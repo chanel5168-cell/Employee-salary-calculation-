@@ -260,9 +260,13 @@
           <input type="text" id="empTitle" placeholder="業務專員">
         </div>
         <div class="form-group">
-          <label>到職日</label>
-          <input type="date" id="empHireDate">
+          <label>電話</label>
+          <input type="tel" id="empPhone" placeholder="0912345678">
         </div>
+      </div>
+      <div class="form-group">
+        <label>到職日</label>
+        <input type="date" id="empHireDate">
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -699,6 +703,7 @@ function initFirebase() {
     }
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
+    db.settings({ ignoreUndefinedProperties: true });
     try { db.enablePersistence({ synchronizeTabs: true }); } catch(e) {}
     cloudReady = true;
     setSyncStatus('連線中…', 'syncing');
@@ -711,24 +716,32 @@ function initFirebase() {
 
 async function migrateAndSubscribe() {
   try {
-    const [e1, e2, e3, e4] = await Promise.all([
-      col('employees').limit(1).get(),
-      col('records').limit(1).get(),
-      col('daily').limit(1).get(),
-      col('products').limit(1).get()
-    ]);
-    const cloudEmpty = e1.empty && e2.empty && e3.empty && e4.empty;
-    const localHasData = employees.length + records.length + dailyEntries.length + products.length > 0;
+    // 逐集合檢查：本機有但雲端沒有的，自動補上傳
+    async function syncMissing(collName, localArr) {
+      if (localArr.length === 0) return 0;
+      const snap = await col(collName).get();
+      const cloudIds = new Set(snap.docs.map(d => d.id));
+      const missing = localArr.filter(x => !cloudIds.has(x._id));
+      if (missing.length > 0) {
+        await Promise.all(missing.map(x => col(collName).doc(x._id).set(x)));
+      }
+      return missing.length;
+    }
 
-    if (cloudEmpty && localHasData) {
-      setSyncStatus('首次同步本機資料到雲端…', 'syncing');
-      await Promise.all([
-        ...employees.map(x => col('employees').doc(x._id).set(x)),
-        ...records.map(x => col('records').doc(x._id).set(x)),
-        ...dailyEntries.map(x => col('daily').doc(x._id).set(x)),
-        ...products.map(x => col('products').doc(x._id).set(x))
-      ]);
-      await ws().collection('config').doc('rates').set(rates);
+    setSyncStatus('檢查同步狀態…', 'syncing');
+    const [nEmp, nRec, nDaily, nProd] = await Promise.all([
+      syncMissing('employees', employees),
+      syncMissing('records', records),
+      syncMissing('daily', dailyEntries),
+      syncMissing('products', products)
+    ]);
+    // 費率若雲端沒有也要補
+    const rSnap = await ws().collection('config').doc('rates').get();
+    if (!rSnap.exists) await ws().collection('config').doc('rates').set(rates);
+
+    const totalSynced = nEmp + nRec + nDaily + nProd;
+    if (totalSynced > 0) {
+      setSyncStatus(`已補傳 ${totalSynced} 筆遺漏記錄`, 'syncing');
     }
     subscribeAll();
   } catch (e) {
@@ -895,6 +908,7 @@ function refreshEmployeeList() {
       <div class="info">
         <div class="name">${escapeHtml(e.name)} <span class="badge">${escapeHtml(e.id || '-')}</span></div>
         <div class="sub">${escapeHtml(e.title || '未填')} · 月薪 NT$ ${formatMoney(e.baseSalary)}</div>
+        ${e.phone ? `<div class="sub">📞 <a href="tel:${escapeHtml(e.phone)}" style="color:#06C755;">${escapeHtml(e.phone)}</a></div>` : ''}
       </div>
       <div class="actions">
         <button class="btn btn-secondary btn-sm" onclick="editEmployee('${e._id}')">編輯</button>
@@ -915,6 +929,7 @@ function saveEmployee() {
     id: document.getElementById('empId').value.trim(),
     name: name,
     title: document.getElementById('empTitle').value.trim(),
+    phone: document.getElementById('empPhone').value.trim(),
     hireDate: document.getElementById('empHireDate').value,
     baseSalary: baseSalary,
     hourlyRate: parseFloat(document.getElementById('empHourlyRate').value) || Math.round(baseSalary / 30 / 8),
@@ -940,6 +955,7 @@ function editEmployee(id) {
   document.getElementById('empId').value = e.id || '';
   document.getElementById('empName').value = e.name;
   document.getElementById('empTitle').value = e.title || '';
+  document.getElementById('empPhone').value = e.phone || '';
   document.getElementById('empHireDate').value = e.hireDate || '';
   document.getElementById('empBaseSalary').value = e.baseSalary;
   document.getElementById('empHourlyRate').value = e.hourlyRate || '';
@@ -958,7 +974,7 @@ function deleteEmployee(id) {
 
 function clearEmpForm() {
   editingEmpId = null;
-  ['empId','empName','empTitle','empHireDate','empBaseSalary','empHourlyRate','empNote']
+  ['empId','empName','empTitle','empPhone','empHireDate','empBaseSalary','empHourlyRate','empNote']
     .forEach(id => document.getElementById(id).value = '');
 }
 
