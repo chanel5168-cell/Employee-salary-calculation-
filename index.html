@@ -380,7 +380,8 @@
         <input type="file" id="piecePhoto" accept="image/*" capture="environment" onchange="previewPhoto('piece', this)" style="padding:6px;">
         <div id="piecePhotoPreview" style="margin-top:8px;"></div>
       </div>
-      <button class="btn btn-primary btn-block" onclick="addPieceEntry()">新增此筆記錄</button>
+      <button class="btn btn-primary btn-block" id="piecePrimaryBtn" onclick="addPieceEntry()">新增此筆記錄</button>
+      <button class="btn btn-secondary btn-block" id="pieceCancelBtn" onclick="cancelDailyEdit()" style="display:none; margin-top:6px;">取消編輯</button>
     </div>
 
     <!-- 按時計酬表單 -->
@@ -448,7 +449,8 @@
         <input type="file" id="hourPhoto" accept="image/*" capture="environment" onchange="previewPhoto('hour', this)" style="padding:6px;">
         <div id="hourPhotoPreview" style="margin-top:8px;"></div>
       </div>
-      <button class="btn btn-primary btn-block" onclick="addHourEntry()">新增此筆記錄</button>
+      <button class="btn btn-primary btn-block" id="hourPrimaryBtn" onclick="addHourEntry()">新增此筆記錄</button>
+      <button class="btn btn-secondary btn-block" id="hourCancelBtn" onclick="cancelDailyEdit()" style="display:none; margin-top:6px;">取消編輯</button>
     </div>
 
     <!-- 當日記錄列表 -->
@@ -547,8 +549,9 @@
 
       <div class="btn-group" style="margin-top:12px;">
         <button class="btn btn-primary btn-block" onclick="calculateAndPreview()">預覽計算</button>
-        <button class="btn btn-primary btn-block" onclick="saveSalaryRecord()">儲存記錄</button>
+        <button class="btn btn-primary btn-block" id="recordPrimaryBtn" onclick="saveSalaryRecord()">儲存記錄</button>
       </div>
+      <button class="btn btn-secondary btn-block" id="recordCancelBtn" onclick="cancelRecordEdit()" style="display:none; margin-top:6px;">取消編輯</button>
     </div>
 
     <div class="card">
@@ -657,6 +660,8 @@ let dailyEntries = load(STORE.daily, []);
 let products = load(STORE.products, []);
 let rates = load(STORE.rates, { labor: 2.42, health: 1.655 });
 let editingEmpId = null;
+let editingDailyId = null;
+let editingRecordId = null;
 let dailyMode = null;
 let currentPiecePhoto = null;
 let currentHourPhoto = null;
@@ -1036,8 +1041,9 @@ function addPieceEntry() {
   if (qty <= 0 || price <= 0) { alert('數量與單價必須大於 0'); return; }
 
   const emp = employees.find(e => e._id === empId);
+  const original = editingDailyId ? dailyEntries.find(x => x._id === editingDailyId) : null;
   const entry = {
-    _id: 'd_' + Date.now(),
+    _id: editingDailyId || ('d_' + Date.now()),
     date, empId,
     empName: emp.name,
     empNo: emp.id,
@@ -1046,17 +1052,25 @@ function addPieceEntry() {
     subtotal: Math.round(qty * price * 100) / 100,
     note: document.getElementById('pieceNote').value.trim(),
     photo: currentPiecePhoto || null,
-    createdAt: new Date().toISOString()
+    createdAt: original ? original.createdAt : new Date().toISOString(),
+    updatedAt: editingDailyId ? new Date().toISOString() : undefined
   };
-  try {
+  const prevList = dailyEntries.slice();
+  if (editingDailyId) {
+    dailyEntries = dailyEntries.map(x => x._id === editingDailyId ? entry : x);
+  } else {
     dailyEntries.push(entry);
+  }
+  try {
     save(STORE.daily, dailyEntries);
   } catch (e) {
-    dailyEntries.pop();
+    dailyEntries = prevList;
     alert('儲存失敗，儲存空間可能已滿。請先匯出照片 ZIP 後清除舊記錄。\n錯誤：' + e.message);
     return;
   }
   cloudSave('daily', entry);
+  const wasEditing = !!editingDailyId;
+  editingDailyId = null;
   // 清空輸入
   document.getElementById('pieceName').selectedIndex = 0;
   document.getElementById('pieceQty').value = '';
@@ -1064,8 +1078,10 @@ function addPieceEntry() {
   document.getElementById('pieceSubtotal').value = '';
   document.getElementById('pieceNote').value = '';
   clearPhoto('piece');
+  resetDailyButtons();
   refreshDailyEntries();
   refreshMonthlyDaily();
+  if (wasEditing) alert('修改已儲存');
 }
 
 function addHourEntry() {
@@ -1084,8 +1100,9 @@ function addHourEntry() {
   if (hours <= 0) { alert('時數必須大於 0'); return; }
 
   const emp = employees.find(e => e._id === empId);
+  const original = editingDailyId ? dailyEntries.find(x => x._id === editingDailyId) : null;
   const entry = {
-    _id: 'd_' + Date.now(),
+    _id: editingDailyId || ('d_' + Date.now()),
     date, empId,
     empName: emp.name,
     empNo: emp.id,
@@ -1096,17 +1113,25 @@ function addHourEntry() {
     subtotal: Math.round(hours * rate * 100) / 100,
     note: document.getElementById('hourNote').value.trim(),
     photo: currentHourPhoto || null,
-    createdAt: new Date().toISOString()
+    createdAt: original ? original.createdAt : new Date().toISOString(),
+    updatedAt: editingDailyId ? new Date().toISOString() : undefined
   };
-  try {
+  const prevList = dailyEntries.slice();
+  if (editingDailyId) {
+    dailyEntries = dailyEntries.map(x => x._id === editingDailyId ? entry : x);
+  } else {
     dailyEntries.push(entry);
+  }
+  try {
     save(STORE.daily, dailyEntries);
   } catch (e) {
-    dailyEntries.pop();
+    dailyEntries = prevList;
     alert('儲存失敗，儲存空間可能已滿。請先匯出照片 ZIP 後清除舊記錄。\n錯誤：' + e.message);
     return;
   }
   cloudSave('daily', entry);
+  const wasEditing = !!editingDailyId;
+  editingDailyId = null;
   // 清空
   document.getElementById('hourStart').value = '';
   document.getElementById('hourEnd').value = '';
@@ -1116,8 +1141,10 @@ function addHourEntry() {
   document.getElementById('hourNote').value = '';
   document.getElementById('hourBreakdown').style.display = 'none';
   clearPhoto('hour');
+  resetDailyButtons();
   refreshDailyEntries();
   refreshMonthlyDaily();
+  if (wasEditing) alert('修改已儲存');
 }
 
 function refreshDailyEntries() {
@@ -1154,15 +1181,17 @@ function refreshDailyEntries() {
     const photoTag = d.photo
       ? `<img src="${d.photo}" onclick="viewPhotoByEntry('${d._id}')" style="width:48px; height:48px; object-fit:cover; border-radius:6px; cursor:pointer; border:2px solid #06C755; margin-right:8px;" title="點擊放大">`
       : '';
+    const isEditing = editingDailyId === d._id;
     return `
-      <div class="employee-item">
+      <div class="employee-item" style="${isEditing ? 'border:2px solid #f59e0b; background:#fffbeb;' : ''}">
         ${photoTag}
         <div class="info">
-          <div class="name">${escapeHtml(d.empName)} ${tag} ${d.photo ? '<span class="badge" style="background:#dcfce7;color:#166534;">📷 有照片</span>' : ''}</div>
+          <div class="name">${escapeHtml(d.empName)} ${tag} ${d.photo ? '<span class="badge" style="background:#dcfce7;color:#166534;">📷 有照片</span>' : ''} ${isEditing ? '<span class="badge" style="background:#fef3c7;color:#92400e;">編輯中</span>' : ''}</div>
           <div class="sub">${detail} = <strong>NT$ ${formatMoney(d.subtotal)}</strong></div>
           ${d.note ? `<div class="sub" style="color:#6b7280;">${escapeHtml(d.note)}</div>` : ''}
         </div>
         <div class="actions">
+          <button class="btn btn-secondary btn-sm" onclick="editDailyEntry('${d._id}')">✏️ 編輯</button>
           <button class="btn btn-danger btn-sm" onclick="deleteDailyEntry('${d._id}')">刪除</button>
         </div>
       </div>
@@ -1181,6 +1210,101 @@ function deleteDailyEntry(id) {
   cloudDelete('daily', id);
   refreshDailyEntries();
   refreshMonthlyDaily();
+}
+
+function showPhotoPreview(kind, base64) {
+  const kb = Math.round(base64.length / 1024);
+  document.getElementById(kind + 'PhotoPreview').innerHTML =
+    `<div style="display:flex; align-items:center; gap:8px;">
+      <img src="${base64}" style="max-width:120px; max-height:90px; border-radius:8px; border:1px solid #e5e7eb; cursor:pointer;" onclick="viewPhotoSrc(this.src)">
+      <div>
+        <div style="font-size:12px; color:#6b7280;">已壓縮 ${kb} KB</div>
+        <button type="button" class="btn btn-danger btn-sm" onclick="clearPhoto('${kind}')" style="margin-top:4px;">移除</button>
+      </div>
+    </div>`;
+}
+
+function editDailyEntry(id) {
+  const e = dailyEntries.find(x => x._id === id);
+  if (!e) return;
+  editingDailyId = id;
+
+  // 設定日期與員工
+  document.getElementById('dailyDate').value = e.date;
+  // 確保員工下拉有資料
+  refreshEmpDropdown();
+  document.getElementById('dailyEmp').value = e.empId;
+
+  if (e.type === 'piece') {
+    setDailyMode('piece');
+    refreshProductList();
+    // 若產品不在清單（已刪除），手動加一個臨時選項
+    const sel = document.getElementById('pieceName');
+    if (!Array.from(sel.options).some(o => o.value === e.name)) {
+      const opt = document.createElement('option');
+      opt.value = e.name;
+      opt.textContent = e.name + ' (舊資料)';
+      sel.appendChild(opt);
+    }
+    sel.value = e.name;
+    document.getElementById('pieceQty').value = e.qty;
+    document.getElementById('piecePrice').value = e.price;
+    document.getElementById('pieceNote').value = e.note || '';
+    updatePiecePreview();
+    // 照片
+    currentPiecePhoto = e.photo || null;
+    if (e.photo) showPhotoPreview('piece', e.photo);
+    else document.getElementById('piecePhotoPreview').innerHTML = '';
+    document.getElementById('piecePhoto').value = '';
+    // 按鈕切換
+    document.getElementById('piecePrimaryBtn').textContent = '💾 儲存修改';
+    document.getElementById('pieceCancelBtn').style.display = 'block';
+    document.getElementById('pieceCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    setDailyMode('hour');
+    document.getElementById('hourStart').value = e.start;
+    document.getElementById('hourEnd').value = e.end;
+    document.getElementById('hourBreak').value = e.breakMin || 0;
+    document.getElementById('hourRate').value = e.rate;
+    document.getElementById('hourNote').value = e.note || '';
+    updateHourPreview();
+    currentHourPhoto = e.photo || null;
+    if (e.photo) showPhotoPreview('hour', e.photo);
+    else document.getElementById('hourPhotoPreview').innerHTML = '';
+    document.getElementById('hourPhoto').value = '';
+    document.getElementById('hourPrimaryBtn').textContent = '💾 儲存修改';
+    document.getElementById('hourCancelBtn').style.display = 'block';
+    document.getElementById('hourCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  refreshDailyEntries(); // 讓清單顯示編輯中標示
+}
+
+function cancelDailyEdit() {
+  editingDailyId = null;
+  resetDailyButtons();
+  // 清空表單欄位
+  document.getElementById('pieceName').selectedIndex = 0;
+  document.getElementById('pieceQty').value = '';
+  document.getElementById('piecePrice').value = '';
+  document.getElementById('pieceSubtotal').value = '';
+  document.getElementById('pieceNote').value = '';
+  clearPhoto('piece');
+  document.getElementById('hourStart').value = '';
+  document.getElementById('hourEnd').value = '';
+  document.getElementById('hourBreak').value = '0';
+  document.getElementById('hourBreakHr').value = '';
+  document.getElementById('hourSubtotal').value = '';
+  document.getElementById('hourNote').value = '';
+  document.getElementById('hourBreakdown').style.display = 'none';
+  clearPhoto('hour');
+  refreshDailyEntries();
+}
+
+function resetDailyButtons() {
+  document.getElementById('piecePrimaryBtn').textContent = '新增此筆記錄';
+  document.getElementById('pieceCancelBtn').style.display = 'none';
+  document.getElementById('hourPrimaryBtn').textContent = '新增此筆記錄';
+  document.getElementById('hourCancelBtn').style.display = 'none';
 }
 
 function refreshMonthlyDaily() {
@@ -1514,8 +1638,9 @@ function saveSalaryRecord() {
   const emp = employees.find(e => e._id === empId);
   const input = gatherCalcInput();
   const r = computeSalary(emp, input);
+  const original = editingRecordId ? records.find(x => x._id === editingRecordId) : null;
   const rec = {
-    _id: 'rec_' + Date.now(),
+    _id: editingRecordId || ('rec_' + Date.now()),
     month,
     empId,
     empName: emp.name,
@@ -1523,13 +1648,66 @@ function saveSalaryRecord() {
     empTitle: emp.title,
     ...input,
     ...r,
-    createdAt: new Date().toISOString()
+    createdAt: original ? original.createdAt : new Date().toISOString(),
+    updatedAt: editingRecordId ? new Date().toISOString() : undefined
   };
-  records.push(rec);
+  if (editingRecordId) {
+    records = records.map(x => x._id === editingRecordId ? rec : x);
+  } else {
+    records.push(rec);
+  }
   save(STORE.records, records);
   cloudSave('records', rec);
-  alert('已儲存：' + emp.name + ' · ' + month);
+  const wasEditing = !!editingRecordId;
+  editingRecordId = null;
+  resetRecordButtons();
+  // 清空表單
+  ['workDays','leaveDays','ot1','ot2','bonus','otherDeduct','laborIns','healthIns','calcNote']
+    .forEach(id => document.getElementById(id).value = '');
+  document.getElementById('calcResult').style.display = 'none';
+  alert(wasEditing ? '修改已儲存' : ('已儲存：' + emp.name + ' · ' + month));
   refreshRecords();
+  updateSummary();
+}
+
+function editSalaryRecord(id) {
+  const r = records.find(x => x._id === id);
+  if (!r) return;
+  editingRecordId = id;
+  document.getElementById('calcMonth').value = r.month;
+  refreshEmpDropdown();
+  document.getElementById('calcEmp').value = r.empId;
+  document.getElementById('workDays').value = r.workDays || '';
+  document.getElementById('leaveDays').value = r.leaveDays || '';
+  document.getElementById('ot1').value = r.ot1 || '';
+  document.getElementById('ot2').value = r.ot2 || '';
+  document.getElementById('bonus').value = r.bonus || '';
+  document.getElementById('otherDeduct').value = r.otherDeduct || '';
+  document.getElementById('laborIns').value = r.laborIns || '';
+  document.getElementById('healthIns').value = r.healthIns || '';
+  document.getElementById('calcNote').value = r.note || '';
+  // 按鈕切換
+  document.getElementById('recordPrimaryBtn').textContent = '💾 儲存修改';
+  document.getElementById('recordCancelBtn').style.display = 'block';
+  // 自動預覽計算
+  calculateAndPreview();
+  // 捲動到表單
+  document.getElementById('panel-calc').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  refreshRecords();
+}
+
+function cancelRecordEdit() {
+  editingRecordId = null;
+  resetRecordButtons();
+  ['workDays','leaveDays','ot1','ot2','bonus','otherDeduct','laborIns','healthIns','calcNote']
+    .forEach(id => document.getElementById(id).value = '');
+  document.getElementById('calcResult').style.display = 'none';
+  refreshRecords();
+}
+
+function resetRecordButtons() {
+  document.getElementById('recordPrimaryBtn').textContent = '儲存記錄';
+  document.getElementById('recordCancelBtn').style.display = 'none';
 }
 
 function refreshRecords() {
@@ -1541,17 +1719,20 @@ function refreshRecords() {
     box.innerHTML = '<div class="empty">尚無記錄</div>';
     return;
   }
-  box.innerHTML = filter.slice().reverse().map(r => `
-    <div class="employee-item">
+  box.innerHTML = filter.slice().reverse().map(r => {
+    const isEditing = editingRecordId === r._id;
+    return `
+    <div class="employee-item" style="${isEditing ? 'border:2px solid #f59e0b; background:#fffbeb;' : ''}">
       <div class="info">
-        <div class="name">${escapeHtml(r.empName)} <span class="badge">${escapeHtml(r.month)}</span></div>
+        <div class="name">${escapeHtml(r.empName)} <span class="badge">${escapeHtml(r.month)}</span> ${isEditing ? '<span class="badge" style="background:#fef3c7;color:#92400e;">編輯中</span>' : ''}</div>
         <div class="sub">應發 ${formatMoney(r.gross)} · 扣除 ${formatMoney(r.deductions)} · <strong>實發 NT$ ${formatMoney(r.net)}</strong></div>
       </div>
       <div class="actions">
+        <button class="btn btn-secondary btn-sm" onclick="editSalaryRecord('${r._id}')">✏️ 編輯</button>
         <button class="btn btn-danger btn-sm" onclick="deleteRecord('${r._id}')">刪除</button>
       </div>
     </div>
-  `).join('');
+  `;}).join('');
 }
 
 function deleteRecord(id) {
