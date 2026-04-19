@@ -1,0 +1,1430 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>員工薪資計算系統 (LINE LIFF)</title>
+<script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", "PingFang TC", sans-serif;
+    background: #f3f4f6;
+    color: #1f2937;
+    font-size: 15px;
+    min-height: 100vh;
+  }
+  .container { max-width: 720px; margin: 0 auto; padding: 16px; padding-bottom: 80px; }
+  header {
+    background: linear-gradient(135deg, #06C755 0%, #00B900 100%);
+    color: white;
+    padding: 20px 16px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+    text-align: center;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  }
+  header h1 { font-size: 20px; margin-bottom: 4px; }
+  header .user-info { font-size: 13px; opacity: 0.95; }
+  .tabs {
+    display: flex;
+    background: white;
+    border-radius: 10px;
+    padding: 4px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  .tab {
+    flex: 1;
+    padding: 10px;
+    text-align: center;
+    cursor: pointer;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.2s;
+    font-size: 14px;
+  }
+  .tab.active { background: #06C755; color: white; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .card h3 {
+    font-size: 16px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #06C755;
+    color: #111827;
+  }
+  .form-group { margin-bottom: 12px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  label {
+    display: block;
+    font-size: 13px;
+    color: #4b5563;
+    margin-bottom: 4px;
+    font-weight: 500;
+  }
+  input, select, textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 15px;
+    font-family: inherit;
+    background: white;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: #06C755;
+    box-shadow: 0 0 0 3px rgba(6,199,85,0.15);
+  }
+  textarea { resize: vertical; min-height: 60px; }
+  .btn {
+    padding: 11px 18px;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+  .btn-primary { background: #06C755; color: white; }
+  .btn-primary:hover { background: #059945; }
+  .btn-secondary { background: #e5e7eb; color: #374151; }
+  .btn-secondary:hover { background: #d1d5db; }
+  .btn-danger { background: #ef4444; color: white; }
+  .btn-danger:hover { background: #dc2626; }
+  .btn-sm { padding: 6px 12px; font-size: 13px; }
+  .btn-block { width: 100%; }
+  .btn-group { display: flex; gap: 8px; }
+  .employee-item {
+    padding: 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #fafafa;
+  }
+  .employee-item .info { flex: 1; }
+  .employee-item .name { font-weight: 600; color: #111827; }
+  .employee-item .sub { font-size: 12px; color: #6b7280; margin-top: 2px; }
+  .employee-item .actions { display: flex; gap: 6px; }
+  .empty {
+    text-align: center;
+    padding: 30px;
+    color: #9ca3af;
+    font-size: 14px;
+  }
+  .result-box {
+    background: #f0fdf4;
+    border: 1px solid #06C755;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 12px;
+  }
+  .result-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 14px;
+  }
+  .result-row.total {
+    border-top: 2px solid #06C755;
+    margin-top: 8px;
+    padding-top: 8px;
+    font-weight: 700;
+    font-size: 16px;
+    color: #06C755;
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    background: #dbeafe;
+    color: #1e40af;
+    margin-left: 6px;
+  }
+  .alert {
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    font-size: 14px;
+  }
+  .alert-info { background: #eff6ff; color: #1e40af; border-left: 4px solid #3b82f6; }
+  .alert-success { background: #f0fdf4; color: #166534; border-left: 4px solid #22c55e; }
+  .alert-warn { background: #fef3c7; color: #92400e; border-left: 4px solid #f59e0b; }
+  .toolbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .month-selector { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .month-selector input { flex: 1; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th, td {
+    padding: 8px 6px;
+    text-align: left;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  th { background: #f9fafb; font-weight: 600; color: #374151; }
+  tr:hover td { background: #fafafa; }
+  .currency { text-align: right; font-variant-numeric: tabular-nums; }
+  .setup-step {
+    padding: 10px;
+    background: #f9fafb;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    font-size: 13px;
+  }
+  .setup-step strong { color: #06C755; }
+  code {
+    background: #1f2937;
+    color: #f3f4f6;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+  .fab {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #06C755;
+    color: white;
+    border: none;
+    font-size: 28px;
+    box-shadow: 0 4px 12px rgba(6,199,85,0.4);
+    cursor: pointer;
+    z-index: 100;
+  }
+  @media (max-width: 480px) {
+    .form-row { grid-template-columns: 1fr; }
+    .container { padding: 10px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>員工薪資計算系統</h1>
+    <div class="user-info" id="userInfo">LINE LIFF 版 · 點選下方頁籤開始</div>
+  </header>
+
+  <div class="tabs">
+    <div class="tab active" data-panel="employees">員工</div>
+    <div class="tab" data-panel="daily">每日</div>
+    <div class="tab" data-panel="calc">月薪</div>
+    <div class="tab" data-panel="export">匯出</div>
+    <div class="tab" data-panel="setup">設定</div>
+  </div>
+
+  <!-- 員工管理 -->
+  <div class="panel active" id="panel-employees">
+    <div class="card">
+      <h3>新增 / 編輯員工</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label>員工編號</label>
+          <input type="text" id="empId" placeholder="例: E001">
+        </div>
+        <div class="form-group">
+          <label>姓名 *</label>
+          <input type="text" id="empName" placeholder="王小明">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>職稱</label>
+          <input type="text" id="empTitle" placeholder="業務專員">
+        </div>
+        <div class="form-group">
+          <label>到職日</label>
+          <input type="date" id="empHireDate">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>月薪 (底薪) NT$ *</label>
+          <input type="number" id="empBaseSalary" placeholder="30000" min="0">
+        </div>
+        <div class="form-group">
+          <label>時薪 NT$ (加班用)</label>
+          <input type="number" id="empHourlyRate" placeholder="自動計算" min="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>備註</label>
+        <textarea id="empNote" placeholder="自訂資訊…"></textarea>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-primary btn-block" onclick="saveEmployee()">儲存員工</button>
+        <button class="btn btn-secondary" onclick="clearEmpForm()">清除</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>員工列表 <span class="badge" id="empCount">0</span></h3>
+      <div id="employeeList"></div>
+    </div>
+  </div>
+
+  <!-- 每日記錄 -->
+  <div class="panel" id="panel-daily">
+    <div class="card">
+      <h3>每日工作記錄</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label>日期 *</label>
+          <input type="date" id="dailyDate">
+        </div>
+        <div class="form-group">
+          <label>員工 *</label>
+          <select id="dailyEmp">
+            <option value="">-- 請選擇 --</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>計酬方式 *</label>
+        <div class="btn-group">
+          <button class="btn btn-secondary btn-block" id="btnModePiece" onclick="setDailyMode('piece')">論件計酬</button>
+          <button class="btn btn-secondary btn-block" id="btnModeHour" onclick="setDailyMode('hour')">按時計酬</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 論件計酬表單 -->
+    <div class="card" id="pieceCard" style="display:none;">
+      <h3>論件計酬明細</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label>品名 *</label>
+          <input type="text" id="pieceName" placeholder="例: A產品" list="productList">
+          <datalist id="productList"></datalist>
+        </div>
+        <div class="form-group">
+          <label>數量 *</label>
+          <input type="number" id="pieceQty" placeholder="0" min="0" step="0.01" oninput="updatePiecePreview()">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>單價 NT$ *</label>
+          <input type="number" id="piecePrice" placeholder="0" min="0" step="0.01" oninput="updatePiecePreview()">
+        </div>
+        <div class="form-group">
+          <label>小計 (自動)</label>
+          <input type="text" id="pieceSubtotal" readonly style="background:#f0fdf4; font-weight:600; color:#06C755;">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>備註</label>
+        <input type="text" id="pieceNote" placeholder="選填">
+      </div>
+      <button class="btn btn-primary btn-block" onclick="addPieceEntry()">新增此筆記錄</button>
+    </div>
+
+    <!-- 按時計酬表單 -->
+    <div class="card" id="hourCard" style="display:none;">
+      <h3>按時計酬明細</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label>開始時間 *</label>
+          <input type="time" id="hourStart" oninput="updateHourPreview()">
+        </div>
+        <div class="form-group">
+          <label>結束時間 *</label>
+          <input type="time" id="hourEnd" oninput="updateHourPreview()">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>休息時間 (會從總時數扣除)</label>
+        <div style="display:flex; gap:6px; margin-bottom:6px; flex-wrap:wrap;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="setBreak(0)">無休息</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="setBreak(30)">30 分</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="setBreak(60)">1 小時</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="setBreak(90)">1.5 小時</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="setBreak(120)">2 小時</button>
+        </div>
+        <div class="form-row">
+          <div>
+            <input type="number" id="hourBreak" placeholder="分鐘" min="0" value="0" step="5" oninput="updateHourPreview()">
+            <small style="color:#6b7280;">(分鐘)</small>
+          </div>
+          <div>
+            <input type="text" id="hourBreakHr" readonly style="background:#f9fafb;">
+            <small style="color:#6b7280;">(等於幾小時)</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="result-box" id="hourBreakdown" style="display:none; background:#fffbeb; border-color:#f59e0b;">
+        <div class="result-row"><span>時段總長</span><span id="hourSpan">—</span></div>
+        <div class="result-row"><span>扣除休息</span><span id="hourBreakShow" style="color:#ef4444;">—</span></div>
+        <div class="result-row total" style="border-color:#f59e0b; color:#92400e;">
+          <span>實際工作時數</span><span id="hourTotal">—</span>
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-top:12px;">
+        <div class="form-group">
+          <label>時薪 NT$ *</label>
+          <input type="number" id="hourRate" placeholder="190" min="0" step="0.01" oninput="updateHourPreview()">
+        </div>
+        <div class="form-group">
+          <label>小計 (自動)</label>
+          <input type="text" id="hourSubtotal" readonly style="background:#f0fdf4; font-weight:700; color:#06C755; font-size:16px;">
+        </div>
+      </div>
+      <div class="alert alert-info" style="font-size:12px; padding:8px;">
+        計算公式：(實際工作時數) × 時薪 = 小計<br>
+        實際工作時數 = 總時段 − 休息時間
+      </div>
+      <div class="form-group">
+        <label>工作內容 / 備註</label>
+        <input type="text" id="hourNote" placeholder="選填">
+      </div>
+      <button class="btn btn-primary btn-block" onclick="addHourEntry()">新增此筆記錄</button>
+    </div>
+
+    <!-- 當日記錄列表 -->
+    <div class="card">
+      <h3>當日記錄 <span class="badge" id="dailyEntryCount">0</span></h3>
+      <div id="dailyEntryList"></div>
+      <div class="result-box" id="dailyTotalBox" style="display:none;">
+        <div class="result-row total">
+          <span>當日合計</span>
+          <span id="dailyTotalAmt">NT$ 0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 整月加總 -->
+    <div class="card">
+      <h3>整月加總</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label>查詢月份</label>
+          <input type="month" id="dailyMonthFilter" onchange="refreshMonthlyDaily()">
+        </div>
+        <div class="form-group">
+          <label>員工 (留空=全部)</label>
+          <select id="dailyEmpFilter" onchange="refreshMonthlyDaily()">
+            <option value="">全部員工</option>
+          </select>
+        </div>
+      </div>
+      <div id="monthlyDailyBox">
+        <div class="empty">請選擇月份</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 薪資計算 -->
+  <div class="panel" id="panel-calc">
+    <div class="card">
+      <h3>新增本月薪資記錄</h3>
+      <div class="month-selector">
+        <label style="margin-bottom:0; white-space:nowrap;">月份：</label>
+        <input type="month" id="calcMonth">
+      </div>
+      <div class="form-group">
+        <label>選擇員工 *</label>
+        <select id="calcEmp">
+          <option value="">-- 請先新增員工 --</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>出勤天數</label>
+          <input type="number" id="workDays" placeholder="22" min="0" max="31">
+        </div>
+        <div class="form-group">
+          <label>請假天數</label>
+          <input type="number" id="leaveDays" placeholder="0" min="0">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>平日加班時數 (×1.34)</label>
+          <input type="number" id="ot1" placeholder="0" min="0" step="0.5">
+        </div>
+        <div class="form-group">
+          <label>假日加班時數 (×1.67)</label>
+          <input type="number" id="ot2" placeholder="0" min="0" step="0.5">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>獎金 / 津貼 NT$</label>
+          <input type="number" id="bonus" placeholder="0" min="0">
+        </div>
+        <div class="form-group">
+          <label>其他扣款 NT$</label>
+          <input type="number" id="otherDeduct" placeholder="0" min="0">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>勞保 (員工負擔)</label>
+          <input type="number" id="laborIns" placeholder="自動估算" min="0">
+        </div>
+        <div class="form-group">
+          <label>健保 (員工負擔)</label>
+          <input type="number" id="healthIns" placeholder="自動估算" min="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>備註</label>
+        <textarea id="calcNote" placeholder="本月備註 (例: 年終獎金、補發等)"></textarea>
+      </div>
+
+      <div class="result-box" id="calcResult" style="display:none;"></div>
+
+      <div class="btn-group" style="margin-top:12px;">
+        <button class="btn btn-primary btn-block" onclick="calculateAndPreview()">預覽計算</button>
+        <button class="btn btn-primary btn-block" onclick="saveSalaryRecord()">儲存記錄</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>本月薪資記錄 <span class="badge" id="recCount">0</span></h3>
+      <div id="recordList"></div>
+    </div>
+  </div>
+
+  <!-- 匯出 -->
+  <div class="panel" id="panel-export">
+    <div class="card">
+      <h3>匯出 Excel</h3>
+      <div class="alert alert-info">
+        將以「摘要 + 明細」兩個工作表匯出目前所有月份的薪資記錄。
+      </div>
+      <div class="form-group">
+        <label>選擇匯出月份 (留空匯出全部)</label>
+        <input type="month" id="exportMonth">
+      </div>
+      <button class="btn btn-primary btn-block" onclick="exportToExcel()">
+        下載 Excel 檔案
+      </button>
+    </div>
+
+    <div class="card">
+      <h3>統計摘要</h3>
+      <div id="summaryBox">
+        <div class="empty">尚無資料</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>資料管理</h3>
+      <div class="alert alert-warn">
+        資料儲存於瀏覽器本機。若更換裝置請先匯出備份。
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-secondary" onclick="backupData()">備份 JSON</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('restoreFile').click()">還原備份</button>
+        <button class="btn btn-danger" onclick="clearAllData()">清除全部</button>
+      </div>
+      <input type="file" id="restoreFile" style="display:none" accept=".json" onchange="restoreData(event)">
+    </div>
+  </div>
+
+  <!-- 設定 -->
+  <div class="panel" id="panel-setup">
+    <div class="card">
+      <h3>LINE LIFF 設定</h3>
+      <div class="form-group">
+        <label>LIFF ID (從 LINE Developers 取得)</label>
+        <input type="text" id="liffId" placeholder="例如: 1234567890-AbCdEfGh">
+      </div>
+      <button class="btn btn-primary btn-block" onclick="saveLiffId()">儲存並重新初始化</button>
+      <div class="alert alert-info" style="margin-top:12px;">
+        <strong>目前狀態：</strong><span id="liffStatus">尚未設定</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>如何佈署到 LINE？</h3>
+      <div class="setup-step"><strong>1.</strong> 將此 HTML 上傳到 HTTPS 主機 (如 GitHub Pages / Netlify / Vercel)</div>
+      <div class="setup-step"><strong>2.</strong> 前往 <code>developers.line.biz</code> 登入並建立 Provider</div>
+      <div class="setup-step"><strong>3.</strong> 建立「LINE Login」Channel，在 LIFF 分頁新增 LIFF App</div>
+      <div class="setup-step"><strong>4.</strong> Endpoint URL 填入您的 HTML 網址，Size 選 Full</div>
+      <div class="setup-step"><strong>5.</strong> 複製 LIFF ID 貼到上方欄位並儲存</div>
+      <div class="setup-step"><strong>6.</strong> 將 LIFF URL (<code>https://liff.line.me/&lt;LIFF_ID&gt;</code>) 分享到您的群組</div>
+    </div>
+
+    <div class="card">
+      <h3>台灣勞健保參數 (2026年)</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label>勞保費率 (員工 %)</label>
+          <input type="number" id="laborRate" value="2.42" step="0.01">
+        </div>
+        <div class="form-group">
+          <label>健保費率 (員工 %)</label>
+          <input type="number" id="healthRate" value="1.655" step="0.001">
+        </div>
+      </div>
+      <button class="btn btn-secondary btn-block" onclick="saveRates()">儲存費率</button>
+      <div class="alert alert-warn" style="margin-top:12px;">
+        費率會隨政府公告調整，請自行確認最新數字。
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ========= 資料儲存 =========
+const STORE = {
+  employees: 'salary_employees',
+  records: 'salary_records',
+  daily: 'salary_daily',
+  liffId: 'salary_liff_id',
+  rates: 'salary_rates'
+};
+
+function load(key, def) {
+  try { return JSON.parse(localStorage.getItem(key)) || def; }
+  catch { return def; }
+}
+function save(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+
+let employees = load(STORE.employees, []);
+let records = load(STORE.records, []);
+let dailyEntries = load(STORE.daily, []);
+let rates = load(STORE.rates, { labor: 2.42, health: 1.655 });
+let editingEmpId = null;
+let dailyMode = null;
+
+// ========= 頁籤切換 =========
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('panel-' + t.dataset.panel).classList.add('active');
+    if (t.dataset.panel === 'export') updateSummary();
+    if (t.dataset.panel === 'calc') refreshEmpDropdown();
+    if (t.dataset.panel === 'daily') {
+      refreshEmpDropdown();
+      refreshDailyEntries();
+      refreshMonthlyDaily();
+    }
+  });
+});
+
+// ========= 員工管理 =========
+function refreshEmployeeList() {
+  const box = document.getElementById('employeeList');
+  document.getElementById('empCount').textContent = employees.length;
+  if (employees.length === 0) {
+    box.innerHTML = '<div class="empty">尚無員工資料，請新增</div>';
+    return;
+  }
+  box.innerHTML = employees.map(e => `
+    <div class="employee-item">
+      <div class="info">
+        <div class="name">${escapeHtml(e.name)} <span class="badge">${escapeHtml(e.id || '-')}</span></div>
+        <div class="sub">${escapeHtml(e.title || '未填')} · 月薪 NT$ ${formatMoney(e.baseSalary)}</div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-secondary btn-sm" onclick="editEmployee('${e._id}')">編輯</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteEmployee('${e._id}')">刪除</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function saveEmployee() {
+  const name = document.getElementById('empName').value.trim();
+  const baseSalary = parseFloat(document.getElementById('empBaseSalary').value) || 0;
+  if (!name) { alert('請輸入姓名'); return; }
+  if (baseSalary <= 0) { alert('請輸入底薪'); return; }
+
+  const emp = {
+    _id: editingEmpId || ('emp_' + Date.now()),
+    id: document.getElementById('empId').value.trim(),
+    name: name,
+    title: document.getElementById('empTitle').value.trim(),
+    hireDate: document.getElementById('empHireDate').value,
+    baseSalary: baseSalary,
+    hourlyRate: parseFloat(document.getElementById('empHourlyRate').value) || Math.round(baseSalary / 30 / 8),
+    note: document.getElementById('empNote').value.trim()
+  };
+
+  if (editingEmpId) {
+    employees = employees.map(e => e._id === editingEmpId ? emp : e);
+  } else {
+    employees.push(emp);
+  }
+  save(STORE.employees, employees);
+  clearEmpForm();
+  refreshEmployeeList();
+  refreshEmpDropdown();
+}
+
+function editEmployee(id) {
+  const e = employees.find(x => x._id === id);
+  if (!e) return;
+  editingEmpId = id;
+  document.getElementById('empId').value = e.id || '';
+  document.getElementById('empName').value = e.name;
+  document.getElementById('empTitle').value = e.title || '';
+  document.getElementById('empHireDate').value = e.hireDate || '';
+  document.getElementById('empBaseSalary').value = e.baseSalary;
+  document.getElementById('empHourlyRate').value = e.hourlyRate || '';
+  document.getElementById('empNote').value = e.note || '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function deleteEmployee(id) {
+  if (!confirm('確定刪除此員工？相關薪資記錄將保留。')) return;
+  employees = employees.filter(e => e._id !== id);
+  save(STORE.employees, employees);
+  refreshEmployeeList();
+  refreshEmpDropdown();
+}
+
+function clearEmpForm() {
+  editingEmpId = null;
+  ['empId','empName','empTitle','empHireDate','empBaseSalary','empHourlyRate','empNote']
+    .forEach(id => document.getElementById(id).value = '');
+}
+
+// ========= 每日記錄 =========
+function setDailyMode(mode) {
+  dailyMode = mode;
+  document.getElementById('pieceCard').style.display = mode === 'piece' ? 'block' : 'none';
+  document.getElementById('hourCard').style.display = mode === 'hour' ? 'block' : 'none';
+  document.getElementById('btnModePiece').className = mode === 'piece'
+    ? 'btn btn-primary btn-block' : 'btn btn-secondary btn-block';
+  document.getElementById('btnModeHour').className = mode === 'hour'
+    ? 'btn btn-primary btn-block' : 'btn btn-secondary btn-block';
+}
+
+function updatePiecePreview() {
+  const qty = parseFloat(document.getElementById('pieceQty').value) || 0;
+  const price = parseFloat(document.getElementById('piecePrice').value) || 0;
+  const sub = qty * price;
+  document.getElementById('pieceSubtotal').value = 'NT$ ' + formatMoney(sub);
+}
+
+function calcSpanMins(start, end) {
+  if (!start || !end) return 0;
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  let mins = (eh * 60 + em) - (sh * 60 + sm);
+  if (mins < 0) mins += 24 * 60; // 跨日
+  return Math.max(0, mins);
+}
+
+function calcHours(start, end, breakMin) {
+  const spanMins = calcSpanMins(start, end);
+  const workMins = Math.max(0, spanMins - (breakMin || 0));
+  return workMins / 60;
+}
+
+function setBreak(min) {
+  document.getElementById('hourBreak').value = min;
+  updateHourPreview();
+}
+
+function updateHourPreview() {
+  const start = document.getElementById('hourStart').value;
+  const end = document.getElementById('hourEnd').value;
+  const brk = parseFloat(document.getElementById('hourBreak').value) || 0;
+  const rate = parseFloat(document.getElementById('hourRate').value) || 0;
+
+  const spanMins = calcSpanMins(start, end);
+  const spanHours = spanMins / 60;
+  const workHours = Math.max(0, (spanMins - brk) / 60);
+  const sub = workHours * rate;
+
+  // 顯示休息時間等於幾小時
+  document.getElementById('hourBreakHr').value = (brk / 60).toFixed(2) + ' 小時';
+
+  const breakdown = document.getElementById('hourBreakdown');
+  if (start && end) {
+    breakdown.style.display = 'block';
+    document.getElementById('hourSpan').textContent = spanHours.toFixed(2) + ' 小時';
+    document.getElementById('hourBreakShow').textContent = '− ' + (brk / 60).toFixed(2) + ' 小時 (' + brk + '分)';
+    document.getElementById('hourTotal').textContent = workHours.toFixed(2) + ' 小時';
+  } else {
+    breakdown.style.display = 'none';
+  }
+
+  document.getElementById('hourSubtotal').value = rate > 0 && workHours > 0
+    ? `NT$ ${formatMoney(sub)}  (${workHours.toFixed(2)}h × ${rate})`
+    : '';
+}
+
+function addPieceEntry() {
+  const date = document.getElementById('dailyDate').value;
+  const empId = document.getElementById('dailyEmp').value;
+  const name = document.getElementById('pieceName').value.trim();
+  const qty = parseFloat(document.getElementById('pieceQty').value) || 0;
+  const price = parseFloat(document.getElementById('piecePrice').value) || 0;
+  if (!date) { alert('請選擇日期'); return; }
+  if (!empId) { alert('請選擇員工'); return; }
+  if (!name) { alert('請輸入品名'); return; }
+  if (qty <= 0 || price <= 0) { alert('數量與單價必須大於 0'); return; }
+
+  const emp = employees.find(e => e._id === empId);
+  const entry = {
+    _id: 'd_' + Date.now(),
+    date, empId,
+    empName: emp.name,
+    empNo: emp.id,
+    type: 'piece',
+    name, qty, price,
+    subtotal: Math.round(qty * price * 100) / 100,
+    note: document.getElementById('pieceNote').value.trim(),
+    createdAt: new Date().toISOString()
+  };
+  dailyEntries.push(entry);
+  save(STORE.daily, dailyEntries);
+  // 清空輸入
+  document.getElementById('pieceName').value = '';
+  document.getElementById('pieceQty').value = '';
+  document.getElementById('piecePrice').value = '';
+  document.getElementById('pieceSubtotal').value = '';
+  document.getElementById('pieceNote').value = '';
+  refreshDailyEntries();
+  refreshMonthlyDaily();
+  refreshProductList();
+}
+
+function addHourEntry() {
+  const date = document.getElementById('dailyDate').value;
+  const empId = document.getElementById('dailyEmp').value;
+  const start = document.getElementById('hourStart').value;
+  const end = document.getElementById('hourEnd').value;
+  const brk = parseFloat(document.getElementById('hourBreak').value) || 0;
+  const rate = parseFloat(document.getElementById('hourRate').value) || 0;
+  if (!date) { alert('請選擇日期'); return; }
+  if (!empId) { alert('請選擇員工'); return; }
+  if (!start || !end) { alert('請輸入起訖時間'); return; }
+  if (rate <= 0) { alert('請輸入時薪'); return; }
+
+  const hours = calcHours(start, end, brk);
+  if (hours <= 0) { alert('時數必須大於 0'); return; }
+
+  const emp = employees.find(e => e._id === empId);
+  const entry = {
+    _id: 'd_' + Date.now(),
+    date, empId,
+    empName: emp.name,
+    empNo: emp.id,
+    type: 'hour',
+    start, end, breakMin: brk,
+    hours: Math.round(hours * 100) / 100,
+    rate,
+    subtotal: Math.round(hours * rate * 100) / 100,
+    note: document.getElementById('hourNote').value.trim(),
+    createdAt: new Date().toISOString()
+  };
+  dailyEntries.push(entry);
+  save(STORE.daily, dailyEntries);
+  // 清空
+  document.getElementById('hourStart').value = '';
+  document.getElementById('hourEnd').value = '';
+  document.getElementById('hourBreak').value = '0';
+  document.getElementById('hourBreakHr').value = '';
+  document.getElementById('hourSubtotal').value = '';
+  document.getElementById('hourNote').value = '';
+  document.getElementById('hourBreakdown').style.display = 'none';
+  refreshDailyEntries();
+  refreshMonthlyDaily();
+}
+
+function refreshDailyEntries() {
+  const date = document.getElementById('dailyDate').value;
+  const empId = document.getElementById('dailyEmp').value;
+  const box = document.getElementById('dailyEntryList');
+  const totalBox = document.getElementById('dailyTotalBox');
+
+  if (!date) {
+    box.innerHTML = '<div class="empty">請先選擇日期</div>';
+    totalBox.style.display = 'none';
+    document.getElementById('dailyEntryCount').textContent = '0';
+    return;
+  }
+
+  let list = dailyEntries.filter(d => d.date === date);
+  if (empId) list = list.filter(d => d.empId === empId);
+
+  document.getElementById('dailyEntryCount').textContent = list.length;
+
+  if (list.length === 0) {
+    box.innerHTML = '<div class="empty">此日期尚無記錄</div>';
+    totalBox.style.display = 'none';
+    return;
+  }
+
+  box.innerHTML = list.map(d => {
+    const detail = d.type === 'piece'
+      ? `${escapeHtml(d.name)} × ${d.qty} × NT$${d.price}`
+      : `${d.start}-${d.end} (${d.hours}小時 × NT$${d.rate})`;
+    const tag = d.type === 'piece'
+      ? '<span class="badge" style="background:#fef3c7;color:#92400e;">論件</span>'
+      : '<span class="badge" style="background:#dbeafe;color:#1e40af;">計時</span>';
+    return `
+      <div class="employee-item">
+        <div class="info">
+          <div class="name">${escapeHtml(d.empName)} ${tag}</div>
+          <div class="sub">${detail} = <strong>NT$ ${formatMoney(d.subtotal)}</strong></div>
+          ${d.note ? `<div class="sub" style="color:#6b7280;">${escapeHtml(d.note)}</div>` : ''}
+        </div>
+        <div class="actions">
+          <button class="btn btn-danger btn-sm" onclick="deleteDailyEntry('${d._id}')">刪除</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  const total = list.reduce((a, b) => a + b.subtotal, 0);
+  totalBox.style.display = 'block';
+  document.getElementById('dailyTotalAmt').textContent = 'NT$ ' + formatMoney(total);
+}
+
+function deleteDailyEntry(id) {
+  if (!confirm('確定刪除此筆記錄？')) return;
+  dailyEntries = dailyEntries.filter(d => d._id !== id);
+  save(STORE.daily, dailyEntries);
+  refreshDailyEntries();
+  refreshMonthlyDaily();
+}
+
+function refreshMonthlyDaily() {
+  const month = document.getElementById('dailyMonthFilter').value;
+  const empId = document.getElementById('dailyEmpFilter').value;
+  const box = document.getElementById('monthlyDailyBox');
+
+  if (!month) {
+    box.innerHTML = '<div class="empty">請選擇月份</div>';
+    return;
+  }
+
+  let list = dailyEntries.filter(d => d.date.startsWith(month));
+  if (empId) list = list.filter(d => d.empId === empId);
+
+  if (list.length === 0) {
+    box.innerHTML = '<div class="empty">此月份沒有記錄</div>';
+    return;
+  }
+
+  // 按日期分組
+  const byDate = {};
+  list.forEach(d => {
+    if (!byDate[d.date]) byDate[d.date] = [];
+    byDate[d.date].push(d);
+  });
+
+  const dates = Object.keys(byDate).sort();
+  let pieceTotal = 0, hourTotal = 0, hoursSum = 0, qtySum = 0;
+  const rows = dates.map(date => {
+    const items = byDate[date];
+    const dayTotal = items.reduce((a, b) => a + b.subtotal, 0);
+    const dayPiece = items.filter(x => x.type === 'piece').reduce((a,b) => a + b.subtotal, 0);
+    const dayHour = items.filter(x => x.type === 'hour').reduce((a,b) => a + b.subtotal, 0);
+    pieceTotal += dayPiece;
+    hourTotal += dayHour;
+    hoursSum += items.filter(x => x.type === 'hour').reduce((a,b) => a + b.hours, 0);
+    qtySum += items.filter(x => x.type === 'piece').reduce((a,b) => a + b.qty, 0);
+    return `<tr>
+      <td>${date.slice(5)}</td>
+      <td>${items.length}</td>
+      <td class="currency">${formatMoney(dayPiece)}</td>
+      <td class="currency">${formatMoney(dayHour)}</td>
+      <td class="currency"><strong>${formatMoney(dayTotal)}</strong></td>
+    </tr>`;
+  }).join('');
+
+  const grand = pieceTotal + hourTotal;
+  box.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>日期</th><th>筆數</th>
+          <th class="currency">論件</th>
+          <th class="currency">計時</th>
+          <th class="currency">當日合計</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+      <tfoot>
+        <tr style="background:#f0fdf4;font-weight:700;">
+          <td colspan="2">月合計</td>
+          <td class="currency">${formatMoney(pieceTotal)}</td>
+          <td class="currency">${formatMoney(hourTotal)}</td>
+          <td class="currency" style="color:#06C755;">NT$ ${formatMoney(grand)}</td>
+        </tr>
+      </tfoot>
+    </table>
+    <div class="alert alert-info" style="margin-top:12px;">
+      共 <strong>${list.length}</strong> 筆記錄 · 論件總數量 <strong>${qtySum}</strong> · 計時總時數 <strong>${hoursSum.toFixed(2)}</strong> 小時
+    </div>
+  `;
+}
+
+// ========= 薪資計算 =========
+function refreshEmpDropdown() {
+  const opts = '<option value="">-- 請選擇員工 --</option>' +
+    employees.map(e => `<option value="${e._id}">${escapeHtml(e.name)} (${escapeHtml(e.id || '無編號')})</option>`).join('');
+  const calcSel = document.getElementById('calcEmp');
+  const dailySel = document.getElementById('dailyEmp');
+  const dailyFilter = document.getElementById('dailyEmpFilter');
+  if (calcSel) calcSel.innerHTML = opts;
+  if (dailySel) dailySel.innerHTML = opts;
+  if (dailyFilter) {
+    dailyFilter.innerHTML = '<option value="">全部員工</option>' +
+      employees.map(e => `<option value="${e._id}">${escapeHtml(e.name)}</option>`).join('');
+  }
+  refreshProductList();
+}
+
+function refreshProductList() {
+  const dl = document.getElementById('productList');
+  if (!dl) return;
+  const names = [...new Set(dailyEntries.filter(d => d.type === 'piece').map(d => d.name))];
+  dl.innerHTML = names.map(n => `<option value="${escapeHtml(n)}">`).join('');
+}
+
+function computeSalary(emp, input) {
+  const base = emp.baseSalary;
+  const hourly = emp.hourlyRate || Math.round(base / 30 / 8);
+  const dailyDeduct = Math.round(base / 30) * (input.leaveDays || 0);
+
+  const otPay1 = Math.round(hourly * 1.34 * (input.ot1 || 0));
+  const otPay2 = Math.round(hourly * 1.67 * (input.ot2 || 0));
+
+  const laborIns = input.laborIns != null && input.laborIns !== ''
+    ? parseFloat(input.laborIns)
+    : Math.round(base * rates.labor / 100);
+  const healthIns = input.healthIns != null && input.healthIns !== ''
+    ? parseFloat(input.healthIns)
+    : Math.round(base * rates.health / 100);
+
+  const gross = base + otPay1 + otPay2 + (input.bonus || 0) - dailyDeduct;
+  const deductions = laborIns + healthIns + (input.otherDeduct || 0);
+  const net = gross - deductions;
+
+  return {
+    base, otPay1, otPay2,
+    bonus: input.bonus || 0,
+    leaveDeduct: dailyDeduct,
+    laborIns, healthIns,
+    otherDeduct: input.otherDeduct || 0,
+    gross, deductions, net
+  };
+}
+
+function gatherCalcInput() {
+  return {
+    workDays: parseFloat(document.getElementById('workDays').value) || 0,
+    leaveDays: parseFloat(document.getElementById('leaveDays').value) || 0,
+    ot1: parseFloat(document.getElementById('ot1').value) || 0,
+    ot2: parseFloat(document.getElementById('ot2').value) || 0,
+    bonus: parseFloat(document.getElementById('bonus').value) || 0,
+    otherDeduct: parseFloat(document.getElementById('otherDeduct').value) || 0,
+    laborIns: document.getElementById('laborIns').value,
+    healthIns: document.getElementById('healthIns').value,
+    note: document.getElementById('calcNote').value.trim()
+  };
+}
+
+function calculateAndPreview() {
+  const empId = document.getElementById('calcEmp').value;
+  if (!empId) { alert('請選擇員工'); return; }
+  const emp = employees.find(e => e._id === empId);
+  const input = gatherCalcInput();
+  const r = computeSalary(emp, input);
+  const box = document.getElementById('calcResult');
+  box.style.display = 'block';
+  box.innerHTML = `
+    <div class="result-row"><span>底薪</span><span>NT$ ${formatMoney(r.base)}</span></div>
+    <div class="result-row"><span>平日加班費</span><span>NT$ ${formatMoney(r.otPay1)}</span></div>
+    <div class="result-row"><span>假日加班費</span><span>NT$ ${formatMoney(r.otPay2)}</span></div>
+    <div class="result-row"><span>獎金/津貼</span><span>NT$ ${formatMoney(r.bonus)}</span></div>
+    <div class="result-row"><span>請假扣款</span><span>-NT$ ${formatMoney(r.leaveDeduct)}</span></div>
+    <div class="result-row"><span>應發合計</span><span>NT$ ${formatMoney(r.gross)}</span></div>
+    <div class="result-row"><span>勞保</span><span>-NT$ ${formatMoney(r.laborIns)}</span></div>
+    <div class="result-row"><span>健保</span><span>-NT$ ${formatMoney(r.healthIns)}</span></div>
+    <div class="result-row"><span>其他扣款</span><span>-NT$ ${formatMoney(r.otherDeduct)}</span></div>
+    <div class="result-row total"><span>實發金額</span><span>NT$ ${formatMoney(r.net)}</span></div>
+  `;
+}
+
+function saveSalaryRecord() {
+  const empId = document.getElementById('calcEmp').value;
+  if (!empId) { alert('請選擇員工'); return; }
+  const month = document.getElementById('calcMonth').value;
+  if (!month) { alert('請選擇月份'); return; }
+  const emp = employees.find(e => e._id === empId);
+  const input = gatherCalcInput();
+  const r = computeSalary(emp, input);
+  const rec = {
+    _id: 'rec_' + Date.now(),
+    month,
+    empId,
+    empName: emp.name,
+    empNo: emp.id,
+    empTitle: emp.title,
+    ...input,
+    ...r,
+    createdAt: new Date().toISOString()
+  };
+  records.push(rec);
+  save(STORE.records, records);
+  alert('已儲存：' + emp.name + ' · ' + month);
+  refreshRecords();
+}
+
+function refreshRecords() {
+  const month = document.getElementById('calcMonth').value;
+  const box = document.getElementById('recordList');
+  const filter = month ? records.filter(r => r.month === month) : records;
+  document.getElementById('recCount').textContent = filter.length;
+  if (filter.length === 0) {
+    box.innerHTML = '<div class="empty">尚無記錄</div>';
+    return;
+  }
+  box.innerHTML = filter.slice().reverse().map(r => `
+    <div class="employee-item">
+      <div class="info">
+        <div class="name">${escapeHtml(r.empName)} <span class="badge">${escapeHtml(r.month)}</span></div>
+        <div class="sub">應發 ${formatMoney(r.gross)} · 扣除 ${formatMoney(r.deductions)} · <strong>實發 NT$ ${formatMoney(r.net)}</strong></div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-danger btn-sm" onclick="deleteRecord('${r._id}')">刪除</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function deleteRecord(id) {
+  if (!confirm('確定刪除此筆薪資記錄？')) return;
+  records = records.filter(r => r._id !== id);
+  save(STORE.records, records);
+  refreshRecords();
+}
+
+// ========= 匯出 Excel =========
+function exportToExcel() {
+  const month = document.getElementById('exportMonth').value;
+  const data = month ? records.filter(r => r.month === month) : records;
+  const dailyData = month
+    ? dailyEntries.filter(d => d.date.startsWith(month))
+    : dailyEntries;
+
+  if (data.length === 0 && dailyData.length === 0) {
+    alert('目前沒有可匯出的資料');
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+
+  // 摘要表 (僅當有月薪記錄時)
+  if (data.length > 0) {
+  const summaryRows = [
+    ['員工薪資摘要表'],
+    ['匯出時間', new Date().toLocaleString('zh-TW')],
+    ['月份範圍', month || '全部'],
+    ['員工筆數', data.length],
+    [],
+    ['員工編號', '姓名', '職稱', '月份', '應發合計', '勞健保', '其他扣款', '實發金額']
+  ];
+  data.forEach(r => {
+    summaryRows.push([
+      r.empNo || '', r.empName, r.empTitle || '',
+      r.month, r.gross, r.laborIns + r.healthIns,
+      r.otherDeduct, r.net
+    ]);
+  });
+  // 總計
+  const totalGross = data.reduce((a,b) => a + b.gross, 0);
+  const totalNet = data.reduce((a,b) => a + b.net, 0);
+  summaryRows.push([]);
+  summaryRows.push(['', '', '', '總計', totalGross, '', '', totalNet]);
+
+  const ws1 = XLSX.utils.aoa_to_sheet(summaryRows);
+  ws1['!cols'] = [{wch:12},{wch:12},{wch:14},{wch:10},{wch:12},{wch:12},{wch:12},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, ws1, '月薪摘要');
+  }
+
+  // 明細表
+  const detailHead = [
+    '月份','員工編號','姓名','職稱','出勤天數','請假天數',
+    '平日加班(時)','假日加班(時)','底薪','平日加班費','假日加班費','獎金',
+    '請假扣款','應發合計','勞保','健保','其他扣款','扣除合計','實發金額','備註'
+  ];
+  const detailRows = [detailHead];
+  data.forEach(r => {
+    detailRows.push([
+      r.month, r.empNo || '', r.empName, r.empTitle || '',
+      r.workDays || 0, r.leaveDays || 0, r.ot1 || 0, r.ot2 || 0,
+      r.base, r.otPay1, r.otPay2, r.bonus,
+      r.leaveDeduct, r.gross, r.laborIns, r.healthIns,
+      r.otherDeduct, r.deductions, r.net, r.note || ''
+    ]);
+  });
+  if (data.length > 0) {
+    const ws2 = XLSX.utils.aoa_to_sheet(detailRows);
+    ws2['!cols'] = detailHead.map(h => ({wch: h.length > 6 ? 12 : 10}));
+    XLSX.utils.book_append_sheet(wb, ws2, '月薪明細');
+  }
+
+  // === 每日記錄工作表 ===
+  if (dailyData.length > 0) {
+    // 每日明細
+    const dailyHead = ['日期','員工編號','姓名','類型','品名/時段','數量/時數','單價/時薪','小計','備註'];
+    const dailyRows = [dailyHead];
+    dailyData.slice().sort((a,b) => a.date.localeCompare(b.date)).forEach(d => {
+      if (d.type === 'piece') {
+        dailyRows.push([
+          d.date, d.empNo || '', d.empName, '論件',
+          d.name, d.qty, d.price, d.subtotal, d.note || ''
+        ]);
+      } else {
+        dailyRows.push([
+          d.date, d.empNo || '', d.empName, '計時',
+          `${d.start}-${d.end}`, d.hours, d.rate, d.subtotal, d.note || ''
+        ]);
+      }
+    });
+    const dailyTotal = dailyData.reduce((a,b) => a + b.subtotal, 0);
+    dailyRows.push([]);
+    dailyRows.push(['', '', '', '', '', '', '總計', dailyTotal, '']);
+
+    const wsD = XLSX.utils.aoa_to_sheet(dailyRows);
+    wsD['!cols'] = [{wch:12},{wch:10},{wch:10},{wch:8},{wch:18},{wch:10},{wch:10},{wch:12},{wch:20}];
+    XLSX.utils.book_append_sheet(wb, wsD, '每日明細');
+
+    // 每日摘要（依員工 × 日期）
+    const byEmpDate = {};
+    dailyData.forEach(d => {
+      const k = d.empId + '|' + d.date;
+      if (!byEmpDate[k]) byEmpDate[k] = { date: d.date, empName: d.empName, empNo: d.empNo || '', piece: 0, hour: 0, total: 0 };
+      if (d.type === 'piece') byEmpDate[k].piece += d.subtotal;
+      else byEmpDate[k].hour += d.subtotal;
+      byEmpDate[k].total += d.subtotal;
+    });
+    const sumRows = [['日期','員工編號','姓名','論件金額','計時金額','當日合計']];
+    Object.values(byEmpDate)
+      .sort((a,b) => a.date.localeCompare(b.date) || a.empName.localeCompare(b.empName))
+      .forEach(v => {
+        sumRows.push([v.date, v.empNo, v.empName, v.piece, v.hour, v.total]);
+      });
+    sumRows.push([]);
+    sumRows.push(['', '', '總計',
+      dailyData.filter(d=>d.type==='piece').reduce((a,b)=>a+b.subtotal,0),
+      dailyData.filter(d=>d.type==='hour').reduce((a,b)=>a+b.subtotal,0),
+      dailyTotal
+    ]);
+    const wsDS = XLSX.utils.aoa_to_sheet(sumRows);
+    wsDS['!cols'] = [{wch:12},{wch:10},{wch:12},{wch:12},{wch:12},{wch:12}];
+    XLSX.utils.book_append_sheet(wb, wsDS, '每日摘要');
+
+    // 每員工月總 (僅當有每日記錄時)
+    const byEmp = {};
+    dailyData.forEach(d => {
+      const k = d.empId;
+      if (!byEmp[k]) byEmp[k] = { empName: d.empName, empNo: d.empNo || '', piece: 0, hour: 0, hours: 0, qty: 0, total: 0 };
+      if (d.type === 'piece') { byEmp[k].piece += d.subtotal; byEmp[k].qty += d.qty; }
+      else { byEmp[k].hour += d.subtotal; byEmp[k].hours += d.hours; }
+      byEmp[k].total += d.subtotal;
+    });
+    const empRows = [['員工編號','姓名','論件總數量','論件金額','計時總時數','計時金額','合計']];
+    Object.values(byEmp).forEach(v => {
+      empRows.push([v.empNo, v.empName, v.qty, v.piece, Math.round(v.hours*100)/100, v.hour, v.total]);
+    });
+    const wsE = XLSX.utils.aoa_to_sheet(empRows);
+    wsE['!cols'] = [{wch:10},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12}];
+    XLSX.utils.book_append_sheet(wb, wsE, '員工月總');
+  }
+
+  const fname = `薪資_${month || 'all'}_${new Date().toISOString().slice(0,10)}.xlsx`;
+  XLSX.writeFile(wb, fname);
+}
+
+// ========= 統計 =========
+function updateSummary() {
+  const box = document.getElementById('summaryBox');
+  if (records.length === 0) {
+    box.innerHTML = '<div class="empty">尚無資料</div>';
+    return;
+  }
+  const months = [...new Set(records.map(r => r.month))].sort();
+  const rows = months.map(m => {
+    const ms = records.filter(r => r.month === m);
+    const g = ms.reduce((a,b) => a + b.gross, 0);
+    const n = ms.reduce((a,b) => a + b.net, 0);
+    return `<tr>
+      <td>${m}</td>
+      <td>${ms.length} 人</td>
+      <td class="currency">${formatMoney(g)}</td>
+      <td class="currency">${formatMoney(n)}</td>
+    </tr>`;
+  }).join('');
+  box.innerHTML = `
+    <table>
+      <thead><tr><th>月份</th><th>人數</th><th class="currency">應發合計</th><th class="currency">實發合計</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+// ========= 備份 =========
+function backupData() {
+  const blob = new Blob([JSON.stringify({ employees, records, dailyEntries, rates }, null, 2)],
+    { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `salary_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function restoreData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (data.employees) employees = data.employees;
+      if (data.records) records = data.records;
+      if (data.dailyEntries) dailyEntries = data.dailyEntries;
+      if (data.rates) rates = data.rates;
+      save(STORE.employees, employees);
+      save(STORE.records, records);
+      save(STORE.daily, dailyEntries);
+      save(STORE.rates, rates);
+      refreshEmployeeList();
+      refreshEmpDropdown();
+      refreshRecords();
+      refreshDailyEntries();
+      refreshMonthlyDaily();
+      alert('還原成功');
+    } catch (err) {
+      alert('檔案格式錯誤');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function clearAllData() {
+  if (!confirm('確定清除所有員工與薪資記錄？此動作無法復原！')) return;
+  if (!confirm('再次確認：資料將完全清除！')) return;
+  employees = []; records = []; dailyEntries = [];
+  save(STORE.employees, []);
+  save(STORE.records, []);
+  save(STORE.daily, []);
+  refreshEmployeeList();
+  refreshEmpDropdown();
+  refreshRecords();
+  refreshDailyEntries();
+  refreshMonthlyDaily();
+  updateSummary();
+  alert('已清除');
+}
+
+// ========= LIFF =========
+function saveLiffId() {
+  const id = document.getElementById('liffId').value.trim();
+  save(STORE.liffId, id);
+  alert('已儲存，重新載入頁面以套用');
+  location.reload();
+}
+
+function saveRates() {
+  rates.labor = parseFloat(document.getElementById('laborRate').value) || 2.42;
+  rates.health = parseFloat(document.getElementById('healthRate').value) || 1.655;
+  save(STORE.rates, rates);
+  alert('費率已儲存');
+}
+
+async function initLiff() {
+  const liffId = load(STORE.liffId, '');
+  document.getElementById('liffId').value = liffId;
+  if (!liffId) {
+    document.getElementById('liffStatus').textContent = '未設定 LIFF ID (目前以獨立網頁模式運作)';
+    return;
+  }
+  try {
+    await liff.init({ liffId });
+    if (liff.isLoggedIn()) {
+      const profile = await liff.getProfile();
+      document.getElementById('userInfo').textContent = `您好，${profile.displayName}`;
+      document.getElementById('liffStatus').textContent = `已連線 · ${profile.displayName}`;
+    } else {
+      document.getElementById('liffStatus').textContent = '已初始化 (未登入 LINE)';
+    }
+  } catch (err) {
+    document.getElementById('liffStatus').textContent = '初始化失敗：' + err.message;
+  }
+}
+
+// ========= 工具 =========
+function formatMoney(n) {
+  if (isNaN(n)) return '0';
+  return Math.round(n).toLocaleString('en-US');
+}
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, m =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+// ========= 初始化 =========
+function init() {
+  // 預設當月 / 當日
+  const now = new Date();
+  const m = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const d = `${m}-${String(now.getDate()).padStart(2,'0')}`;
+  document.getElementById('calcMonth').value = m;
+  document.getElementById('dailyDate').value = d;
+  document.getElementById('dailyMonthFilter').value = m;
+  document.getElementById('calcMonth').addEventListener('change', refreshRecords);
+  document.getElementById('dailyDate').addEventListener('change', refreshDailyEntries);
+  document.getElementById('dailyEmp').addEventListener('change', refreshDailyEntries);
+
+  // 費率
+  document.getElementById('laborRate').value = rates.labor;
+  document.getElementById('healthRate').value = rates.health;
+
+  // 預設選擇論件模式
+  setDailyMode('piece');
+
+  refreshEmployeeList();
+  refreshEmpDropdown();
+  refreshRecords();
+  refreshDailyEntries();
+  refreshMonthlyDaily();
+  initLiff();
+}
+
+init();
+</script>
+</body>
+</html>
