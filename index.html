@@ -7,6 +7,8 @@
 <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -227,6 +229,7 @@
   <header>
     <h1>員工薪資計算系統</h1>
     <div class="user-info" id="userInfo">LINE LIFF 版 · 點選下方頁籤開始</div>
+    <div id="syncStatus" style="font-size:11px; margin-top:6px; opacity:0.9;">☁ 初始化中…</div>
   </header>
 
   <div class="tabs">
@@ -659,6 +662,138 @@ let currentPiecePhoto = null;
 let currentHourPhoto = null;
 let currentNewProductPhoto = null;
 
+// ========= Firebase 雲端同步 =========
+const firebaseConfig = {
+  apiKey: "AIzaSyCQ7r27OSdCEHRJM5Xhc_FmtfoWr3iLjcU",
+  authDomain: "salary-system-ba974.firebaseapp.com",
+  projectId: "salary-system-ba974",
+  storageBucket: "salary-system-ba974.firebasestorage.app",
+  messagingSenderId: "422453565800",
+  appId: "1:422453565800:web:2701c922564d5147181edd"
+};
+const WORKSPACE_ID = 'default';
+let db = null;
+let cloudReady = false;
+let suppressSubscription = false;
+
+function setSyncStatus(text, tone) {
+  const el = document.getElementById('syncStatus');
+  if (!el) return;
+  const icon = tone === 'error' ? '⚠' : tone === 'syncing' ? '⏳' : '☁';
+  el.textContent = icon + ' ' + text;
+}
+
+function ws() { return db.collection('workspaces').doc(WORKSPACE_ID); }
+function col(name) { return ws().collection(name); }
+
+function initFirebase() {
+  try {
+    if (typeof firebase === 'undefined') {
+      setSyncStatus('無法連線雲端 (僅本機)', 'error');
+      return;
+    }
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    try { db.enablePersistence({ synchronizeTabs: true }); } catch(e) {}
+    cloudReady = true;
+    setSyncStatus('連線中…', 'syncing');
+    migrateAndSubscribe();
+  } catch (e) {
+    console.error('Firebase init failed:', e);
+    setSyncStatus('連線失敗 (僅本機): ' + e.message, 'error');
+  }
+}
+
+async function migrateAndSubscribe() {
+  try {
+    const [e1, e2, e3, e4] = await Promise.all([
+      col('employees').limit(1).get(),
+      col('records').limit(1).get(),
+      col('daily').limit(1).get(),
+      col('products').limit(1).get()
+    ]);
+    const cloudEmpty = e1.empty && e2.empty && e3.empty && e4.empty;
+    const localHasData = employees.length + records.length + dailyEntries.length + products.length > 0;
+
+    if (cloudEmpty && localHasData) {
+      setSyncStatus('首次同步本機資料到雲端…', 'syncing');
+      await Promise.all([
+        ...employees.map(x => col('employees').doc(x._id).set(x)),
+        ...records.map(x => col('records').doc(x._id).set(x)),
+        ...dailyEntries.map(x => col('daily').doc(x._id).set(x)),
+        ...products.map(x => col('products').doc(x._id).set(x))
+      ]);
+      await ws().collection('config').doc('rates').set(rates);
+    }
+    subscribeAll();
+  } catch (e) {
+    console.error('Migration/Subscribe failed:', e);
+    setSyncStatus('同步錯誤: ' + e.message, 'error');
+  }
+}
+
+function subscribeAll() {
+  col('employees').onSnapshot(snap => {
+    employees = snap.docs.map(d => d.data());
+    save(STORE.employees, employees);
+    refreshEmployeeList();
+    refreshEmpDropdown();
+    setSyncStatus('已同步 ' + new Date().toLocaleTimeString('zh-TW'));
+  }, err => setSyncStatus('讀取錯誤: ' + err.message, 'error'));
+
+  col('records').onSnapshot(snap => {
+    records = snap.docs.map(d => d.data());
+    save(STORE.records, records);
+    refreshRecords();
+    updateSummary();
+  });
+
+  col('daily').onSnapshot(snap => {
+    dailyEntries = snap.docs.map(d => d.data());
+    save(STORE.daily, dailyEntries);
+    refreshDailyEntries();
+    refreshMonthlyDaily();
+  });
+
+  col('products').onSnapshot(snap => {
+    products = snap.docs.map(d => d.data());
+    save(STORE.products, products);
+    refreshProductList();
+    const pm = document.getElementById('productManager');
+    if (pm && pm.style.display === 'block') refreshProductManagerList();
+  });
+
+  ws().collection('config').doc('rates').onSnapshot(snap => {
+    const d = snap.data();
+    if (d) {
+      rates = d;
+      save(STORE.rates, rates);
+      const lr = document.getElementById('laborRate');
+      const hr = document.getElementById('healthRate');
+      if (lr) lr.value = rates.labor;
+      if (hr) hr.value = rates.health;
+    }
+  });
+}
+
+async function cloudSave(type, item) {
+  if (!cloudReady) return;
+  try { await col(type).doc(item._id).set(item); }
+  catch (e) { console.error('cloudSave error:', e); setSyncStatus('上傳失敗: ' + e.message, 'error'); }
+}
+
+async function cloudDelete(type, id) {
+  if (!cloudReady) return;
+  try { await col(type).doc(id).delete(); }
+  catch (e) { console.error('cloudDelete error:', e); }
+}
+
+async function cloudSaveRates() {
+  if (!cloudReady) return;
+  try { await ws().collection('config').doc('rates').set(rates); }
+  catch (e) { console.error('cloudSaveRates error:', e); }
+}
+
 // ========= 照片處理 =========
 function compressImage(file, maxWidth = 1000, quality = 0.7) {
   return new Promise((resolve, reject) => {
@@ -787,6 +922,7 @@ function saveEmployee() {
     employees.push(emp);
   }
   save(STORE.employees, employees);
+  cloudSave('employees', emp);
   clearEmpForm();
   refreshEmployeeList();
   refreshEmpDropdown();
@@ -810,6 +946,7 @@ function deleteEmployee(id) {
   if (!confirm('確定刪除此員工？相關薪資記錄將保留。')) return;
   employees = employees.filter(e => e._id !== id);
   save(STORE.employees, employees);
+  cloudDelete('employees', id);
   refreshEmployeeList();
   refreshEmpDropdown();
 }
@@ -919,6 +1056,7 @@ function addPieceEntry() {
     alert('儲存失敗，儲存空間可能已滿。請先匯出照片 ZIP 後清除舊記錄。\n錯誤：' + e.message);
     return;
   }
+  cloudSave('daily', entry);
   // 清空輸入
   document.getElementById('pieceName').selectedIndex = 0;
   document.getElementById('pieceQty').value = '';
@@ -968,6 +1106,7 @@ function addHourEntry() {
     alert('儲存失敗，儲存空間可能已滿。請先匯出照片 ZIP 後清除舊記錄。\n錯誤：' + e.message);
     return;
   }
+  cloudSave('daily', entry);
   // 清空
   document.getElementById('hourStart').value = '';
   document.getElementById('hourEnd').value = '';
@@ -1039,6 +1178,7 @@ function deleteDailyEntry(id) {
   if (!confirm('確定刪除此筆記錄？')) return;
   dailyEntries = dailyEntries.filter(d => d._id !== id);
   save(STORE.daily, dailyEntries);
+  cloudDelete('daily', id);
   refreshDailyEntries();
   refreshMonthlyDaily();
 }
@@ -1184,12 +1324,13 @@ function addProduct() {
   const price = parseFloat(document.getElementById('newProductPrice').value) || 0;
   if (!name) { alert('請輸入產品名稱'); return; }
   if (products.find(p => p.name === name)) { alert('此產品已存在'); return; }
-  products.push({
+  const newProd = {
     _id: 'p_' + Date.now(),
     name,
     defaultPrice: price,
     photo: currentNewProductPhoto || null
-  });
+  };
+  products.push(newProd);
   try {
     save(STORE.products, products);
   } catch (e) {
@@ -1197,10 +1338,29 @@ function addProduct() {
     alert('儲存失敗，儲存空間可能已滿。\n錯誤：' + e.message);
     return;
   }
+  cloudSave('products', newProd);
   document.getElementById('newProductName').value = '';
   document.getElementById('newProductPrice').value = '';
   clearNewProductPhoto();
   refreshProductManagerList();
+  refreshProductList();
+}
+
+function deleteProduct(id) {
+  if (!confirm('確定刪除此產品？已建立的記錄不受影響。')) return;
+  products = products.filter(p => p._id !== id);
+  save(STORE.products, products);
+  cloudDelete('products', id);
+  refreshProductManagerList();
+  refreshProductList();
+}
+
+function updateProductPrice(id, newPrice) {
+  const p = products.find(x => x._id === id);
+  if (!p) return;
+  p.defaultPrice = parseFloat(newPrice) || 0;
+  save(STORE.products, products);
+  cloudSave('products', p);
   refreshProductList();
 }
 
@@ -1212,6 +1372,7 @@ function updateProductPhoto(id, file) {
     p.photo = base64;
     try {
       save(STORE.products, products);
+      cloudSave('products', p);
       refreshProductManagerList();
     } catch (e) {
       alert('儲存失敗：' + e.message);
@@ -1224,23 +1385,8 @@ function removeProductPhoto(id) {
   if (!p) return;
   p.photo = null;
   save(STORE.products, products);
+  cloudSave('products', p);
   refreshProductManagerList();
-}
-
-function deleteProduct(id) {
-  if (!confirm('確定刪除此產品？已建立的記錄不受影響。')) return;
-  products = products.filter(p => p._id !== id);
-  save(STORE.products, products);
-  refreshProductManagerList();
-  refreshProductList();
-}
-
-function updateProductPrice(id, newPrice) {
-  const p = products.find(x => x._id === id);
-  if (!p) return;
-  p.defaultPrice = parseFloat(newPrice) || 0;
-  save(STORE.products, products);
-  refreshProductList();
 }
 
 function refreshProductManagerList() {
@@ -1381,6 +1527,7 @@ function saveSalaryRecord() {
   };
   records.push(rec);
   save(STORE.records, records);
+  cloudSave('records', rec);
   alert('已儲存：' + emp.name + ' · ' + month);
   refreshRecords();
 }
@@ -1411,6 +1558,7 @@ function deleteRecord(id) {
   if (!confirm('確定刪除此筆薪資記錄？')) return;
   records = records.filter(r => r._id !== id);
   save(STORE.records, records);
+  cloudDelete('records', id);
   refreshRecords();
 }
 
@@ -1691,6 +1839,7 @@ function saveRates() {
   rates.labor = parseFloat(document.getElementById('laborRate').value) || 2.42;
   rates.health = parseFloat(document.getElementById('healthRate').value) || 1.655;
   save(STORE.rates, rates);
+  cloudSaveRates();
   alert('費率已儲存');
 }
 
@@ -1753,6 +1902,7 @@ function init() {
   refreshMonthlyDaily();
   refreshProductList();
   initLiff();
+  initFirebase();
 }
 
 init();
