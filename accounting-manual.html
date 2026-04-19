@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>員工薪資計算系統｜會計操作手冊</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", "PingFang TC", sans-serif;
+    background: #f9fafb;
+    color: #1f2937;
+    line-height: 1.7;
+    font-size: 15px;
+  }
+  .layout { display: flex; max-width: 1280px; margin: 0 auto; }
+  .toc {
+    width: 260px;
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 30px 20px;
+    background: white;
+    border-right: 1px solid #e5e7eb;
+  }
+  .toc h3 {
+    font-size: 14px;
+    color: #6b7280;
+    margin-bottom: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .toc a {
+    display: block;
+    padding: 7px 12px;
+    color: #374151;
+    text-decoration: none;
+    font-size: 13px;
+    border-radius: 6px;
+    margin-bottom: 2px;
+    transition: all 0.15s;
+  }
+  .toc a:hover { background: #f3f4f6; color: #06C755; }
+  .toc a.sub { padding-left: 24px; font-size: 12px; color: #6b7280; }
+  .content {
+    flex: 1;
+    padding: 40px 48px 80px;
+    max-width: 900px;
+  }
+  .cover {
+    background: linear-gradient(135deg, #06C755 0%, #00B900 100%);
+    color: white;
+    padding: 50px 40px;
+    border-radius: 16px;
+    margin-bottom: 40px;
+    position: relative;
+    overflow: hidden;
+  }
+  .cover h1 { font-size: 32px; margin-bottom: 8px; font-weight: 700; }
+  .cover .subtitle { font-size: 17px; opacity: 0.95; margin-bottom: 20px; }
+  .cover-meta { font-size: 13px; opacity: 0.85; display: flex; gap: 20px; flex-wrap: wrap; }
+  h2 {
+    font-size: 26px;
+    color: #111827;
+    margin: 40px 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 3px solid #06C755;
+    scroll-margin-top: 20px;
+  }
+  h3 {
+    font-size: 19px;
+    color: #059669;
+    margin: 28px 0 10px;
+    scroll-margin-top: 20px;
+  }
+  h4 {
+    font-size: 16px;
+    color: #374151;
+    margin: 18px 0 8px;
+  }
+  p { margin-bottom: 12px; }
+  ul, ol { margin: 10px 0 14px 24px; }
+  li { margin-bottom: 6px; }
+  code {
+    background: #1f2937;
+    color: #f3f4f6;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: "Cascadia Code", Consolas, monospace;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0;
+    font-size: 14px;
+  }
+  th, td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  th { background: #f3f4f6; font-weight: 600; color: #111827; }
+  tbody tr:hover { background: #fafafa; }
+  .tip {
+    background: #f0fdf4;
+    border-left: 4px solid #06C755;
+    padding: 14px 18px;
+    border-radius: 0 10px 10px 0;
+    margin: 16px 0;
+  }
+  .tip-title { font-weight: 700; color: #059669; margin-bottom: 4px; }
+  .warn {
+    background: #fef3c7;
+    border-left: 4px solid #f59e0b;
+    padding: 14px 18px;
+    border-radius: 0 10px 10px 0;
+    margin: 16px 0;
+  }
+  .warn-title { font-weight: 700; color: #92400e; margin-bottom: 4px; }
+  .info {
+    background: #eff6ff;
+    border-left: 4px solid #3b82f6;
+    padding: 14px 18px;
+    border-radius: 0 10px 10px 0;
+    margin: 16px 0;
+  }
+  .info-title { font-weight: 700; color: #1e40af; margin-bottom: 4px; }
+  .danger {
+    background: #fef2f2;
+    border-left: 4px solid #ef4444;
+    padding: 14px 18px;
+    border-radius: 0 10px 10px 0;
+    margin: 16px 0;
+  }
+  .danger-title { font-weight: 700; color: #991b1b; margin-bottom: 4px; }
+  /* UI 模擬 */
+  .mock {
+    background: #f3f4f6;
+    border-radius: 14px;
+    padding: 14px;
+    border: 2px solid #e5e7eb;
+    max-width: 400px;
+    margin: 14px 0;
+  }
+  .mock-header {
+    background: linear-gradient(135deg, #06C755, #00B900);
+    color: white;
+    padding: 10px;
+    border-radius: 10px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+  .mock-tabs {
+    display: flex;
+    background: white;
+    border-radius: 8px;
+    padding: 4px;
+    margin-bottom: 10px;
+    gap: 3px;
+  }
+  .mock-tab {
+    flex: 1;
+    padding: 6px;
+    text-align: center;
+    font-size: 11px;
+    border-radius: 6px;
+    color: #6b7280;
+    font-weight: 600;
+  }
+  .mock-tab.active { background: #06C755; color: white; }
+  .mock-card {
+    background: white;
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 8px;
+  }
+  .mock-label { font-size: 11px; color: #4b5563; margin-bottom: 4px; font-weight: 600; }
+  .mock-input {
+    background: white;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 7px 9px;
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+  .mock-btn {
+    background: #06C755;
+    color: white;
+    padding: 9px;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .mock-btn.gray { background: #e5e7eb; color: #374151; }
+  .mock-btn.red { background: #ef4444; color: white; }
+  .mock-btn.amber { background: #f59e0b; color: white; }
+  .mock-row { display: flex; gap: 8px; }
+  .mock-row > * { flex: 1; margin-bottom: 0 !important; }
+  .mock-highlight { outline: 3px solid #ef4444; outline-offset: 2px; }
+  .mock-caption { text-align: center; font-size: 11px; color: #6b7280; margin-top: 6px; font-style: italic; }
+  .step-num {
+    display: inline-block;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #06C755;
+    color: white;
+    text-align: center;
+    line-height: 28px;
+    font-weight: 700;
+    margin-right: 8px;
+    font-size: 14px;
+  }
+  .pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .pill-green { background: #dcfce7; color: #166534; }
+  .pill-amber { background: #fef3c7; color: #92400e; }
+  .pill-blue { background: #dbeafe; color: #1e40af; }
+  .pill-red { background: #fee2e2; color: #991b1b; }
+  .print-btn {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: linear-gradient(135deg, #06C755, #00B900);
+    color: white;
+    border: none;
+    padding: 14px 20px;
+    border-radius: 30px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(6, 199, 85, 0.4);
+    z-index: 100;
+    font-family: inherit;
+  }
+  /* 手機版 */
+  @media (max-width: 768px) {
+    .layout { flex-direction: column; }
+    .toc {
+      width: 100%;
+      position: static;
+      height: auto;
+      max-height: 300px;
+      border-right: none;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .content { padding: 24px 20px 100px; }
+    .cover { padding: 30px 24px; }
+    .cover h1 { font-size: 24px; }
+  }
+  /* 列印樣式 */
+  @media print {
+    body { background: white; font-size: 12px; }
+    .toc, .print-btn { display: none !important; }
+    .content { padding: 0; max-width: 100%; }
+    h2 { page-break-after: avoid; }
+    .mock, .tip, .warn, .info, .danger { page-break-inside: avoid; }
+    .cover { background: #06C755 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- 目錄 -->
+  <nav class="toc">
+    <h3>操作手冊目錄</h3>
+    <a href="#intro">1. 系統概覽</a>
+    <a href="#structure">2. 介面結構</a>
+    <a href="#employees">3. 員工管理</a>
+    <a href="#products">4. 產品建檔</a>
+    <a href="#daily">5. 每日工作記錄</a>
+    <a href="#daily-piece" class="sub">5.1 論件計酬</a>
+    <a href="#daily-hour" class="sub">5.2 計時計酬</a>
+    <a href="#daily-edit" class="sub">5.3 編輯記錄</a>
+    <a href="#monthly">6. 月薪計算</a>
+    <a href="#export">7. 匯出 Excel 與照片</a>
+    <a href="#backup">8. 資料備份與還原</a>
+    <a href="#sync">9. 雲端同步</a>
+    <a href="#settings">10. 系統設定</a>
+    <a href="#workflow">11. 建議工作流程</a>
+    <a href="#faq">12. 常見問題</a>
+  </nav>
+
+  <main class="content">
+
+    <!-- 封面 -->
+    <div class="cover">
+      <h1>員工薪資計算系統</h1>
+      <div class="subtitle">會計操作手冊 · Accounting Manual</div>
+      <div class="cover-meta">
+        <span>版本 v1.5</span>
+        <span>最後更新 2026-04-20</span>
+        <span>繁體中文</span>
+      </div>
+    </div>
+
+    <!-- 1. 系統概覽 -->
+    <h2 id="intro">1. 系統概覽</h2>
+    <p>本系統是一套專為小型公司（20 人以下）設計的薪資管理工具，透過 LINE LIFF 方式讓員工用手機輸入每日工作記錄，資料即時同步到雲端，會計／老闆在電腦上彙整、計算月薪並匯出 Excel 報表。</p>
+
+    <h3>主要能力</h3>
+    <table>
+      <tr><th>類別</th><th>功能</th></tr>
+      <tr><td>員工</td><td>新增／編輯／刪除員工、設定底薪與時薪</td></tr>
+      <tr><td>產品</td><td>建立品名、預設單價、參考照片</td></tr>
+      <tr><td>每日記錄</td><td>論件計酬、計時計酬兩種模式，可拍照存證</td></tr>
+      <tr><td>月薪</td><td>加班費、獎金、勞健保、扣款自動計算</td></tr>
+      <tr><td>匯出</td><td>Excel 多工作表、照片 ZIP 打包</td></tr>
+      <tr><td>同步</td><td>Firebase 雲端即時同步</td></tr>
+      <tr><td>備份</td><td>JSON 匯出／匯入還原</td></tr>
+    </table>
+
+    <h3>角色分工</h3>
+    <ul>
+      <li><b>會計／老闆</b>（您）：建立員工、建立產品、查看記錄、月底匯出 Excel</li>
+      <li><b>員工</b>：用手機 LINE 每天輸入工作記錄、拍照存證</li>
+    </ul>
+
+    <div class="tip">
+      <div class="tip-title">💡 使用重點</div>
+      資料雲端同步後，員工手機輸入的內容會在 1~3 秒內出現在您電腦，不需要員工另外傳 JSON 備份。
+    </div>
+
+    <!-- 2. 介面結構 -->
+    <h2 id="structure">2. 介面結構</h2>
+    <p>系統頂部為綠色標題列，下方為 5 個頁籤，每個頁籤是一個功能模組。</p>
+
+    <div class="mock">
+      <div class="mock-header">員工薪資計算系統<br><span style="font-size:11px; opacity:0.9;">☁ 已同步 03:54:12</span></div>
+      <div class="mock-tabs">
+        <div class="mock-tab">員工</div>
+        <div class="mock-tab">每日</div>
+        <div class="mock-tab">月薪</div>
+        <div class="mock-tab">匯出</div>
+        <div class="mock-tab">設定</div>
+      </div>
+      <div class="mock-caption">主畫面：頁首 + 雲端同步狀態 + 5 頁籤</div>
+    </div>
+
+    <table>
+      <tr><th>頁籤</th><th>用途</th><th>主要使用者</th></tr>
+      <tr><td>員工</td><td>員工資料管理</td><td>會計</td></tr>
+      <tr><td>每日</td><td>每日工作記錄輸入</td><td>員工（主要）+ 會計</td></tr>
+      <tr><td>月薪</td><td>月薪計算與記錄</td><td>會計</td></tr>
+      <tr><td>匯出</td><td>Excel/ZIP/JSON 匯出</td><td>會計</td></tr>
+      <tr><td>設定</td><td>LIFF ID、勞健保費率</td><td>會計（初次設定）</td></tr>
+    </table>
+
+    <!-- 3. 員工管理 -->
+    <h2 id="employees">3. 員工管理</h2>
+    <p>員工頁籤用來建立與維護員工資料。每位員工包含員工編號、姓名、職稱、到職日、月薪、時薪、備註。</p>
+
+    <h3>新增員工</h3>
+    <ol>
+      <li><span class="step-num">1</span>點「員工」頁籤</li>
+      <li><span class="step-num">2</span>於「新增 / 編輯員工」卡片中填寫：
+        <ul>
+          <li><b>員工編號</b>（可選）：公司內部編號，例如 E001</li>
+          <li><b>姓名</b>（必填）：員工全名</li>
+          <li><b>職稱</b>（可選）：如「作業員」「業務專員」</li>
+          <li><b>到職日</b>（可選）：用於未來年資計算</li>
+          <li><b>月薪（底薪）</b>（必填）：月薪新台幣</li>
+          <li><b>時薪</b>（可選）：留空會自動以「月薪 ÷ 30 ÷ 8」計算</li>
+          <li><b>備註</b>（可選）：任何補充資訊</li>
+        </ul>
+      </li>
+      <li><span class="step-num">3</span>按綠色「儲存員工」</li>
+    </ol>
+
+    <div class="mock">
+      <div class="mock-card">
+        <div class="mock-label">員工編號</div>
+        <div class="mock-input">E001</div>
+        <div class="mock-label">姓名 *</div>
+        <div class="mock-input">王小明</div>
+        <div class="mock-label">月薪 (底薪) NT$ *</div>
+        <div class="mock-input">30000</div>
+        <div class="mock-btn">儲存員工</div>
+      </div>
+    </div>
+
+    <h3>編輯／刪除員工</h3>
+    <p>在下方員工列表找到該員工，點「<b>編輯</b>」載入資料修改後再按「儲存員工」覆蓋；或點「<b>刪除</b>」移除。</p>
+
+    <div class="warn">
+      <div class="warn-title">⚠ 刪除員工的影響</div>
+      刪除員工只會從名單移除，<b>不會刪除該員工已建立的每日記錄或月薪記錄</b>。如要完全清除，需另行刪除對應記錄。
+    </div>
+
+    <!-- 4. 產品建檔 -->
+    <h2 id="products">4. 產品建檔</h2>
+    <p>產品建檔是論件計酬的必要前置作業。您先在這裡建立好產品名稱、預設單價和參考照片，員工輸入時只要從下拉選單選產品，單價自動帶入，減少錯誤。</p>
+
+    <h3>開啟產品管理</h3>
+    <p>在「每日」頁籤選擇「論件計酬」模式後，上方品名欄位旁邊會出現「<b>⚙ 管理產品清單</b>」按鈕，點它即可展開產品管理面板。</p>
+
+    <h3>新增產品</h3>
+    <ol>
+      <li><span class="step-num">1</span>填寫「產品名稱」，例如 <code>A 產品</code></li>
+      <li><span class="step-num">2</span>填寫「預設單價」，例如 <code>50</code>（員工選此產品時會自動帶出）</li>
+      <li><span class="step-num">3</span>選填「產品參考照片」：點「選擇檔案」上傳產品照片，有助於員工核對</li>
+      <li><span class="step-num">4</span>按「新增產品」</li>
+    </ol>
+
+    <div class="mock">
+      <div class="mock-card" style="background:#f0fdf4; border:1px dashed #06C755;">
+        <div style="font-weight:700; color:#06C755; margin-bottom:6px;">產品清單管理</div>
+        <div class="mock-row">
+          <div>
+            <div class="mock-label">產品名稱</div>
+            <div class="mock-input">A 產品</div>
+          </div>
+          <div>
+            <div class="mock-label">預設單價</div>
+            <div class="mock-input">50</div>
+          </div>
+        </div>
+        <div class="mock-label">📷 產品參考照片 (選填)</div>
+        <div class="mock-input">[選擇檔案]</div>
+        <div class="mock-btn">新增產品</div>
+      </div>
+    </div>
+
+    <h3>維護既有產品</h3>
+    <p>產品清單中每一列可以：</p>
+    <ul>
+      <li>直接修改單價（輸入後自動儲存）</li>
+      <li>點「📷 加照片」上傳照片，或點「✕」移除照片</li>
+      <li>點「刪除」移除整個產品</li>
+    </ul>
+
+    <div class="tip">
+      <div class="tip-title">💡 產品照片的用途</div>
+      員工選產品時，下拉選單下方會顯示您上傳的參考照片，幫助員工確認是否選對產品。產品名稱後面會有 📷 小圖示標示「有照片」。
+    </div>
+
+    <!-- 5. 每日記錄 -->
+    <h2 id="daily">5. 每日工作記錄</h2>
+    <p>員工每天上班後輸入當日工作內容。您（會計）也可以代員工補輸入或修正。</p>
+
+    <h3>共同操作</h3>
+    <ol>
+      <li>點「每日」頁籤</li>
+      <li>選擇<b>日期</b>（系統預設今天）</li>
+      <li>從下拉選單選擇<b>員工</b></li>
+      <li>選擇計酬方式：「論件計酬」或「按時計酬」</li>
+    </ol>
+
+    <h3 id="daily-piece">5.1 論件計酬 <span class="pill pill-amber">論件</span></h3>
+    <ol>
+      <li>從品名下拉選擇產品（單價自動帶出）</li>
+      <li>輸入<b>數量</b>，下方「小計」會自動計算</li>
+      <li>可選填「備註」</li>
+      <li>選填「📷 拍照 / 上傳照片」存證</li>
+      <li>按綠色「新增此筆記錄」</li>
+    </ol>
+
+    <div class="mock">
+      <div class="mock-card">
+        <div class="mock-label">品名 *</div>
+        <div class="mock-input">A 產品 (NT$ 50) 📷 ▼</div>
+        <div class="mock-row">
+          <div>
+            <div class="mock-label">數量 *</div>
+            <div class="mock-input">20</div>
+          </div>
+          <div>
+            <div class="mock-label">單價</div>
+            <div class="mock-input" style="background:#f0fdf4; color:#06C755;">50</div>
+          </div>
+        </div>
+        <div class="mock-label">小計</div>
+        <div class="mock-input" style="background:#f0fdf4; color:#06C755; font-weight:700;">NT$ 1,000</div>
+      </div>
+    </div>
+
+    <h3 id="daily-hour">5.2 計時計酬 <span class="pill pill-blue">計時</span></h3>
+    <ol>
+      <li>輸入<b>開始時間</b>與<b>結束時間</b>（支援跨日）</li>
+      <li>選休息時間：無休息／30 分／1 小時／1.5 小時／2 小時，或手動輸入分鐘</li>
+      <li>系統自動計算：<b>時段總長 − 休息 = 實際工作時數</b></li>
+      <li>輸入<b>時薪</b>，小計自動計算</li>
+      <li>選填備註、照片</li>
+      <li>按「新增此筆記錄」</li>
+    </ol>
+
+    <div class="mock">
+      <div class="mock-card">
+        <div class="mock-row">
+          <div>
+            <div class="mock-label">開始時間 *</div>
+            <div class="mock-input">09:00</div>
+          </div>
+          <div>
+            <div class="mock-label">結束時間 *</div>
+            <div class="mock-input">18:00</div>
+          </div>
+        </div>
+        <div class="mock-input" style="background:#fffbeb; border:1px solid #f59e0b; padding:8px;">
+          <div style="font-size:11px;">時段總長 <span style="float:right;">9.00 小時</span></div>
+          <div style="font-size:11px; color:#ef4444;">扣除休息 <span style="float:right;">− 1.00 小時</span></div>
+          <div style="font-size:12px; font-weight:700; color:#92400e; border-top:1px solid #f59e0b; margin-top:4px; padding-top:4px;">實際工作時數 <span style="float:right;">8.00 小時</span></div>
+        </div>
+        <div class="mock-label">時薪 NT$</div>
+        <div class="mock-input">190</div>
+        <div class="mock-input" style="background:#f0fdf4; color:#06C755; font-weight:700;">NT$ 1,520 (8.00h × 190)</div>
+      </div>
+    </div>
+
+    <h3 id="daily-edit">5.3 編輯／刪除每日記錄</h3>
+    <p>下方「當日記錄」列表會顯示該日所有記錄，每筆右邊有兩個按鈕：</p>
+    <ul>
+      <li><span class="pill pill-amber">✏️ 編輯</span> 載入資料到表單，修改後按「💾 儲存修改」覆蓋</li>
+      <li><span class="pill pill-red">刪除</span> 移除該筆記錄</li>
+    </ul>
+    <p>編輯時該筆記錄會顯示黃色邊框 + 「編輯中」徽章，提醒您目前正在編輯的是哪一筆。</p>
+
+    <h3>查詢整月加總</h3>
+    <p>「每日」頁籤往下滑到「整月加總」區塊，選月份和員工（留空 = 全部），會看到：</p>
+    <ul>
+      <li>每日分別的論件／計時金額</li>
+      <li>每日合計</li>
+      <li>月合計</li>
+      <li>論件總數量、計時總時數</li>
+    </ul>
+
+    <!-- 6. 月薪計算 -->
+    <h2 id="monthly">6. 月薪計算</h2>
+    <p>月薪頁籤用來建立每月的薪資記錄，包含底薪、加班費、獎金、勞健保、扣款等項目的完整計算。適合月薪制員工或論件計酬員工的月底結算。</p>
+
+    <h3>計算公式</h3>
+    <ul>
+      <li><b>平日加班費</b> = 時薪 × 1.34 × 時數</li>
+      <li><b>假日加班費</b> = 時薪 × 1.67 × 時數</li>
+      <li><b>請假扣款</b> = (月薪 ÷ 30) × 請假天數</li>
+      <li><b>應發合計</b> = 底薪 + 平日加班 + 假日加班 + 獎金 − 請假扣款</li>
+      <li><b>勞保</b>（預設）= 月薪 × 2.42%（員工負擔，可於設定頁調整費率）</li>
+      <li><b>健保</b>（預設）= 月薪 × 1.655%（員工負擔）</li>
+      <li><b>扣除合計</b> = 勞保 + 健保 + 其他扣款</li>
+      <li><b>實發金額</b> = 應發合計 − 扣除合計</li>
+    </ul>
+
+    <h3>操作步驟</h3>
+    <ol>
+      <li>選擇<b>月份</b>（如 2026-04）</li>
+      <li>選擇<b>員工</b></li>
+      <li>輸入出勤天數、請假天數、平日/假日加班時數、獎金、其他扣款</li>
+      <li>勞保、健保可留空自動估算，或手動填入實際投保級距的金額</li>
+      <li>按「<b>預覽計算</b>」查看試算結果</li>
+      <li>確認無誤按「<b>儲存記錄</b>」</li>
+    </ol>
+
+    <div class="warn">
+      <div class="warn-title">⚠ 勞健保建議手動填入</div>
+      系統自動用月薪乘上費率估算，但實際金額應以勞保局公告的「投保薪資級距表」為準。建議查詢員工實際級距後手動輸入精確金額。
+    </div>
+
+    <h3>編輯／刪除月薪記錄</h3>
+    <p>下方「本月薪資記錄」列表中，每筆同樣有「✏️ 編輯」和「刪除」按鈕。編輯時會自動載入所有欄位並執行預覽計算，方便調整。</p>
+
+    <!-- 7. 匯出 -->
+    <h2 id="export">7. 匯出 Excel 與照片</h2>
+    <p>匯出頁籤用於產生月底報表。</p>
+
+    <h3>匯出 Excel</h3>
+    <ol>
+      <li>點「匯出」頁籤</li>
+      <li>選擇「匯出月份」（留空 = 匯出全部資料）</li>
+      <li>按綠色「<b>下載 Excel 檔案</b>」按鈕</li>
+    </ol>
+
+    <h3>Excel 包含的工作表</h3>
+    <table>
+      <tr><th>工作表名稱</th><th>內容</th><th>條件</th></tr>
+      <tr><td>月薪摘要</td><td>每位員工該月的應發、勞健保、其他扣款、實發，含總計列</td><td>有月薪記錄</td></tr>
+      <tr><td>月薪明細</td><td>20 欄完整月薪明細（出勤、加班、獎金、扣款等）</td><td>有月薪記錄</td></tr>
+      <tr><td>每日明細</td><td>每筆每日記錄一列，含日期、員工、類型、品名/時段、數量/時數、單價/時薪、小計、備註、照片檔名</td><td>有每日記錄</td></tr>
+      <tr><td>每日摘要</td><td>依「員工 × 日期」加總的論件/計時金額與當日合計</td><td>有每日記錄</td></tr>
+      <tr><td>員工月總</td><td>每位員工該月的論件數量、計時時數、論件/計時金額、總合</td><td>有每日記錄</td></tr>
+    </table>
+
+    <h3>下載照片 ZIP</h3>
+    <p>按「<b>📷 下載所有照片 (ZIP)</b>」會將當月所有員工拍攝的存證照片打包下載，檔名格式為：</p>
+    <p><code>2026-04-20_王小明_A產品_abc123.jpg</code></p>
+    <p>檔名會與 Excel 裡「每日明細」工作表的「照片檔名」欄一致，可以直接對照核對。</p>
+
+    <div class="tip">
+      <div class="tip-title">💡 稽核建議</div>
+      每月底同時下載 Excel 與照片 ZIP，在電腦上開啟 Excel 並解壓縮 ZIP，按「照片檔名」欄排序，可以快速對照每筆記錄與實際照片。
+    </div>
+
+    <h3>統計摘要</h3>
+    <p>匯出頁下方有「統計摘要」表格，按月份列出人數、應發合計、實發合計，方便快速檢視。</p>
+
+    <!-- 8. 備份 -->
+    <h2 id="backup">8. 資料備份與還原</h2>
+
+    <h3>備份 JSON</h3>
+    <p>匯出頁「資料管理」區塊點「<b>備份 JSON</b>」會下載一個包含所有員工、記錄、產品、費率設定的 JSON 檔，檔名格式 <code>salary_backup_2026-04-20.json</code>。</p>
+
+    <h3>還原備份</h3>
+    <p>點「<b>還原備份</b>」選擇先前下載的 JSON 檔，系統會讀入並覆蓋目前資料。</p>
+
+    <div class="info">
+      <div class="info-title">ℹ 雲端同步與本機備份關係</div>
+      雖然資料有 Firebase 雲端同步，但建議每週仍下載一次 JSON 做雙重保險。如果雲端專案誤刪、付費方案異動，還能靠 JSON 還原。
+    </div>
+
+    <h3>清除全部</h3>
+    <p>「<b>清除全部</b>」會移除本機所有資料。需要確認兩次，無法復原。</p>
+
+    <div class="danger">
+      <div class="danger-title">❗ 清除全部的雲端影響</div>
+      清除全部只會清除<b>本機（瀏覽器 localStorage）</b>資料，但因為雲端訂閱仍在運作，下次重新整理頁面時雲端的資料會回來（也就是其實沒清掉）。如要真正清空，需先停用雲端同步或到 Firebase 主控台手動刪除。
+    </div>
+
+    <!-- 9. 雲端同步 -->
+    <h2 id="sync">9. 雲端同步</h2>
+    <p>系統使用 Firebase Firestore 作為雲端資料庫，頁首下方會顯示目前同步狀態：</p>
+
+    <table>
+      <tr><th>狀態</th><th>意義</th></tr>
+      <tr><td><span class="pill pill-blue">⏳ 連線中…</span></td><td>剛啟動，正在連 Firebase</td></tr>
+      <tr><td><span class="pill pill-green">☁ 已同步 XX:XX:XX</span></td><td>正常運作，最後同步時間</td></tr>
+      <tr><td><span class="pill pill-amber">⚠ 連線失敗</span></td><td>網路問題或設定錯誤，自動降級為只用本機</td></tr>
+    </table>
+
+    <h3>同步機制</h3>
+    <p>每一次新增、編輯、刪除都會同時寫入：</p>
+    <ul>
+      <li>本機瀏覽器 localStorage（快速讀取）</li>
+      <li>Firebase Firestore（雲端）</li>
+    </ul>
+    <p>其他裝置的系統會自動訂閱雲端變動，1~3 秒內同步更新畫面，不需要手動重新整理。</p>
+
+    <h3>離線使用</h3>
+    <p>沒網路時仍可正常新增記錄，資料暫存本機。恢復網路後自動補同步到雲端。</p>
+
+    <!-- 10. 設定 -->
+    <h2 id="settings">10. 系統設定</h2>
+
+    <h3>LINE LIFF 設定</h3>
+    <p>設定頁籤最上方可輸入 LIFF ID，用於整合 LINE 登入。員工打開 LIFF URL 時會自動取得姓名顯示在頁首。</p>
+    <p>LIFF ID 格式：<code>1234567890-AbCdEfGh</code>，從 LINE Developers 主控台取得。</p>
+
+    <h3>勞健保費率</h3>
+    <p>預設值（2026 年）：</p>
+    <ul>
+      <li>勞保費率（員工負擔）：<b>2.42%</b></li>
+      <li>健保費率（員工負擔）：<b>1.655%</b></li>
+    </ul>
+    <p>政府調整費率時，可於此處修改並按「儲存費率」。費率會同步到雲端，所有裝置自動套用。</p>
+
+    <div class="warn">
+      <div class="warn-title">⚠ 費率查詢來源</div>
+      請以勞動部勞工保險局、衛生福利部中央健康保險署最新公告為準。
+    </div>
+
+    <!-- 11. 建議工作流程 -->
+    <h2 id="workflow">11. 建議工作流程</h2>
+
+    <h3>初次設定（一次性）</h3>
+    <ol>
+      <li>於設定頁填入 LIFF ID 並儲存</li>
+      <li>於員工頁建立全部員工資料</li>
+      <li>於產品管理建立產品清單與照片</li>
+      <li>確認勞健保費率（視需要調整）</li>
+      <li>把 LIFF URL 分享給員工</li>
+    </ol>
+
+    <h3>日常運作</h3>
+    <ul>
+      <li>員工每天在手機輸入工作記錄（會計不需介入）</li>
+      <li>會計隨時可在電腦檢視全員資料</li>
+      <li>有誤時點「編輯」修正</li>
+    </ul>
+
+    <h3>每週</h3>
+    <ul>
+      <li>點「備份 JSON」下載備份檔，存到公司電腦指定資料夾</li>
+      <li>快速瀏覽「整月加總」確認資料完整</li>
+    </ul>
+
+    <h3>每月月底</h3>
+    <ol>
+      <li>檢查每位員工的每日記錄是否齊全</li>
+      <li>於月薪頁建立每位員工的月薪記錄（輸入加班、獎金、扣款等）</li>
+      <li>於匯出頁：
+        <ul>
+          <li>選該月份 → 下載 Excel</li>
+          <li>下載照片 ZIP</li>
+          <li>再下載一份 JSON 備份</li>
+        </ul>
+      </li>
+      <li>用 Excel + 照片 ZIP 進行薪資發放對照與稽核</li>
+    </ol>
+
+    <!-- 12. FAQ -->
+    <h2 id="faq">12. 常見問題</h2>
+
+    <h4>Q1. 兩台裝置資料不同步？</h4>
+    <p>先檢查頁首的同步狀態，若顯示「連線失敗」可能是網路問題。重新整理網頁即可。若長時間無法連線，可能是 Firestore 規則過期（測試模式 30 天）或付費配額用完。</p>
+
+    <h4>Q2. 員工拍照後儲存失敗？</h4>
+    <p>表示本機 localStorage 快滿了（約 5-10 MB 上限）。請先下載照片 ZIP 備份後，刪除已完成月份的舊記錄以騰出空間。</p>
+
+    <h4>Q3. 員工點 LIFF URL 顯示 400 Bad Request？</h4>
+    <p>表示 Channel 狀態是「Developing」，需到 LINE Developers 切換成「Published」才能讓所有人使用。</p>
+
+    <h4>Q4. 如何把系統搬到另一台電腦？</h4>
+    <p>由於資料在雲端，新電腦只要打開同一個網址（LIFF URL 或 GitHub Pages 網址）即可自動從雲端載入資料，無需搬移。</p>
+
+    <h4>Q5. 產品名稱打錯了怎麼辦？</h4>
+    <p>進入產品管理，找到該產品點「刪除」再新增一個正確名稱的。注意已建立的記錄中的品名不會自動更新，請使用「編輯」功能個別修正。</p>
+
+    <h4>Q6. 員工離職後怎麼處理？</h4>
+    <p>建議不要直接刪除，改在員工備註欄註明「已離職 2026-05-01」。這樣歷史記錄仍可查詢，也不會影響統計報表。</p>
+
+    <h4>Q7. Excel 裡金額是數字但排序怪怪的？</h4>
+    <p>可能是 Excel 誤判為文字。開啟後選取該欄 → 右鍵「儲存格格式」→ 選「數值」即可正確排序。</p>
+
+    <h4>Q8. 想加入新的計算欄位（例如夜班津貼）？</h4>
+    <p>可以把需求告知開發端，程式可修改擴充。目前「獎金／津貼」欄位可暫代用途。</p>
+
+    <h4>Q9. 資料被誤刪怎麼辦？</h4>
+    <p>用最近的「備份 JSON」還原即可。所以強烈建議每週做一次 JSON 備份。</p>
+
+    <div class="tip" style="margin-top:40px;">
+      <div class="tip-title">📞 需要協助？</div>
+      使用上遇到任何問題，請聯絡系統管理員或開發端。常見調整（加欄位、改公式、換色等）都能客製修改。
+    </div>
+
+  </main>
+</div>
+
+<button class="print-btn" onclick="window.print()">📄 列印 / 下載 PDF</button>
+
+</body>
+</html>

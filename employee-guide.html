@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>薪資系統使用指南 / Hướng dẫn / คู่มือ</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", "PingFang TC", "Noto Sans Thai", sans-serif;
+    background: linear-gradient(135deg, #fff7ed 0%, #fed7aa 50%, #fde68a 100%);
+    min-height: 100vh;
+    padding: 16px 12px;
+    color: #1f2937;
+  }
+  .container {
+    max-width: 560px;
+    margin: 0 auto;
+    padding-bottom: 40px;
+  }
+  .hero {
+    background: white;
+    border-radius: 24px;
+    padding: 24px 20px;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(20, 184, 166, 0.15);
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: "";
+    position: absolute;
+    top: -40px; right: -40px;
+    width: 120px; height: 120px;
+    background: radial-gradient(circle, rgba(20, 184, 166, 0.2), transparent);
+    border-radius: 50%;
+  }
+  .hero::after {
+    content: "";
+    position: absolute;
+    bottom: -30px; left: -30px;
+    width: 100px; height: 100px;
+    background: radial-gradient(circle, rgba(14, 165, 233, 0.2), transparent);
+    border-radius: 50%;
+  }
+  .mascot {
+    width: 150px;
+    height: 150px;
+    margin: 0 auto 8px;
+    position: relative;
+    z-index: 1;
+  }
+  h1 {
+    font-size: 22px;
+    background: linear-gradient(90deg, #ea580c, #d97706);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 4px;
+    position: relative;
+    z-index: 1;
+  }
+  .subtitle {
+    color: #6b7280;
+    font-size: 13px;
+    position: relative;
+    z-index: 1;
+  }
+  .lang-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    background: white;
+    border-radius: 20px;
+    padding: 6px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+  }
+  .lang-tab {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    background: transparent;
+    border-radius: 16px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    color: #6b7280;
+    font-family: inherit;
+  }
+  .lang-tab.active {
+    background: linear-gradient(135deg, #ea580c, #d97706);
+    color: white;
+    box-shadow: 0 4px 12px rgba(234, 88, 12, 0.4);
+  }
+  .lang-content { display: none; }
+  .lang-content.active { display: block; }
+  .step-card {
+    background: white;
+    border-radius: 20px;
+    padding: 20px;
+    margin-bottom: 14px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06);
+    position: relative;
+    overflow: hidden;
+  }
+  .step-card::before {
+    content: attr(data-step);
+    position: absolute;
+    top: -18px;
+    right: -10px;
+    font-size: 110px;
+    font-weight: 900;
+    color: rgba(234, 88, 12, 0.08);
+    line-height: 1;
+  }
+  .step-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    position: relative;
+    z-index: 1;
+  }
+  .step-num {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ea580c, #f59e0b);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 18px;
+    flex-shrink: 0;
+    box-shadow: 0 4px 10px rgba(234, 88, 12, 0.3);
+  }
+  .step-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: #111827;
+  }
+  .step-mascot {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    margin: 10px 0 14px;
+  }
+  .step-mascot svg { width: 110px; height: 110px; }
+  /* UI 模擬：仿系統實際畫面 */
+  .ui-mock {
+    background: #f3f4f6;
+    border-radius: 14px;
+    padding: 10px;
+    margin: 10px auto 14px;
+    border: 2px solid #e5e7eb;
+    font-size: 12px;
+    color: #1f2937;
+    max-width: 300px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  }
+  .ui-mock-header {
+    background: linear-gradient(135deg, #06C755, #00B900);
+    color: white;
+    padding: 10px 8px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 8px;
+  }
+  .ui-mock-tabs {
+    display: flex;
+    background: white;
+    border-radius: 8px;
+    padding: 3px;
+    margin-bottom: 8px;
+    gap: 2px;
+  }
+  .ui-mock-tab {
+    flex: 1;
+    padding: 5px 2px;
+    text-align: center;
+    font-size: 10px;
+    border-radius: 5px;
+    color: #6b7280;
+    font-weight: 600;
+  }
+  .ui-mock-tab.active { background: #06C755; color: white; }
+  .ui-mock-card {
+    background: white;
+    border-radius: 10px;
+    padding: 10px;
+    margin-bottom: 6px;
+  }
+  .ui-mock-label {
+    font-size: 10px;
+    color: #4b5563;
+    margin-bottom: 3px;
+    font-weight: 600;
+  }
+  .ui-mock-input {
+    background: white;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 11px;
+    color: #1f2937;
+    margin-bottom: 6px;
+  }
+  .ui-mock-select {
+    background: white;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 11px;
+    color: #1f2937;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .ui-mock-btn {
+    background: #06C755;
+    color: white;
+    padding: 8px;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+    margin-top: 4px;
+  }
+  .ui-mock-btn.gray { background: #e5e7eb; color: #374151; }
+  .ui-mock-btn.amber { background: #f59e0b; color: white; }
+  .ui-mock-row { display: flex; gap: 6px; }
+  .ui-mock-row > * { flex: 1; margin-bottom: 0 !important; }
+  .ui-mock-highlight {
+    outline: 3px solid #ef4444;
+    outline-offset: 2px;
+    position: relative;
+    animation: pulseRing 1.5s ease-in-out infinite;
+  }
+  @keyframes pulseRing {
+    0%, 100% { outline-color: #ef4444; }
+    50% { outline-color: #fca5a5; }
+  }
+  .ui-mock-note {
+    font-size: 10px;
+    color: #ef4444;
+    text-align: center;
+    margin-top: 4px;
+    font-weight: 700;
+  }
+  .ui-mock-breakdown {
+    background: #fffbeb;
+    border: 1px solid #f59e0b;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 10px;
+    margin-bottom: 4px;
+  }
+  .ui-mock-breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+  }
+  .ui-mock-breakdown-row.total {
+    font-weight: 700;
+    color: #92400e;
+    border-top: 1px solid #f59e0b;
+    margin-top: 3px;
+    padding-top: 4px;
+  }
+  .ui-mock-photo {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #fdba74, #ea580c);
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 18px;
+  }
+  .ui-mock-record {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    padding: 8px;
+    background: #fafafa;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    margin-bottom: 4px;
+  }
+  .ui-mock-actions { display: flex; gap: 3px; }
+  .ui-mock-mini-btn {
+    font-size: 9px;
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-weight: 700;
+  }
+  .mock-caption {
+    text-align: center;
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 4px;
+    font-style: italic;
+  }
+  .step-desc {
+    background: #fff7ed;
+    border-left: 4px solid #ea580c;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 14px;
+    line-height: 1.7;
+    color: #374151;
+  }
+  .step-desc strong { color: #ea580c; }
+  .tag {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-left: 6px;
+  }
+  .tag-piece { background: #fef3c7; color: #92400e; }
+  .tag-hour { background: #dbeafe; color: #1e40af; }
+  .tips {
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    border-radius: 20px;
+    padding: 20px;
+    margin-top: 20px;
+    box-shadow: 0 6px 24px rgba(251, 191, 36, 0.2);
+  }
+  .tips h3 {
+    font-size: 17px;
+    margin-bottom: 12px;
+    color: #92400e;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .tips ul {
+    list-style: none;
+    padding-left: 0;
+  }
+  .tips li {
+    padding: 6px 0;
+    font-size: 14px;
+    color: #78350f;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .tips li::before {
+    content: "💡";
+    flex-shrink: 0;
+  }
+  .footer {
+    text-align: center;
+    padding: 20px;
+    color: #9ca3af;
+    font-size: 12px;
+  }
+  .heart {
+    color: #ea580c;
+    animation: heartbeat 1.5s infinite;
+  }
+  @keyframes heartbeat {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+  }
+  @keyframes wave {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-10deg); }
+    75% { transform: rotate(10deg); }
+  }
+  .waving { animation: wave 2s infinite; transform-origin: 50% 100%; }
+  /* 列印 / PDF 匯出專用樣式 */
+  @media print {
+    body { background: white !important; padding: 0; }
+    .lang-tabs { display: none !important; }
+    button[onclick*="print"] { display: none !important; }
+    .lang-content { display: block !important; }
+    .lang-content + .lang-content { page-break-before: always; padding-top: 20px; }
+    .lang-content::before {
+      content: attr(data-label);
+      display: block;
+      text-align: center;
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 14px;
+      font-weight: 700;
+      letter-spacing: 2px;
+    }
+    .step-card { page-break-inside: avoid; box-shadow: none !important; border: 1px solid #e5e7eb; }
+    .hero { box-shadow: none !important; border: 1px solid #fed7aa; }
+    .ui-mock-highlight { animation: none !important; }
+    .heart { animation: none !important; }
+    .footer { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- 主視覺 -->
+  <div class="hero">
+    <div class="mascot">
+      <!-- 柴犬吉祥物 -->
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <!-- 背景圓 -->
+        <circle cx="100" cy="100" r="90" fill="#fef3c7"/>
+        <!-- 左耳 (外) -->
+        <path d="M 48 75 L 60 28 L 85 78 Z" fill="#c2410c"/>
+        <!-- 左耳 (內) -->
+        <path d="M 58 72 L 63 45 L 78 72 Z" fill="#fdba74"/>
+        <!-- 右耳 (外) -->
+        <path d="M 115 78 L 140 28 L 152 75 Z" fill="#c2410c"/>
+        <!-- 右耳 (內) -->
+        <path d="M 122 72 L 137 45 L 142 72 Z" fill="#fdba74"/>
+        <!-- 頭 (橘色外圈) -->
+        <ellipse cx="100" cy="105" rx="58" ry="55" fill="#ea580c"/>
+        <!-- 奶油色臉部面罩 (柴犬特徵) -->
+        <ellipse cx="100" cy="120" rx="42" ry="40" fill="#fef7ed"/>
+        <!-- 眼周白圈 -->
+        <ellipse cx="78" cy="108" rx="13" ry="14" fill="#fef7ed"/>
+        <ellipse cx="122" cy="108" rx="13" ry="14" fill="#fef7ed"/>
+        <!-- 眉毛 (小小一點) -->
+        <ellipse cx="75" cy="98" rx="4" ry="2" fill="#1c1917"/>
+        <ellipse cx="125" cy="98" rx="4" ry="2" fill="#1c1917"/>
+        <!-- 左眼 -->
+        <ellipse cx="78" cy="110" rx="5" ry="6" fill="#1c1917"/>
+        <circle cx="79" cy="108" r="1.8" fill="white"/>
+        <!-- 右眼 -->
+        <ellipse cx="122" cy="110" rx="5" ry="6" fill="#1c1917"/>
+        <circle cx="123" cy="108" r="1.8" fill="white"/>
+        <!-- 腮紅 -->
+        <circle cx="62" cy="128" r="5" fill="#fca5a5" opacity="0.5"/>
+        <circle cx="138" cy="128" r="5" fill="#fca5a5" opacity="0.5"/>
+        <!-- 鼻子 -->
+        <ellipse cx="100" cy="130" rx="7" ry="5" fill="#1c1917"/>
+        <!-- 人中 -->
+        <path d="M 100 135 L 100 143" stroke="#1c1917" stroke-width="1.5" stroke-linecap="round"/>
+        <!-- 微笑嘴巴 (W 形，柴犬招牌) -->
+        <path d="M 100 143 Q 88 152 80 144" stroke="#1c1917" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        <path d="M 100 143 Q 112 152 120 144" stroke="#1c1917" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        <!-- 舌頭 -->
+        <path d="M 92 150 Q 100 160 108 150 Q 106 156 100 156 Q 94 156 92 150 Z" fill="#f87171"/>
+      </svg>
+    </div>
+    <h1>薪資系統使用指南</h1>
+    <div class="subtitle">Hướng dẫn sử dụng · คู่มือการใช้งาน</div>
+  </div>
+
+  <!-- 語言切換 -->
+  <div class="lang-tabs">
+    <button class="lang-tab active" data-lang="zh">繁體中文</button>
+    <button class="lang-tab" data-lang="vi">Tiếng Việt</button>
+    <button class="lang-tab" data-lang="th">ภาษาไทย</button>
+  </div>
+
+  <!-- PDF 下載按鈕 -->
+  <button onclick="window.print()" style="width:100%; padding:12px; background:linear-gradient(135deg, #ea580c, #f59e0b); color:white; border:none; border-radius:14px; font-size:14px; font-weight:700; cursor:pointer; margin-bottom:16px; box-shadow:0 4px 12px rgba(234,88,12,0.3); font-family:inherit;">
+    📄 下載 PDF 檔（列印 → 另存為 PDF）
+  </button>
+
+  <!-- 中文版 -->
+  <div class="lang-content active" id="zh" data-label="繁體中文 · 中文版">
+
+    <div class="step-card" data-step="1">
+      <div class="step-head">
+        <div class="step-num">1</div>
+        <div class="step-title">打開系統</div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-header">員工薪資計算系統<br><span style="font-size:10px; opacity:0.9;">您好，您的名字</span></div>
+        <div class="ui-mock-tabs">
+          <div class="ui-mock-tab">員工</div>
+          <div class="ui-mock-tab">每日</div>
+          <div class="ui-mock-tab">月薪</div>
+          <div class="ui-mock-tab">匯出</div>
+          <div class="ui-mock-tab">設定</div>
+        </div>
+        <div class="mock-caption">↑ 打開後看到的畫面</div>
+      </div>
+      <div class="step-desc">
+        打開手機 <strong>LINE</strong>，點公司分享的連結，系統會自動開啟。第一次打開會看到綠色「員工薪資計算系統」標題。
+      </div>
+    </div>
+
+    <div class="step-card" data-step="2">
+      <div class="step-head">
+        <div class="step-num">2</div>
+        <div class="step-title">選日期和員工</div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-tabs">
+          <div class="ui-mock-tab">員工</div>
+          <div class="ui-mock-tab active">每日</div>
+          <div class="ui-mock-tab">月薪</div>
+          <div class="ui-mock-tab">匯出</div>
+          <div class="ui-mock-tab">設定</div>
+        </div>
+        <div class="ui-mock-card">
+          <div class="ui-mock-row">
+            <div>
+              <div class="ui-mock-label">日期 *</div>
+              <div class="ui-mock-input ui-mock-highlight">2026-04-20 📅</div>
+            </div>
+            <div>
+              <div class="ui-mock-label">員工 *</div>
+              <div class="ui-mock-select ui-mock-highlight">您的名字 ▼</div>
+            </div>
+          </div>
+        </div>
+        <div class="mock-caption">↑ 紅框處是要選的欄位</div>
+      </div>
+      <div class="step-desc">
+        點最上方的「<strong>每日</strong>」頁籤，選今天的<strong>日期</strong>，再從下拉選單選<strong>您的名字</strong>。
+      </div>
+    </div>
+
+    <div class="step-card" data-step="3">
+      <div class="step-head">
+        <div class="step-num">3</div>
+        <div class="step-title">選計酬方式</div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-card">
+          <div class="ui-mock-label">計酬方式 *</div>
+          <div class="ui-mock-row">
+            <div class="ui-mock-btn ui-mock-highlight">論件計酬</div>
+            <div class="ui-mock-btn gray">按時計酬</div>
+          </div>
+        </div>
+        <div class="mock-caption">↑ 選一個方式（這裡選了「論件」）</div>
+      </div>
+      <div class="step-desc">
+        選擇一種：<br>
+        • <span class="tag tag-piece">論件</span> 做幾個算錢<br>
+        • <span class="tag tag-hour">計時</span> 上了幾小時算錢
+      </div>
+    </div>
+
+    <div class="step-card" data-step="4">
+      <div class="step-head">
+        <div class="step-num">4</div>
+        <div class="step-title">論件：選產品填數量 <span class="tag tag-piece">論件</span></div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-card">
+          <div class="ui-mock-label">品名 *</div>
+          <div class="ui-mock-select ui-mock-highlight">A 產品 (NT$ 50) 📷 ▼</div>
+          <div class="ui-mock-row">
+            <div>
+              <div class="ui-mock-label">數量 *</div>
+              <div class="ui-mock-input ui-mock-highlight">20</div>
+            </div>
+            <div>
+              <div class="ui-mock-label">單價</div>
+              <div class="ui-mock-input" style="background:#f0fdf4; color:#06C755;">50</div>
+            </div>
+          </div>
+          <div class="ui-mock-label">小計 (自動)</div>
+          <div class="ui-mock-input" style="background:#f0fdf4; color:#06C755; font-weight:700;">NT$ 1,000</div>
+        </div>
+        <div class="mock-caption">↑ 選品名 → 自動帶出單價；填數量 → 自動算小計</div>
+      </div>
+      <div class="step-desc">
+        從下拉選單選<strong>產品名稱</strong>，單價會<strong>自動帶出</strong>。接著填今天做了<strong>幾個</strong>，小計會自動算好。
+      </div>
+    </div>
+
+    <div class="step-card" data-step="5">
+      <div class="step-head">
+        <div class="step-num">5</div>
+        <div class="step-title">計時：輸入時間 <span class="tag tag-hour">計時</span></div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-card">
+          <div class="ui-mock-row">
+            <div>
+              <div class="ui-mock-label">開始時間 *</div>
+              <div class="ui-mock-input ui-mock-highlight">09:00</div>
+            </div>
+            <div>
+              <div class="ui-mock-label">結束時間 *</div>
+              <div class="ui-mock-input ui-mock-highlight">18:00</div>
+            </div>
+          </div>
+          <div class="ui-mock-label">休息時間</div>
+          <div class="ui-mock-row" style="gap:3px; margin-bottom:4px;">
+            <div class="ui-mock-btn gray" style="padding:4px; font-size:9px;">30分</div>
+            <div class="ui-mock-btn amber" style="padding:4px; font-size:9px;">1小時</div>
+            <div class="ui-mock-btn gray" style="padding:4px; font-size:9px;">1.5小時</div>
+          </div>
+          <div class="ui-mock-breakdown">
+            <div class="ui-mock-breakdown-row"><span>時段總長</span><span>9.00 小時</span></div>
+            <div class="ui-mock-breakdown-row"><span>扣除休息</span><span style="color:#ef4444;">− 1.00 小時</span></div>
+            <div class="ui-mock-breakdown-row total"><span>實際工作時數</span><span>8.00 小時</span></div>
+          </div>
+          <div class="ui-mock-label">時薪 NT$</div>
+          <div class="ui-mock-input ui-mock-highlight">190</div>
+          <div class="ui-mock-input" style="background:#f0fdf4; color:#06C755; font-weight:700; margin-top:4px;">NT$ 1,520 (8h × 190)</div>
+        </div>
+        <div class="mock-caption">↑ 起訖時間 → 自動算時數 → 乘以時薪</div>
+      </div>
+      <div class="step-desc">
+        填「<strong>開始時間</strong>」和「<strong>結束時間</strong>」。如果有休息，點「30 分」「1 小時」等快速按鈕。時薪輸入後，金額<strong>自動計算</strong>。
+      </div>
+    </div>
+
+    <div class="step-card" data-step="6">
+      <div class="step-head">
+        <div class="step-num">6</div>
+        <div class="step-title">拍照存證（選填）</div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-card">
+          <div class="ui-mock-label">📷 拍照 / 上傳照片 (選填)</div>
+          <div class="ui-mock-input ui-mock-highlight" style="text-align:center; padding:10px;">點這裡選相機或相簿</div>
+          <div style="display:flex; gap:8px; align-items:center; margin-top:6px; padding:6px; background:#f0fdf4; border-radius:6px;">
+            <div class="ui-mock-photo">📸</div>
+            <div style="font-size:10px; color:#6b7280;">
+              <div style="color:#06C755; font-weight:700;">已壓縮 85 KB</div>
+              <div>（點圖可放大預覽）</div>
+            </div>
+          </div>
+        </div>
+        <div class="mock-caption">↑ 拍一張作品照片存證</div>
+      </div>
+      <div class="step-desc">
+        點「<strong>📷 拍照 / 上傳照片</strong>」拍一張作品照片。這樣老闆可以<strong>核對稽核</strong>，不怕算錯。
+      </div>
+    </div>
+
+    <div class="step-card" data-step="7">
+      <div class="step-head">
+        <div class="step-num">7</div>
+        <div class="step-title">儲存！</div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-card">
+          <div class="ui-mock-btn ui-mock-highlight" style="font-size:14px; padding:12px;">新增此筆記錄</div>
+          <div style="text-align:center; font-size:10px; color:#06C755; margin-top:6px; font-weight:700;">☁ 已同步 03:54:12</div>
+        </div>
+        <div class="mock-caption">↑ 按綠色按鈕 → 資料自動上雲端</div>
+      </div>
+      <div class="step-desc">
+        按綠色的「<strong>新增此筆記錄</strong>」按鈕，資料<strong>自動上傳雲端</strong>，老闆馬上看得到 🎉
+      </div>
+    </div>
+
+    <div class="step-card" data-step="8">
+      <div class="step-head">
+        <div class="step-num">8</div>
+        <div class="step-title">輸錯可以編輯</div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-card">
+          <div class="ui-mock-label">當日記錄</div>
+          <div class="ui-mock-record">
+            <div style="flex:1;">
+              <div style="font-weight:700; font-size:11px;">您的名字 <span style="background:#fef3c7; color:#92400e; padding:1px 5px; border-radius:8px; font-size:9px;">論件</span></div>
+              <div style="font-size:10px; color:#6b7280;">A 產品 × 20 = NT$ 1,000</div>
+            </div>
+            <div class="ui-mock-actions">
+              <div class="ui-mock-mini-btn ui-mock-highlight" style="background:#e5e7eb; color:#374151;">✏️ 編輯</div>
+              <div class="ui-mock-mini-btn" style="background:#ef4444; color:white;">刪除</div>
+            </div>
+          </div>
+        </div>
+        <div class="mock-caption">↑ 點「編輯」→ 修改 → 儲存</div>
+      </div>
+      <div class="step-desc">
+        在下方「當日記錄」找到那筆，點「<strong>✏️ 編輯</strong>」修改後按「<strong>💾 儲存修改</strong>」即可。不必刪掉重填。
+      </div>
+    </div>
+
+    <div class="step-card" data-step="9">
+      <div class="step-head">
+        <div class="step-num">9</div>
+        <div class="step-title">匯出 Excel 與照片</div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-tabs">
+          <div class="ui-mock-tab">員工</div>
+          <div class="ui-mock-tab">每日</div>
+          <div class="ui-mock-tab">月薪</div>
+          <div class="ui-mock-tab active">匯出</div>
+          <div class="ui-mock-tab">設定</div>
+        </div>
+        <div class="ui-mock-card">
+          <div class="ui-mock-label">選擇月份 (留空=全部)</div>
+          <div class="ui-mock-input">2026-04</div>
+          <div class="ui-mock-btn ui-mock-highlight">下載 Excel 檔案</div>
+          <div class="ui-mock-btn gray" style="margin-top:6px;">📷 下載所有照片 (ZIP)</div>
+        </div>
+        <div class="ui-mock-card">
+          <div style="font-size:11px; font-weight:700; margin-bottom:4px;">統計摘要</div>
+          <table style="width:100%; font-size:10px;">
+            <tr style="background:#f9fafb;"><th style="text-align:left; padding:3px;">月份</th><th style="padding:3px;">人數</th><th style="text-align:right; padding:3px;">應發</th><th style="text-align:right; padding:3px;">實發</th></tr>
+            <tr><td style="padding:3px;">2026-04</td><td style="text-align:center;">5</td><td style="text-align:right; padding:3px;">180,000</td><td style="text-align:right; padding:3px;">172,400</td></tr>
+          </table>
+        </div>
+        <div class="mock-caption">↑ 匯出頁：Excel + 照片 ZIP + 統計表</div>
+      </div>
+      <div class="step-desc">
+        點「<strong>匯出</strong>」頁籤。選<strong>月份</strong>後，按綠色「<strong>下載 Excel 檔案</strong>」會產生含<strong>月薪摘要、每日明細、員工月總</strong>的多工作表。再按「<strong>📷 下載所有照片 (ZIP)</strong>」會打包該月所有照片，檔名自動對照 Excel 的「照片檔名」欄，方便老闆<strong>稽核對照</strong>。
+      </div>
+    </div>
+
+    <div class="tips">
+      <h3>💡 小提醒</h3>
+      <ul>
+        <li>每天記得輸入！資料是您的薪水證明</li>
+        <li>拍清楚的照片更好</li>
+        <li>網路不穩沒關係，恢復連線會自動上傳</li>
+        <li>按錯隨時可以編輯或刪除</li>
+        <li>Excel / 照片 ZIP 通常由老闆月底匯出</li>
+        <li>不會用可以問老闆</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 越南文版 -->
+  <div class="lang-content" id="vi" data-label="Tiếng Việt · Phiên bản Việt Nam">
+
+    <div class="step-card" data-step="1">
+      <div class="step-head">
+        <div class="step-num">1</div>
+        <div class="step-title">Mở hệ thống</div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-header">員工薪資計算系統<br><span style="font-size:10px; opacity:0.9;">您好，您的名字</span></div>
+        <div class="ui-mock-tabs">
+          <div class="ui-mock-tab">員工</div>
+          <div class="ui-mock-tab">每日</div>
+          <div class="ui-mock-tab">月薪</div>
+          <div class="ui-mock-tab">匯出</div>
+          <div class="ui-mock-tab">設定</div>
+        </div>
+        <div class="mock-caption">↑ 打開後看到的畫面</div>
+      </div>
+      <div class="step-desc">
+        Mở ứng dụng <strong>LINE</strong> trên điện thoại, nhấn vào liên kết mà công ty chia sẻ. Hệ thống sẽ tự động mở. Lần đầu sẽ thấy tiêu đề xanh "員工薪資計算系統" (Hệ thống tính lương).
+      </div>
+    </div>
+
+    <div class="step-card" data-step="2">
+      <div class="step-head">
+        <div class="step-num">2</div>
+        <div class="step-title">Chọn ngày và tên của bạn</div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-tabs">
+          <div class="ui-mock-tab">員工</div>
+          <div class="ui-mock-tab active">每日</div>
+          <div class="ui-mock-tab">月薪</div>
+          <div class="ui-mock-tab">匯出</div>
+          <div class="ui-mock-tab">設定</div>
+        </div>
+        <div class="ui-mock-card">
+          <div class="ui-mock-row">
+            <div>
+              <div class="ui-mock-label">日期 *</div>
+              <div class="ui-mock-input ui-mock-highlight">2026-04-20 📅</div>
+            </div>
+            <div>
+              <div class="ui-mock-label">員工 *</div>
+              <div class="ui-mock-select ui-mock-highlight">您的名字 ▼</div>
+            </div>
+          </div>
+        </div>
+        <div class="mock-caption">↑ 紅框處是要選的欄位</div>
+      </div>
+      <div class="step-desc">
+        Nhấn vào thẻ "<strong>每日</strong>" (Hàng ngày) ở trên cùng. Chọn <strong>ngày hôm nay</strong>, sau đó chọn <strong>tên của bạn</strong> từ menu thả xuống.
+      </div>
+    </div>
+
+    <div class="step-card" data-step="3">
+      <div class="step-head">
+        <div class="step-num">3</div>
+        <div class="step-title">Chọn cách tính lương</div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-card">
+          <div class="ui-mock-label">計酬方式 *</div>
+          <div class="ui-mock-row">
+            <div class="ui-mock-btn ui-mock-highlight">論件計酬</div>
+            <div class="ui-mock-btn gray">按時計酬</div>
+          </div>
+        </div>
+        <div class="mock-caption">↑ 選一個方式（這裡選了「論件」）</div>
+      </div>
+      <div class="step-desc">
+        Chọn một trong hai:<br>
+        • <span class="tag tag-piece">論件</span> <strong>Theo sản phẩm</strong> (tính theo số lượng)<br>
+        • <span class="tag tag-hour">計時</span> <strong>Theo giờ</strong> (tính theo số giờ làm)
+      </div>
+    </div>
+
+    <div class="step-card" data-step="4">
+      <div class="step-head">
+        <div class="step-num">4</div>
+        <div class="step-title">Theo sản phẩm: chọn sản phẩm và số lượng <span class="tag tag-piece">論件</span></div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-card">
+          <div class="ui-mock-label">品名 *</div>
+          <div class="ui-mock-select ui-mock-highlight">A 產品 (NT$ 50) 📷 ▼</div>
+          <div class="ui-mock-row">
+            <div>
+              <div class="ui-mock-label">數量 *</div>
+              <div class="ui-mock-input ui-mock-highlight">20</div>
+            </div>
+            <div>
+              <div class="ui-mock-label">單價</div>
+              <div class="ui-mock-input" style="background:#f0fdf4; color:#06C755;">50</div>
+            </div>
+          </div>
+          <div class="ui-mock-label">小計 (自動)</div>
+          <div class="ui-mock-input" style="background:#f0fdf4; color:#06C755; font-weight:700;">NT$ 1,000</div>
+        </div>
+        <div class="mock-caption">↑ 選品名 → 自動帶出單價；填數量 → 自動算小計</div>
+      </div>
+      <div class="step-desc">
+        Chọn <strong>tên sản phẩm</strong> từ menu thả xuống. Đơn giá sẽ <strong>tự động hiện</strong>. Sau đó nhập <strong>số lượng</strong> bạn đã làm hôm nay. Tổng tiền sẽ tự động tính.
+      </div>
+    </div>
+
+    <div class="step-card" data-step="5">
+      <div class="step-head">
+        <div class="step-num">5</div>
+        <div class="step-title">Theo giờ: nhập thời gian <span class="tag tag-hour">計時</span></div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-card">
+          <div class="ui-mock-row">
+            <div>
+              <div class="ui-mock-label">開始時間 *</div>
+              <div class="ui-mock-input ui-mock-highlight">09:00</div>
+            </div>
+            <div>
+              <div class="ui-mock-label">結束時間 *</div>
+              <div class="ui-mock-input ui-mock-highlight">18:00</div>
+            </div>
+          </div>
+          <div class="ui-mock-label">休息時間</div>
+          <div class="ui-mock-row" style="gap:3px; margin-bottom:4px;">
+            <div class="ui-mock-btn gray" style="padding:4px; font-size:9px;">30分</div>
+            <div class="ui-mock-btn amber" style="padding:4px; font-size:9px;">1小時</div>
+            <div class="ui-mock-btn gray" style="padding:4px; font-size:9px;">1.5小時</div>
+          </div>
+          <div class="ui-mock-breakdown">
+            <div class="ui-mock-breakdown-row"><span>時段總長</span><span>9.00 小時</span></div>
+            <div class="ui-mock-breakdown-row"><span>扣除休息</span><span style="color:#ef4444;">− 1.00 小時</span></div>
+            <div class="ui-mock-breakdown-row total"><span>實際工作時數</span><span>8.00 小時</span></div>
+          </div>
+          <div class="ui-mock-label">時薪 NT$</div>
+          <div class="ui-mock-input ui-mock-highlight">190</div>
+          <div class="ui-mock-input" style="background:#f0fdf4; color:#06C755; font-weight:700; margin-top:4px;">NT$ 1,520 (8h × 190)</div>
+        </div>
+        <div class="mock-caption">↑ 起訖時間 → 自動算時數 → 乘以時薪</div>
+      </div>
+      <div class="step-desc">
+        Nhập "<strong>Giờ bắt đầu</strong>" và "<strong>Giờ kết thúc</strong>". Nếu có nghỉ, nhấn nút nhanh "30 分" (30 phút) hoặc "1 小時" (1 giờ). Nhập lương theo giờ, tổng tiền <strong>sẽ tự tính</strong>.
+      </div>
+    </div>
+
+    <div class="step-card" data-step="6">
+      <div class="step-head">
+        <div class="step-num">6</div>
+        <div class="step-title">Chụp ảnh xác nhận (không bắt buộc)</div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-card">
+          <div class="ui-mock-label">📷 拍照 / 上傳照片 (選填)</div>
+          <div class="ui-mock-input ui-mock-highlight" style="text-align:center; padding:10px;">點這裡選相機或相簿</div>
+          <div style="display:flex; gap:8px; align-items:center; margin-top:6px; padding:6px; background:#f0fdf4; border-radius:6px;">
+            <div class="ui-mock-photo">📸</div>
+            <div style="font-size:10px; color:#6b7280;">
+              <div style="color:#06C755; font-weight:700;">已壓縮 85 KB</div>
+              <div>（點圖可放大預覽）</div>
+            </div>
+          </div>
+        </div>
+        <div class="mock-caption">↑ 拍一張作品照片存證</div>
+      </div>
+      <div class="step-desc">
+        Nhấn "<strong>📷 拍照 / 上傳照片</strong>" để chụp ảnh công việc. Sếp có thể <strong>kiểm tra dễ dàng</strong>, tránh sai sót.
+      </div>
+    </div>
+
+    <div class="step-card" data-step="7">
+      <div class="step-head">
+        <div class="step-num">7</div>
+        <div class="step-title">Lưu!</div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-card">
+          <div class="ui-mock-btn ui-mock-highlight" style="font-size:14px; padding:12px;">新增此筆記錄</div>
+          <div style="text-align:center; font-size:10px; color:#06C755; margin-top:6px; font-weight:700;">☁ 已同步 03:54:12</div>
+        </div>
+        <div class="mock-caption">↑ 按綠色按鈕 → 資料自動上雲端</div>
+      </div>
+      <div class="step-desc">
+        Nhấn nút xanh "<strong>新增此筆記錄</strong>" (Thêm bản ghi này). Dữ liệu sẽ <strong>tự động tải lên đám mây</strong>, sếp sẽ thấy ngay 🎉
+      </div>
+    </div>
+
+    <div class="step-card" data-step="8">
+      <div class="step-head">
+        <div class="step-num">8</div>
+        <div class="step-title">Nhập sai có thể sửa</div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-card">
+          <div class="ui-mock-label">當日記錄</div>
+          <div class="ui-mock-record">
+            <div style="flex:1;">
+              <div style="font-weight:700; font-size:11px;">您的名字 <span style="background:#fef3c7; color:#92400e; padding:1px 5px; border-radius:8px; font-size:9px;">論件</span></div>
+              <div style="font-size:10px; color:#6b7280;">A 產品 × 20 = NT$ 1,000</div>
+            </div>
+            <div class="ui-mock-actions">
+              <div class="ui-mock-mini-btn ui-mock-highlight" style="background:#e5e7eb; color:#374151;">✏️ 編輯</div>
+              <div class="ui-mock-mini-btn" style="background:#ef4444; color:white;">刪除</div>
+            </div>
+          </div>
+        </div>
+        <div class="mock-caption">↑ 點「編輯」→ 修改 → 儲存</div>
+      </div>
+      <div class="step-desc">
+        Tìm bản ghi đó ở "當日記錄" (Ghi chép hôm nay), nhấn "<strong>✏️ 編輯</strong>" (Sửa), chỉnh xong nhấn "<strong>💾 儲存修改</strong>" (Lưu thay đổi). Không cần xóa và nhập lại.
+      </div>
+    </div>
+
+    <div class="step-card" data-step="9">
+      <div class="step-head">
+        <div class="step-num">9</div>
+        <div class="step-title">Xuất Excel và ảnh</div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-tabs">
+          <div class="ui-mock-tab">員工</div>
+          <div class="ui-mock-tab">每日</div>
+          <div class="ui-mock-tab">月薪</div>
+          <div class="ui-mock-tab active">匯出</div>
+          <div class="ui-mock-tab">設定</div>
+        </div>
+        <div class="ui-mock-card">
+          <div class="ui-mock-label">Chọn tháng (để trống = tất cả)</div>
+          <div class="ui-mock-input">2026-04</div>
+          <div class="ui-mock-btn ui-mock-highlight">下載 Excel 檔案</div>
+          <div class="ui-mock-btn gray" style="margin-top:6px;">📷 下載所有照片 (ZIP)</div>
+        </div>
+        <div class="ui-mock-card">
+          <div style="font-size:11px; font-weight:700; margin-bottom:4px;">Tóm tắt thống kê</div>
+          <table style="width:100%; font-size:10px;">
+            <tr style="background:#f9fafb;"><th style="text-align:left; padding:3px;">Tháng</th><th style="padding:3px;">SL</th><th style="text-align:right; padding:3px;">Gộp</th><th style="text-align:right; padding:3px;">Thực lĩnh</th></tr>
+            <tr><td style="padding:3px;">2026-04</td><td style="text-align:center;">5</td><td style="text-align:right; padding:3px;">180,000</td><td style="text-align:right; padding:3px;">172,400</td></tr>
+          </table>
+        </div>
+        <div class="mock-caption">↑ Trang xuất: Excel + ZIP ảnh + Bảng thống kê</div>
+      </div>
+      <div class="step-desc">
+        Nhấn thẻ "<strong>匯出</strong>" (Xuất). Chọn <strong>tháng</strong>, nhấn nút xanh "<strong>下載 Excel 檔案</strong>" (Tải Excel) sẽ tạo file Excel gồm <strong>tóm tắt lương, chi tiết hàng ngày, tổng kết từng nhân viên</strong>. Nhấn "<strong>📷 下載所有照片 (ZIP)</strong>" để tải tất cả ảnh theo tháng, tên file khớp với cột "照片檔名" trong Excel, giúp sếp <strong>kiểm tra đối chiếu</strong>.
+      </div>
+    </div>
+
+    <div class="tips">
+      <h3>💡 Lưu ý</h3>
+      <ul>
+        <li>Nhớ nhập mỗi ngày! Đây là bằng chứng tiền lương của bạn</li>
+        <li>Chụp ảnh rõ ràng sẽ tốt hơn</li>
+        <li>Mạng chậm không sao, khi có mạng sẽ tự tải lên</li>
+        <li>Nhấn sai có thể sửa hoặc xóa bất cứ lúc nào</li>
+        <li>Excel / ZIP ảnh thường do sếp xuất vào cuối tháng</li>
+        <li>Không biết thì hỏi sếp</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 泰文版 -->
+  <div class="lang-content" id="th" data-label="ภาษาไทย · ฉบับภาษาไทย">
+
+    <div class="step-card" data-step="1">
+      <div class="step-head">
+        <div class="step-num">1</div>
+        <div class="step-title">เปิดระบบ</div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-header">員工薪資計算系統<br><span style="font-size:10px; opacity:0.9;">您好，您的名字</span></div>
+        <div class="ui-mock-tabs">
+          <div class="ui-mock-tab">員工</div>
+          <div class="ui-mock-tab">每日</div>
+          <div class="ui-mock-tab">月薪</div>
+          <div class="ui-mock-tab">匯出</div>
+          <div class="ui-mock-tab">設定</div>
+        </div>
+        <div class="mock-caption">↑ 打開後看到的畫面</div>
+      </div>
+      <div class="step-desc">
+        เปิดแอป <strong>LINE</strong> บนมือถือ แตะลิงก์ที่บริษัทแชร์ ระบบจะเปิดอัตโนมัติ ครั้งแรกจะเห็นหัวข้อสีเขียว "員工薪資計算系統" (ระบบคำนวณเงินเดือน)
+      </div>
+    </div>
+
+    <div class="step-card" data-step="2">
+      <div class="step-head">
+        <div class="step-num">2</div>
+        <div class="step-title">เลือกวันที่และชื่อของคุณ</div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-tabs">
+          <div class="ui-mock-tab">員工</div>
+          <div class="ui-mock-tab active">每日</div>
+          <div class="ui-mock-tab">月薪</div>
+          <div class="ui-mock-tab">匯出</div>
+          <div class="ui-mock-tab">設定</div>
+        </div>
+        <div class="ui-mock-card">
+          <div class="ui-mock-row">
+            <div>
+              <div class="ui-mock-label">日期 *</div>
+              <div class="ui-mock-input ui-mock-highlight">2026-04-20 📅</div>
+            </div>
+            <div>
+              <div class="ui-mock-label">員工 *</div>
+              <div class="ui-mock-select ui-mock-highlight">您的名字 ▼</div>
+            </div>
+          </div>
+        </div>
+        <div class="mock-caption">↑ 紅框處是要選的欄位</div>
+      </div>
+      <div class="step-desc">
+        แตะแท็บ "<strong>每日</strong>" (รายวัน) ด้านบน เลือก<strong>วันที่วันนี้</strong> แล้วเลือก<strong>ชื่อของคุณ</strong>จากเมนูแบบเลื่อนลง
+      </div>
+    </div>
+
+    <div class="step-card" data-step="3">
+      <div class="step-head">
+        <div class="step-num">3</div>
+        <div class="step-title">เลือกวิธีคำนวณค่าจ้าง</div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-card">
+          <div class="ui-mock-label">計酬方式 *</div>
+          <div class="ui-mock-row">
+            <div class="ui-mock-btn ui-mock-highlight">論件計酬</div>
+            <div class="ui-mock-btn gray">按時計酬</div>
+          </div>
+        </div>
+        <div class="mock-caption">↑ 選一個方式（這裡選了「論件」）</div>
+      </div>
+      <div class="step-desc">
+        เลือกหนึ่งจากสองวิธี:<br>
+        • <span class="tag tag-piece">論件</span> <strong>ตามชิ้นงาน</strong> (คิดตามจำนวน)<br>
+        • <span class="tag tag-hour">計時</span> <strong>ตามชั่วโมง</strong> (คิดตามเวลาทำงาน)
+      </div>
+    </div>
+
+    <div class="step-card" data-step="4">
+      <div class="step-head">
+        <div class="step-num">4</div>
+        <div class="step-title">ตามชิ้น: เลือกสินค้าและจำนวน <span class="tag tag-piece">論件</span></div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-card">
+          <div class="ui-mock-label">品名 *</div>
+          <div class="ui-mock-select ui-mock-highlight">A 產品 (NT$ 50) 📷 ▼</div>
+          <div class="ui-mock-row">
+            <div>
+              <div class="ui-mock-label">數量 *</div>
+              <div class="ui-mock-input ui-mock-highlight">20</div>
+            </div>
+            <div>
+              <div class="ui-mock-label">單價</div>
+              <div class="ui-mock-input" style="background:#f0fdf4; color:#06C755;">50</div>
+            </div>
+          </div>
+          <div class="ui-mock-label">小計 (自動)</div>
+          <div class="ui-mock-input" style="background:#f0fdf4; color:#06C755; font-weight:700;">NT$ 1,000</div>
+        </div>
+        <div class="mock-caption">↑ 選品名 → 自動帶出單價；填數量 → 自動算小計</div>
+      </div>
+      <div class="step-desc">
+        เลือก<strong>ชื่อสินค้า</strong>จากเมนูแบบเลื่อนลง ราคาต่อหน่วยจะ<strong>แสดงอัตโนมัติ</strong> จากนั้นกรอก<strong>จำนวน</strong>ที่คุณทำวันนี้ ยอดรวมจะคำนวณอัตโนมัติ
+      </div>
+    </div>
+
+    <div class="step-card" data-step="5">
+      <div class="step-head">
+        <div class="step-num">5</div>
+        <div class="step-title">ตามชั่วโมง: กรอกเวลา <span class="tag tag-hour">計時</span></div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-card">
+          <div class="ui-mock-row">
+            <div>
+              <div class="ui-mock-label">開始時間 *</div>
+              <div class="ui-mock-input ui-mock-highlight">09:00</div>
+            </div>
+            <div>
+              <div class="ui-mock-label">結束時間 *</div>
+              <div class="ui-mock-input ui-mock-highlight">18:00</div>
+            </div>
+          </div>
+          <div class="ui-mock-label">休息時間</div>
+          <div class="ui-mock-row" style="gap:3px; margin-bottom:4px;">
+            <div class="ui-mock-btn gray" style="padding:4px; font-size:9px;">30分</div>
+            <div class="ui-mock-btn amber" style="padding:4px; font-size:9px;">1小時</div>
+            <div class="ui-mock-btn gray" style="padding:4px; font-size:9px;">1.5小時</div>
+          </div>
+          <div class="ui-mock-breakdown">
+            <div class="ui-mock-breakdown-row"><span>時段總長</span><span>9.00 小時</span></div>
+            <div class="ui-mock-breakdown-row"><span>扣除休息</span><span style="color:#ef4444;">− 1.00 小時</span></div>
+            <div class="ui-mock-breakdown-row total"><span>實際工作時數</span><span>8.00 小時</span></div>
+          </div>
+          <div class="ui-mock-label">時薪 NT$</div>
+          <div class="ui-mock-input ui-mock-highlight">190</div>
+          <div class="ui-mock-input" style="background:#f0fdf4; color:#06C755; font-weight:700; margin-top:4px;">NT$ 1,520 (8h × 190)</div>
+        </div>
+        <div class="mock-caption">↑ 起訖時間 → 自動算時數 → 乘以時薪</div>
+      </div>
+      <div class="step-desc">
+        กรอก "<strong>เวลาเริ่ม</strong>" และ "<strong>เวลาเลิก</strong>" หากมีพักให้กดปุ่มด่วน "30 分" (30 นาที) หรือ "1 小時" (1 ชม.) กรอกค่าจ้างต่อชั่วโมง ยอดรวม<strong>จะคิดอัตโนมัติ</strong>
+      </div>
+    </div>
+
+    <div class="step-card" data-step="6">
+      <div class="step-head">
+        <div class="step-num">6</div>
+        <div class="step-title">ถ่ายภาพยืนยัน (ไม่บังคับ)</div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-card">
+          <div class="ui-mock-label">📷 拍照 / 上傳照片 (選填)</div>
+          <div class="ui-mock-input ui-mock-highlight" style="text-align:center; padding:10px;">點這裡選相機或相簿</div>
+          <div style="display:flex; gap:8px; align-items:center; margin-top:6px; padding:6px; background:#f0fdf4; border-radius:6px;">
+            <div class="ui-mock-photo">📸</div>
+            <div style="font-size:10px; color:#6b7280;">
+              <div style="color:#06C755; font-weight:700;">已壓縮 85 KB</div>
+              <div>（點圖可放大預覽）</div>
+            </div>
+          </div>
+        </div>
+        <div class="mock-caption">↑ 拍一張作品照片存證</div>
+      </div>
+      <div class="step-desc">
+        กด "<strong>📷 拍照 / 上傳照片</strong>" เพื่อถ่ายภาพงาน เจ้านายจะ<strong>ตรวจสอบได้ง่าย</strong> ไม่ต้องกลัวผิดพลาด
+      </div>
+    </div>
+
+    <div class="step-card" data-step="7">
+      <div class="step-head">
+        <div class="step-num">7</div>
+        <div class="step-title">บันทึก!</div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-card">
+          <div class="ui-mock-btn ui-mock-highlight" style="font-size:14px; padding:12px;">新增此筆記錄</div>
+          <div style="text-align:center; font-size:10px; color:#06C755; margin-top:6px; font-weight:700;">☁ 已同步 03:54:12</div>
+        </div>
+        <div class="mock-caption">↑ 按綠色按鈕 → 資料自動上雲端</div>
+      </div>
+      <div class="step-desc">
+        กดปุ่มสีเขียว "<strong>新增此筆記錄</strong>" (เพิ่มบันทึกนี้) ข้อมูลจะ<strong>อัปโหลดขึ้นคลาวด์อัตโนมัติ</strong> เจ้านายเห็นทันที 🎉
+      </div>
+    </div>
+
+    <div class="step-card" data-step="8">
+      <div class="step-head">
+        <div class="step-num">8</div>
+        <div class="step-title">กรอกผิดสามารถแก้ไขได้</div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-card">
+          <div class="ui-mock-label">當日記錄</div>
+          <div class="ui-mock-record">
+            <div style="flex:1;">
+              <div style="font-weight:700; font-size:11px;">您的名字 <span style="background:#fef3c7; color:#92400e; padding:1px 5px; border-radius:8px; font-size:9px;">論件</span></div>
+              <div style="font-size:10px; color:#6b7280;">A 產品 × 20 = NT$ 1,000</div>
+            </div>
+            <div class="ui-mock-actions">
+              <div class="ui-mock-mini-btn ui-mock-highlight" style="background:#e5e7eb; color:#374151;">✏️ 編輯</div>
+              <div class="ui-mock-mini-btn" style="background:#ef4444; color:white;">刪除</div>
+            </div>
+          </div>
+        </div>
+        <div class="mock-caption">↑ 點「編輯」→ 修改 → 儲存</div>
+      </div>
+      <div class="step-desc">
+        หาบันทึกนั้นใน "當日記錄" (บันทึกวันนี้) กด "<strong>✏️ 編輯</strong>" (แก้ไข) แก้เสร็จกด "<strong>💾 儲存修改</strong>" (บันทึกการแก้ไข) ไม่ต้องลบแล้วกรอกใหม่
+      </div>
+    </div>
+
+    <div class="step-card" data-step="9">
+      <div class="step-head">
+        <div class="step-num">9</div>
+        <div class="step-title">ส่งออก Excel และภาพ</div>
+      </div>
+      <div class="ui-mock">
+        <div class="ui-mock-tabs">
+          <div class="ui-mock-tab">員工</div>
+          <div class="ui-mock-tab">每日</div>
+          <div class="ui-mock-tab">月薪</div>
+          <div class="ui-mock-tab active">匯出</div>
+          <div class="ui-mock-tab">設定</div>
+        </div>
+        <div class="ui-mock-card">
+          <div class="ui-mock-label">เลือกเดือน (ว่าง = ทั้งหมด)</div>
+          <div class="ui-mock-input">2026-04</div>
+          <div class="ui-mock-btn ui-mock-highlight">下載 Excel 檔案</div>
+          <div class="ui-mock-btn gray" style="margin-top:6px;">📷 下載所有照片 (ZIP)</div>
+        </div>
+        <div class="ui-mock-card">
+          <div style="font-size:11px; font-weight:700; margin-bottom:4px;">สรุปสถิติ</div>
+          <table style="width:100%; font-size:10px;">
+            <tr style="background:#f9fafb;"><th style="text-align:left; padding:3px;">เดือน</th><th style="padding:3px;">คน</th><th style="text-align:right; padding:3px;">รวม</th><th style="text-align:right; padding:3px;">รับจริง</th></tr>
+            <tr><td style="padding:3px;">2026-04</td><td style="text-align:center;">5</td><td style="text-align:right; padding:3px;">180,000</td><td style="text-align:right; padding:3px;">172,400</td></tr>
+          </table>
+        </div>
+        <div class="mock-caption">↑ หน้าส่งออก: Excel + ZIP ภาพ + ตารางสถิติ</div>
+      </div>
+      <div class="step-desc">
+        กดแท็บ "<strong>匯出</strong>" (ส่งออก) เลือก<strong>เดือน</strong> แล้วกดปุ่มสีเขียว "<strong>下載 Excel 檔案</strong>" (ดาวน์โหลด Excel) จะได้ไฟล์ Excel รวม <strong>สรุปเงินเดือน, รายละเอียดรายวัน, ยอดรวมแต่ละคน</strong> จากนั้นกด "<strong>📷 下載所有照片 (ZIP)</strong>" เพื่อดาวน์โหลดภาพทั้งเดือน ชื่อไฟล์ตรงกับคอลัมน์ "照片檔名" ใน Excel ให้เจ้านาย<strong>ตรวจสอบได้ง่าย</strong>
+      </div>
+    </div>
+
+    <div class="tips">
+      <h3>💡 ข้อควรจำ</h3>
+      <ul>
+        <li>อย่าลืมกรอกทุกวัน! เป็นหลักฐานค่าจ้างของคุณ</li>
+        <li>ถ่ายภาพชัดเจนจะดีกว่า</li>
+        <li>อินเทอร์เน็ตช้าไม่เป็นไร จะอัปโหลดอัตโนมัติเมื่อสัญญาณกลับมา</li>
+        <li>กดผิดสามารถแก้ไขหรือลบได้ทุกเมื่อ</li>
+        <li>Excel / ZIP ภาพ เจ้านายมักจะส่งออกสิ้นเดือน</li>
+        <li>ไม่เข้าใจสามารถถามเจ้านายได้</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="footer">
+    Made with <span class="heart">❤</span> for our team
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('.lang-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.lang-tab').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.lang-content').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.lang).classList.add('active');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+</script>
+</body>
+</html>
