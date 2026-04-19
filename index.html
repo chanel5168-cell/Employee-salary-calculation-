@@ -6,6 +6,7 @@
 <title>員工薪資計算系統 (LINE LIFF)</title>
 <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -314,30 +315,67 @@
     <!-- 論件計酬表單 -->
     <div class="card" id="pieceCard" style="display:none;">
       <h3>論件計酬明細</h3>
-      <div class="form-row">
-        <div class="form-group">
-          <label>品名 *</label>
-          <input type="text" id="pieceName" placeholder="例: A產品" list="productList">
-          <datalist id="productList"></datalist>
+      <div class="form-group">
+        <label style="display:flex; justify-content:space-between; align-items:center;">
+          <span>品名 *</span>
+          <button type="button" onclick="toggleProductManager()" style="background:none; border:1px solid #06C755; color:#06C755; padding:2px 8px; border-radius:12px; cursor:pointer; font-size:11px;">⚙ 管理產品清單</button>
+        </label>
+        <select id="pieceName" onchange="onProductSelected()">
+          <option value="">-- 請選擇產品 --</option>
+        </select>
+      </div>
+
+      <!-- 產品管理子面板 -->
+      <div id="productManager" style="display:none; background:#f0fdf4; border:1px dashed #06C755; border-radius:8px; padding:12px; margin-bottom:12px;">
+        <div style="font-weight:600; margin-bottom:8px; color:#06C755;">產品清單管理</div>
+        <div class="form-row">
+          <div class="form-group" style="margin-bottom:0;">
+            <input type="text" id="newProductName" placeholder="產品名稱">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <input type="number" id="newProductPrice" placeholder="預設單價 (可留空)" min="0" step="0.01">
+          </div>
         </div>
+        <div class="form-group" style="margin:8px 0 0;">
+          <label style="font-size:12px;">📷 產品參考照片 (選填)</label>
+          <input type="file" id="newProductPhoto" accept="image/*" onchange="previewProductPhoto(this)" style="padding:6px;">
+          <div id="newProductPhotoPreview" style="margin-top:6px;"></div>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm btn-block" onclick="addProduct()" style="margin:8px 0;">新增產品</button>
+        <div id="productManagerList"></div>
+        <div style="font-size:11px; color:#6b7280; margin-top:6px;">新增後會自動加入上方下拉選單，選擇時會自動帶出預設單價並顯示產品照片供核對</div>
+      </div>
+
+      <!-- 所選產品的參考照片 -->
+      <div id="selectedProductRef" style="display:none; padding:8px; background:#f9fafb; border-radius:6px; margin-bottom:12px; text-align:center;">
+        <div style="font-size:11px; color:#6b7280; margin-bottom:4px;">產品參考照片</div>
+        <img id="selectedProductImg" src="" style="max-width:150px; max-height:150px; border-radius:6px; cursor:pointer; border:1px solid #e5e7eb;" onclick="viewPhotoSrc(this.src)">
+      </div>
+
+      <div class="form-row">
         <div class="form-group">
           <label>數量 *</label>
           <input type="number" id="pieceQty" placeholder="0" min="0" step="0.01" oninput="updatePiecePreview()">
         </div>
-      </div>
-      <div class="form-row">
         <div class="form-group">
           <label>單價 NT$ *</label>
           <input type="number" id="piecePrice" placeholder="0" min="0" step="0.01" oninput="updatePiecePreview()">
         </div>
+      </div>
+      <div class="form-row">
         <div class="form-group">
           <label>小計 (自動)</label>
           <input type="text" id="pieceSubtotal" readonly style="background:#f0fdf4; font-weight:600; color:#06C755;">
         </div>
+        <div class="form-group">
+          <label>備註</label>
+          <input type="text" id="pieceNote" placeholder="選填">
+        </div>
       </div>
       <div class="form-group">
-        <label>備註</label>
-        <input type="text" id="pieceNote" placeholder="選填">
+        <label>📷 拍照 / 上傳照片 (選填，核對用)</label>
+        <input type="file" id="piecePhoto" accept="image/*" capture="environment" onchange="previewPhoto('piece', this)" style="padding:6px;">
+        <div id="piecePhotoPreview" style="margin-top:8px;"></div>
       </div>
       <button class="btn btn-primary btn-block" onclick="addPieceEntry()">新增此筆記錄</button>
     </div>
@@ -401,6 +439,11 @@
       <div class="form-group">
         <label>工作內容 / 備註</label>
         <input type="text" id="hourNote" placeholder="選填">
+      </div>
+      <div class="form-group">
+        <label>📷 拍照 / 上傳照片 (選填，核對用)</label>
+        <input type="file" id="hourPhoto" accept="image/*" capture="environment" onchange="previewPhoto('hour', this)" style="padding:6px;">
+        <div id="hourPhotoPreview" style="margin-top:8px;"></div>
       </div>
       <button class="btn btn-primary btn-block" onclick="addHourEntry()">新增此筆記錄</button>
     </div>
@@ -525,6 +568,12 @@
       <button class="btn btn-primary btn-block" onclick="exportToExcel()">
         下載 Excel 檔案
       </button>
+      <button class="btn btn-secondary btn-block" onclick="exportPhotosZip()" style="margin-top:8px;">
+        📷 下載所有照片 (ZIP)
+      </button>
+      <div class="alert alert-info" style="margin-top:8px; font-size:12px;">
+        照片會以「日期_員工_品名.jpg」格式命名，方便對照 Excel 核對稽核。
+      </div>
     </div>
 
     <div class="card">
@@ -563,16 +612,6 @@
     </div>
 
     <div class="card">
-      <h3>如何佈署到 LINE？</h3>
-      <div class="setup-step"><strong>1.</strong> 將此 HTML 上傳到 HTTPS 主機 (如 GitHub Pages / Netlify / Vercel)</div>
-      <div class="setup-step"><strong>2.</strong> 前往 <code>developers.line.biz</code> 登入並建立 Provider</div>
-      <div class="setup-step"><strong>3.</strong> 建立「LINE Login」Channel，在 LIFF 分頁新增 LIFF App</div>
-      <div class="setup-step"><strong>4.</strong> Endpoint URL 填入您的 HTML 網址，Size 選 Full</div>
-      <div class="setup-step"><strong>5.</strong> 複製 LIFF ID 貼到上方欄位並儲存</div>
-      <div class="setup-step"><strong>6.</strong> 將 LIFF URL (<code>https://liff.line.me/&lt;LIFF_ID&gt;</code>) 分享到您的群組</div>
-    </div>
-
-    <div class="card">
       <h3>台灣勞健保參數 (2026年)</h3>
       <div class="form-row">
         <div class="form-group">
@@ -598,6 +637,7 @@ const STORE = {
   employees: 'salary_employees',
   records: 'salary_records',
   daily: 'salary_daily',
+  products: 'salary_products',
   liffId: 'salary_liff_id',
   rates: 'salary_rates'
 };
@@ -611,9 +651,79 @@ function save(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
 let employees = load(STORE.employees, []);
 let records = load(STORE.records, []);
 let dailyEntries = load(STORE.daily, []);
+let products = load(STORE.products, []);
 let rates = load(STORE.rates, { labor: 2.42, health: 1.655 });
 let editingEmpId = null;
 let dailyMode = null;
+let currentPiecePhoto = null;
+let currentHourPhoto = null;
+let currentNewProductPhoto = null;
+
+// ========= 照片處理 =========
+function compressImage(file, maxWidth = 1000, quality = 0.7) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxWidth) {
+          height = Math.round((maxWidth / width) * height);
+          width = maxWidth;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function previewPhoto(kind, input) {
+  const file = input.files[0];
+  if (!file) return;
+  try {
+    const base64 = await compressImage(file);
+    if (kind === 'piece') currentPiecePhoto = base64;
+    else currentHourPhoto = base64;
+    const kb = Math.round(base64.length / 1024);
+    document.getElementById(kind + 'PhotoPreview').innerHTML =
+      `<div style="display:flex; align-items:center; gap:8px;">
+        <img src="${base64}" style="max-width:120px; max-height:90px; border-radius:8px; border:1px solid #e5e7eb; cursor:pointer;" onclick="viewPhotoSrc(this.src)">
+        <div>
+          <div style="font-size:12px; color:#6b7280;">已壓縮 ${kb} KB</div>
+          <button type="button" class="btn btn-danger btn-sm" onclick="clearPhoto('${kind}')" style="margin-top:4px;">移除</button>
+        </div>
+      </div>`;
+  } catch (e) {
+    alert('照片處理失敗：' + e.message);
+  }
+}
+
+function clearPhoto(kind) {
+  if (kind === 'piece') { currentPiecePhoto = null; document.getElementById('piecePhoto').value = ''; document.getElementById('piecePhotoPreview').innerHTML = ''; }
+  else { currentHourPhoto = null; document.getElementById('hourPhoto').value = ''; document.getElementById('hourPhotoPreview').innerHTML = ''; }
+}
+
+function viewPhotoSrc(src) {
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:9999; display:flex; align-items:center; justify-content:center; cursor:pointer; padding:20px;';
+  modal.onclick = () => modal.remove();
+  modal.innerHTML = `<img src="${src}" style="max-width:100%; max-height:100%; border-radius:8px; box-shadow:0 0 40px rgba(0,0,0,0.5);">
+    <div style="position:absolute; top:20px; right:20px; background:white; color:#111; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:700;">×</div>`;
+  document.body.appendChild(modal);
+}
+
+function viewPhotoByEntry(id) {
+  const entry = dailyEntries.find(d => d._id === id);
+  if (entry && entry.photo) viewPhotoSrc(entry.photo);
+}
 
 // ========= 頁籤切換 =========
 document.querySelectorAll('.tab').forEach(t => {
@@ -798,19 +908,26 @@ function addPieceEntry() {
     name, qty, price,
     subtotal: Math.round(qty * price * 100) / 100,
     note: document.getElementById('pieceNote').value.trim(),
+    photo: currentPiecePhoto || null,
     createdAt: new Date().toISOString()
   };
-  dailyEntries.push(entry);
-  save(STORE.daily, dailyEntries);
+  try {
+    dailyEntries.push(entry);
+    save(STORE.daily, dailyEntries);
+  } catch (e) {
+    dailyEntries.pop();
+    alert('儲存失敗，儲存空間可能已滿。請先匯出照片 ZIP 後清除舊記錄。\n錯誤：' + e.message);
+    return;
+  }
   // 清空輸入
-  document.getElementById('pieceName').value = '';
+  document.getElementById('pieceName').selectedIndex = 0;
   document.getElementById('pieceQty').value = '';
   document.getElementById('piecePrice').value = '';
   document.getElementById('pieceSubtotal').value = '';
   document.getElementById('pieceNote').value = '';
+  clearPhoto('piece');
   refreshDailyEntries();
   refreshMonthlyDaily();
-  refreshProductList();
 }
 
 function addHourEntry() {
@@ -840,10 +957,17 @@ function addHourEntry() {
     rate,
     subtotal: Math.round(hours * rate * 100) / 100,
     note: document.getElementById('hourNote').value.trim(),
+    photo: currentHourPhoto || null,
     createdAt: new Date().toISOString()
   };
-  dailyEntries.push(entry);
-  save(STORE.daily, dailyEntries);
+  try {
+    dailyEntries.push(entry);
+    save(STORE.daily, dailyEntries);
+  } catch (e) {
+    dailyEntries.pop();
+    alert('儲存失敗，儲存空間可能已滿。請先匯出照片 ZIP 後清除舊記錄。\n錯誤：' + e.message);
+    return;
+  }
   // 清空
   document.getElementById('hourStart').value = '';
   document.getElementById('hourEnd').value = '';
@@ -852,6 +976,7 @@ function addHourEntry() {
   document.getElementById('hourSubtotal').value = '';
   document.getElementById('hourNote').value = '';
   document.getElementById('hourBreakdown').style.display = 'none';
+  clearPhoto('hour');
   refreshDailyEntries();
   refreshMonthlyDaily();
 }
@@ -887,10 +1012,14 @@ function refreshDailyEntries() {
     const tag = d.type === 'piece'
       ? '<span class="badge" style="background:#fef3c7;color:#92400e;">論件</span>'
       : '<span class="badge" style="background:#dbeafe;color:#1e40af;">計時</span>';
+    const photoTag = d.photo
+      ? `<img src="${d.photo}" onclick="viewPhotoByEntry('${d._id}')" style="width:48px; height:48px; object-fit:cover; border-radius:6px; cursor:pointer; border:2px solid #06C755; margin-right:8px;" title="點擊放大">`
+      : '';
     return `
       <div class="employee-item">
+        ${photoTag}
         <div class="info">
-          <div class="name">${escapeHtml(d.empName)} ${tag}</div>
+          <div class="name">${escapeHtml(d.empName)} ${tag} ${d.photo ? '<span class="badge" style="background:#dcfce7;color:#166534;">📷 有照片</span>' : ''}</div>
           <div class="sub">${detail} = <strong>NT$ ${formatMoney(d.subtotal)}</strong></div>
           ${d.note ? `<div class="sub" style="color:#6b7280;">${escapeHtml(d.note)}</div>` : ''}
         </div>
@@ -1003,10 +1132,167 @@ function refreshEmpDropdown() {
 }
 
 function refreshProductList() {
-  const dl = document.getElementById('productList');
-  if (!dl) return;
-  const names = [...new Set(dailyEntries.filter(d => d.type === 'piece').map(d => d.name))];
-  dl.innerHTML = names.map(n => `<option value="${escapeHtml(n)}">`).join('');
+  const sel = document.getElementById('pieceName');
+  if (!sel) return;
+  // 保留目前選擇的值
+  const current = sel.value;
+  sel.innerHTML = '<option value="">-- 請選擇產品 --</option>' +
+    products.map(p => {
+      const priceText = p.defaultPrice ? ` (NT$ ${p.defaultPrice})` : '';
+      const photoMark = p.photo ? ' 📷' : '';
+      return `<option value="${escapeHtml(p.name)}" data-price="${p.defaultPrice || ''}" data-pid="${p._id}">${escapeHtml(p.name)}${priceText}${photoMark}</option>`;
+    }).join('');
+  if (current) sel.value = current;
+  onProductSelected();
+}
+
+function toggleProductManager() {
+  const pm = document.getElementById('productManager');
+  if (!pm) return;
+  pm.style.display = pm.style.display === 'none' ? 'block' : 'none';
+  if (pm.style.display === 'block') refreshProductManagerList();
+}
+
+async function previewProductPhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  try {
+    const base64 = await compressImage(file, 600, 0.7);
+    currentNewProductPhoto = base64;
+    const kb = Math.round(base64.length / 1024);
+    document.getElementById('newProductPhotoPreview').innerHTML =
+      `<div style="display:flex; align-items:center; gap:8px;">
+        <img src="${base64}" style="max-width:80px; max-height:80px; border-radius:6px; border:1px solid #e5e7eb; cursor:pointer;" onclick="viewPhotoSrc(this.src)">
+        <div>
+          <div style="font-size:11px; color:#6b7280;">${kb} KB</div>
+          <button type="button" class="btn btn-danger btn-sm" onclick="clearNewProductPhoto()" style="margin-top:2px; padding:2px 8px; font-size:11px;">移除</button>
+        </div>
+      </div>`;
+  } catch (e) {
+    alert('照片處理失敗：' + e.message);
+  }
+}
+
+function clearNewProductPhoto() {
+  currentNewProductPhoto = null;
+  document.getElementById('newProductPhoto').value = '';
+  document.getElementById('newProductPhotoPreview').innerHTML = '';
+}
+
+function addProduct() {
+  const name = document.getElementById('newProductName').value.trim();
+  const price = parseFloat(document.getElementById('newProductPrice').value) || 0;
+  if (!name) { alert('請輸入產品名稱'); return; }
+  if (products.find(p => p.name === name)) { alert('此產品已存在'); return; }
+  products.push({
+    _id: 'p_' + Date.now(),
+    name,
+    defaultPrice: price,
+    photo: currentNewProductPhoto || null
+  });
+  try {
+    save(STORE.products, products);
+  } catch (e) {
+    products.pop();
+    alert('儲存失敗，儲存空間可能已滿。\n錯誤：' + e.message);
+    return;
+  }
+  document.getElementById('newProductName').value = '';
+  document.getElementById('newProductPrice').value = '';
+  clearNewProductPhoto();
+  refreshProductManagerList();
+  refreshProductList();
+}
+
+function updateProductPhoto(id, file) {
+  if (!file) return;
+  compressImage(file, 600, 0.7).then(base64 => {
+    const p = products.find(x => x._id === id);
+    if (!p) return;
+    p.photo = base64;
+    try {
+      save(STORE.products, products);
+      refreshProductManagerList();
+    } catch (e) {
+      alert('儲存失敗：' + e.message);
+    }
+  });
+}
+
+function removeProductPhoto(id) {
+  const p = products.find(x => x._id === id);
+  if (!p) return;
+  p.photo = null;
+  save(STORE.products, products);
+  refreshProductManagerList();
+}
+
+function deleteProduct(id) {
+  if (!confirm('確定刪除此產品？已建立的記錄不受影響。')) return;
+  products = products.filter(p => p._id !== id);
+  save(STORE.products, products);
+  refreshProductManagerList();
+  refreshProductList();
+}
+
+function updateProductPrice(id, newPrice) {
+  const p = products.find(x => x._id === id);
+  if (!p) return;
+  p.defaultPrice = parseFloat(newPrice) || 0;
+  save(STORE.products, products);
+  refreshProductList();
+}
+
+function refreshProductManagerList() {
+  const box = document.getElementById('productManagerList');
+  if (!box) return;
+  if (products.length === 0) {
+    box.innerHTML = '<div style="text-align:center; padding:10px; color:#9ca3af; font-size:13px;">尚無產品，請新增</div>';
+    return;
+  }
+  box.innerHTML = products.map(p => {
+    const photoBlock = p.photo
+      ? `<img src="${p.photo}" onclick="viewPhotoSrc(this.src)" style="width:40px; height:40px; object-fit:cover; border-radius:6px; cursor:pointer; border:1px solid #e5e7eb;" title="點擊放大">
+         <button type="button" onclick="removeProductPhoto('${p._id}')" title="移除照片" style="border:none; background:none; color:#ef4444; cursor:pointer; font-size:14px; padding:0 2px;">✕</button>`
+      : `<label style="cursor:pointer; padding:4px 8px; background:#f3f4f6; border-radius:6px; font-size:11px; color:#6b7280;">
+           📷 加照片
+           <input type="file" accept="image/*" onchange="updateProductPhoto('${p._id}', this.files[0])" style="display:none;">
+         </label>`;
+    return `
+      <div style="display:flex; align-items:center; gap:6px; padding:6px; background:white; border-radius:6px; margin-bottom:4px;">
+        ${photoBlock}
+        <div style="flex:1; font-weight:500;">${escapeHtml(p.name)}</div>
+        <input type="number" value="${p.defaultPrice || ''}" placeholder="單價" min="0" step="0.01"
+          onchange="updateProductPrice('${p._id}', this.value)"
+          style="width:80px; padding:4px 8px; font-size:13px;">
+        <button type="button" class="btn btn-danger btn-sm" onclick="deleteProduct('${p._id}')" style="padding:3px 8px; font-size:11px;">刪除</button>
+      </div>
+    `;
+  }).join('');
+}
+
+function onProductSelected() {
+  const sel = document.getElementById('pieceName');
+  if (!sel) return;
+  const opt = sel.options[sel.selectedIndex];
+  const price = opt ? opt.dataset.price : '';
+  const pid = opt ? opt.dataset.pid : '';
+  if (price) {
+    document.getElementById('piecePrice').value = price;
+    updatePiecePreview();
+  }
+  // 顯示所選產品的參考照片
+  const ref = document.getElementById('selectedProductRef');
+  const img = document.getElementById('selectedProductImg');
+  if (!ref || !img) return;
+  const prod = pid ? products.find(p => p._id === pid) : null;
+  if (prod && prod.photo) {
+    img.src = prod.photo;
+    ref.style.display = 'block';
+  } else {
+    ref.style.display = 'none';
+    img.src = '';
+  }
 }
 
 function computeSalary(emp, input) {
@@ -1196,27 +1482,28 @@ function exportToExcel() {
   // === 每日記錄工作表 ===
   if (dailyData.length > 0) {
     // 每日明細
-    const dailyHead = ['日期','員工編號','姓名','類型','品名/時段','數量/時數','單價/時薪','小計','備註'];
+    const dailyHead = ['日期','員工編號','姓名','類型','品名/時段','數量/時數','單價/時薪','小計','備註','照片檔名'];
     const dailyRows = [dailyHead];
     dailyData.slice().sort((a,b) => a.date.localeCompare(b.date)).forEach(d => {
+      const photoName = d.photo ? photoFileName(d) : '';
       if (d.type === 'piece') {
         dailyRows.push([
           d.date, d.empNo || '', d.empName, '論件',
-          d.name, d.qty, d.price, d.subtotal, d.note || ''
+          d.name, d.qty, d.price, d.subtotal, d.note || '', photoName
         ]);
       } else {
         dailyRows.push([
           d.date, d.empNo || '', d.empName, '計時',
-          `${d.start}-${d.end}`, d.hours, d.rate, d.subtotal, d.note || ''
+          `${d.start}-${d.end}`, d.hours, d.rate, d.subtotal, d.note || '', photoName
         ]);
       }
     });
     const dailyTotal = dailyData.reduce((a,b) => a + b.subtotal, 0);
     dailyRows.push([]);
-    dailyRows.push(['', '', '', '', '', '', '總計', dailyTotal, '']);
+    dailyRows.push(['', '', '', '', '', '', '總計', dailyTotal, '', '']);
 
     const wsD = XLSX.utils.aoa_to_sheet(dailyRows);
-    wsD['!cols'] = [{wch:12},{wch:10},{wch:10},{wch:8},{wch:18},{wch:10},{wch:10},{wch:12},{wch:20}];
+    wsD['!cols'] = [{wch:12},{wch:10},{wch:10},{wch:8},{wch:18},{wch:10},{wch:10},{wch:12},{wch:20},{wch:30}];
     XLSX.utils.book_append_sheet(wb, wsD, '每日明細');
 
     // 每日摘要（依員工 × 日期）
@@ -1266,6 +1553,44 @@ function exportToExcel() {
   XLSX.writeFile(wb, fname);
 }
 
+// ========= 照片檔名與 ZIP 匯出 =========
+function photoFileName(d) {
+  const safe = s => String(s || '').replace(/[\\/:*?"<>|]/g, '_');
+  const label = d.type === 'piece' ? safe(d.name) : `${d.start}-${d.end}`.replace(':', '');
+  return `${d.date}_${safe(d.empName)}_${label}_${d._id.slice(-6)}.jpg`;
+}
+
+async function exportPhotosZip() {
+  const month = document.getElementById('exportMonth').value;
+  const pool = month ? dailyEntries.filter(d => d.date.startsWith(month)) : dailyEntries;
+  const withPhotos = pool.filter(d => d.photo);
+  if (withPhotos.length === 0) {
+    alert('目前沒有照片可以匯出');
+    return;
+  }
+  if (typeof JSZip === 'undefined') {
+    alert('JSZip 套件載入失敗，請檢查網路');
+    return;
+  }
+  const zip = new JSZip();
+  withPhotos.forEach(d => {
+    // base64: data:image/jpeg;base64,XXXXX
+    const base64 = d.photo.split(',')[1] || '';
+    zip.file(photoFileName(d), base64, { base64: true });
+  });
+  try {
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `薪資照片_${month || 'all'}_${new Date().toISOString().slice(0,10)}.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('匯出失敗：' + e.message);
+  }
+}
+
 // ========= 統計 =========
 function updateSummary() {
   const box = document.getElementById('summaryBox');
@@ -1295,7 +1620,7 @@ function updateSummary() {
 
 // ========= 備份 =========
 function backupData() {
-  const blob = new Blob([JSON.stringify({ employees, records, dailyEntries, rates }, null, 2)],
+  const blob = new Blob([JSON.stringify({ employees, records, dailyEntries, products, rates }, null, 2)],
     { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1315,16 +1640,19 @@ function restoreData(e) {
       if (data.employees) employees = data.employees;
       if (data.records) records = data.records;
       if (data.dailyEntries) dailyEntries = data.dailyEntries;
+      if (data.products) products = data.products;
       if (data.rates) rates = data.rates;
       save(STORE.employees, employees);
       save(STORE.records, records);
       save(STORE.daily, dailyEntries);
+      save(STORE.products, products);
       save(STORE.rates, rates);
       refreshEmployeeList();
       refreshEmpDropdown();
       refreshRecords();
       refreshDailyEntries();
       refreshMonthlyDaily();
+      refreshProductList();
       alert('還原成功');
     } catch (err) {
       alert('檔案格式錯誤');
@@ -1336,15 +1664,17 @@ function restoreData(e) {
 function clearAllData() {
   if (!confirm('確定清除所有員工與薪資記錄？此動作無法復原！')) return;
   if (!confirm('再次確認：資料將完全清除！')) return;
-  employees = []; records = []; dailyEntries = [];
+  employees = []; records = []; dailyEntries = []; products = [];
   save(STORE.employees, []);
   save(STORE.records, []);
   save(STORE.daily, []);
+  save(STORE.products, []);
   refreshEmployeeList();
   refreshEmpDropdown();
   refreshRecords();
   refreshDailyEntries();
   refreshMonthlyDaily();
+  refreshProductList();
   updateSummary();
   alert('已清除');
 }
@@ -1421,6 +1751,7 @@ function init() {
   refreshRecords();
   refreshDailyEntries();
   refreshMonthlyDaily();
+  refreshProductList();
   initLiff();
 }
 
