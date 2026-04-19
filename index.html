@@ -359,6 +359,24 @@
         <img id="selectedProductImg" src="" style="max-width:150px; max-height:150px; border-radius:6px; cursor:pointer; border:1px solid #e5e7eb;" onclick="viewPhotoSrc(this.src)">
       </div>
 
+      <!-- 工時記錄 (選填) -->
+      <div class="form-row">
+        <div class="form-group">
+          <label>開始時間 (選填)</label>
+          <input type="time" id="pieceStart" oninput="updatePieceTime()">
+        </div>
+        <div class="form-group">
+          <label>結束時間 (選填)</label>
+          <input type="time" id="pieceEnd" oninput="updatePieceTime()">
+        </div>
+      </div>
+      <div id="pieceTimeInfo" style="display:none; background:#fffbeb; padding:10px; border-radius:8px; margin-bottom:10px; border:1px solid #f59e0b; font-size:13px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+          <span>🕐 工時：<strong id="pieceDuration" style="color:#92400e;">—</strong></span>
+          <span>⚡ 效率：<strong id="pieceEfficiency" style="color:#ea580c;">—</strong></span>
+        </div>
+      </div>
+
       <div class="form-row">
         <div class="form-group">
           <label>數量 *</label>
@@ -445,8 +463,12 @@
         實際工作時數 = 總時段 − 休息時間
       </div>
       <div class="form-group">
-        <label>工作內容 / 備註</label>
-        <input type="text" id="hourNote" placeholder="選填">
+        <label>工作內容 *</label>
+        <input type="text" id="hourWorkContent" placeholder="例：整理倉庫、包裝商品、客戶接待" style="font-weight:500;">
+      </div>
+      <div class="form-group">
+        <label>備註 (選填)</label>
+        <input type="text" id="hourNote" placeholder="例：天氣影響、加班原因">
       </div>
       <div class="form-group">
         <label>📷 拍照 / 上傳照片 (選填，核對用)</label>
@@ -524,16 +546,41 @@
           <input type="number" id="ot2" placeholder="0" min="0" step="0.5">
         </div>
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>獎金 / 津貼 NT$</label>
-          <input type="number" id="bonus" placeholder="0" min="0">
-        </div>
-        <div class="form-group">
-          <label>其他扣款 NT$</label>
-          <input type="number" id="otherDeduct" placeholder="0" min="0">
+      <div class="form-group">
+        <label>獎金 / 津貼 NT$</label>
+        <input type="number" id="bonus" placeholder="0" min="0">
+      </div>
+
+      <!-- 其他扣款明細 -->
+      <div class="form-group">
+        <label style="display:flex; justify-content:space-between; align-items:center;">
+          <span>其他扣款明細</span>
+          <button type="button" onclick="toggleDeductCatManager()" style="background:none; border:1px solid #06C755; color:#06C755; padding:2px 8px; border-radius:12px; cursor:pointer; font-size:11px;">⚙ 管理扣款類別</button>
+        </label>
+        <div id="deductItems"></div>
+        <button type="button" onclick="addDeductItem()" class="btn btn-secondary btn-sm btn-block" style="margin-top:6px;">+ 新增扣款項目</button>
+        <input type="hidden" id="otherDeduct" value="0">
+        <div style="text-align:right; margin-top:8px; padding:6px 10px; background:#fef2f2; border-radius:6px; font-size:13px;">
+          扣款合計: <strong style="color:#ef4444;">NT$ <span id="otherDeductTotal">0</span></strong>
         </div>
       </div>
+
+      <!-- 扣款類別管理子面板 -->
+      <div id="deductCatManager" style="display:none; background:#f0fdf4; border:1px dashed #06C755; border-radius:8px; padding:12px; margin-bottom:12px;">
+        <div style="font-weight:600; margin-bottom:8px; color:#06C755;">扣款類別管理</div>
+        <div class="form-row">
+          <div class="form-group" style="margin-bottom:0;">
+            <input type="text" id="newDeductCatName" placeholder="類別名稱 (如: 借支)">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <input type="number" id="newDeductCatAmount" placeholder="預設金額 (可留空)" min="0" step="1">
+          </div>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm btn-block" onclick="addDeductCategory()" style="margin:8px 0;">新增類別</button>
+        <div id="deductCatList"></div>
+        <div style="font-size:11px; color:#6b7280; margin-top:6px;">新增後會出現在上方「新增扣款項目」的下拉選單中</div>
+      </div>
+
       <div class="form-row">
         <div class="form-group">
           <label>勞保 (員工負擔)</label>
@@ -648,6 +695,7 @@ const STORE = {
   records: 'salary_records',
   daily: 'salary_daily',
   products: 'salary_products',
+  deductCats: 'salary_deduct_cats',
   liffId: 'salary_liff_id',
   rates: 'salary_rates'
 };
@@ -662,6 +710,13 @@ let employees = load(STORE.employees, []);
 let records = load(STORE.records, []);
 let dailyEntries = load(STORE.daily, []);
 let products = load(STORE.products, []);
+let deductCategories = load(STORE.deductCats, [
+  { _id: 'dc_default_1', name: '借支', defaultAmount: 0 },
+  { _id: 'dc_default_2', name: '水電', defaultAmount: 0 },
+  { _id: 'dc_default_3', name: '瓦斯', defaultAmount: 0 },
+  { _id: 'dc_default_4', name: '伙食費', defaultAmount: 0 }
+]);
+let currentDeductItems = [];
 let rates = load(STORE.rates, { labor: 2.42, health: 1.655 });
 let editingEmpId = null;
 let editingDailyId = null;
@@ -729,17 +784,18 @@ async function migrateAndSubscribe() {
     }
 
     setSyncStatus('檢查同步狀態…', 'syncing');
-    const [nEmp, nRec, nDaily, nProd] = await Promise.all([
+    const [nEmp, nRec, nDaily, nProd, nDc] = await Promise.all([
       syncMissing('employees', employees),
       syncMissing('records', records),
       syncMissing('daily', dailyEntries),
-      syncMissing('products', products)
+      syncMissing('products', products),
+      syncMissing('deductCats', deductCategories)
     ]);
     // 費率若雲端沒有也要補
     const rSnap = await ws().collection('config').doc('rates').get();
     if (!rSnap.exists) await ws().collection('config').doc('rates').set(rates);
 
-    const totalSynced = nEmp + nRec + nDaily + nProd;
+    const totalSynced = nEmp + nRec + nDaily + nProd + nDc;
     if (totalSynced > 0) {
       setSyncStatus(`已補傳 ${totalSynced} 筆遺漏記錄`, 'syncing');
     }
@@ -779,6 +835,17 @@ function subscribeAll() {
     refreshProductList();
     const pm = document.getElementById('productManager');
     if (pm && pm.style.display === 'block') refreshProductManagerList();
+  });
+
+  col('deductCats').onSnapshot(snap => {
+    if (snap.docs.length > 0) {
+      deductCategories = snap.docs.map(d => d.data());
+      save(STORE.deductCats, deductCategories);
+      const dm = document.getElementById('deductCatManager');
+      if (dm && dm.style.display === 'block') refreshDeductCatList();
+      // 重新渲染扣款項目以更新類別下拉
+      if (currentDeductItems.length > 0) renderDeductItems();
+    }
   });
 
   ws().collection('config').doc('rates').onSnapshot(snap => {
@@ -994,6 +1061,28 @@ function updatePiecePreview() {
   const price = parseFloat(document.getElementById('piecePrice').value) || 0;
   const sub = qty * price;
   document.getElementById('pieceSubtotal').value = 'NT$ ' + formatMoney(sub);
+  updatePieceTime();
+}
+
+function updatePieceTime() {
+  const start = document.getElementById('pieceStart').value;
+  const end = document.getElementById('pieceEnd').value;
+  const qty = parseFloat(document.getElementById('pieceQty').value) || 0;
+  const info = document.getElementById('pieceTimeInfo');
+  if (!start || !end) {
+    info.style.display = 'none';
+    return;
+  }
+  const mins = calcSpanMins(start, end);
+  const hours = mins / 60;
+  info.style.display = 'block';
+  document.getElementById('pieceDuration').textContent = `${hours.toFixed(2)} 小時 (${start} → ${end})`;
+  if (qty > 0 && hours > 0) {
+    const eff = (qty / hours).toFixed(1);
+    document.getElementById('pieceEfficiency').textContent = `${eff} 個/小時`;
+  } else {
+    document.getElementById('pieceEfficiency').textContent = '請填數量';
+  }
 }
 
 function calcSpanMins(start, end) {
@@ -1058,6 +1147,9 @@ function addPieceEntry() {
 
   const emp = employees.find(e => e._id === empId);
   const original = editingDailyId ? dailyEntries.find(x => x._id === editingDailyId) : null;
+  const pStart = document.getElementById('pieceStart').value;
+  const pEnd = document.getElementById('pieceEnd').value;
+  const pWorkMins = (pStart && pEnd) ? calcSpanMins(pStart, pEnd) : null;
   const entry = {
     _id: editingDailyId || ('d_' + Date.now()),
     date, empId,
@@ -1066,10 +1158,13 @@ function addPieceEntry() {
     type: 'piece',
     name, qty, price,
     subtotal: Math.round(qty * price * 100) / 100,
+    startTime: pStart || null,
+    endTime: pEnd || null,
+    workMinutes: pWorkMins,
     note: document.getElementById('pieceNote').value.trim(),
     photo: currentPiecePhoto || null,
     createdAt: original ? original.createdAt : new Date().toISOString(),
-    updatedAt: editingDailyId ? new Date().toISOString() : undefined
+    updatedAt: editingDailyId ? new Date().toISOString() : null
   };
   const prevList = dailyEntries.slice();
   if (editingDailyId) {
@@ -1092,6 +1187,9 @@ function addPieceEntry() {
   document.getElementById('pieceQty').value = '';
   document.getElementById('piecePrice').value = '';
   document.getElementById('pieceSubtotal').value = '';
+  document.getElementById('pieceStart').value = '';
+  document.getElementById('pieceEnd').value = '';
+  document.getElementById('pieceTimeInfo').style.display = 'none';
   document.getElementById('pieceNote').value = '';
   clearPhoto('piece');
   resetDailyButtons();
@@ -1127,10 +1225,11 @@ function addHourEntry() {
     hours: Math.round(hours * 100) / 100,
     rate,
     subtotal: Math.round(hours * rate * 100) / 100,
+    workContent: document.getElementById('hourWorkContent').value.trim(),
     note: document.getElementById('hourNote').value.trim(),
     photo: currentHourPhoto || null,
     createdAt: original ? original.createdAt : new Date().toISOString(),
-    updatedAt: editingDailyId ? new Date().toISOString() : undefined
+    updatedAt: editingDailyId ? new Date().toISOString() : null
   };
   const prevList = dailyEntries.slice();
   if (editingDailyId) {
@@ -1154,6 +1253,7 @@ function addHourEntry() {
   document.getElementById('hourBreak').value = '0';
   document.getElementById('hourBreakHr').value = '';
   document.getElementById('hourSubtotal').value = '';
+  document.getElementById('hourWorkContent').value = '';
   document.getElementById('hourNote').value = '';
   document.getElementById('hourBreakdown').style.display = 'none';
   clearPhoto('hour');
@@ -1188,9 +1288,17 @@ function refreshDailyEntries() {
   }
 
   box.innerHTML = list.map(d => {
-    const detail = d.type === 'piece'
-      ? `${escapeHtml(d.name)} × ${d.qty} × NT$${d.price}`
-      : `${d.start}-${d.end} (${d.hours}小時 × NT$${d.rate})`;
+    let detail, timeInfo = '';
+    if (d.type === 'piece') {
+      detail = `${escapeHtml(d.name)} × ${d.qty} × NT$${d.price}`;
+      if (d.startTime && d.endTime && d.workMinutes) {
+        const h = (d.workMinutes / 60).toFixed(2);
+        const eff = d.qty > 0 ? (d.qty / (d.workMinutes / 60)).toFixed(1) : '';
+        timeInfo = `🕐 ${d.startTime}-${d.endTime} · ${h}h${eff ? ` · ⚡${eff}個/h` : ''}`;
+      }
+    } else {
+      detail = `${d.start}-${d.end} (${d.hours}小時 × NT$${d.rate})`;
+    }
     const tag = d.type === 'piece'
       ? '<span class="badge" style="background:#fef3c7;color:#92400e;">論件</span>'
       : '<span class="badge" style="background:#dbeafe;color:#1e40af;">計時</span>';
@@ -1198,12 +1306,17 @@ function refreshDailyEntries() {
       ? `<img src="${d.photo}" onclick="viewPhotoByEntry('${d._id}')" style="width:48px; height:48px; object-fit:cover; border-radius:6px; cursor:pointer; border:2px solid #06C755; margin-right:8px;" title="點擊放大">`
       : '';
     const isEditing = editingDailyId === d._id;
+    const workDesc = d.type === 'hour' && d.workContent
+      ? `<div class="sub" style="color:#374151; font-weight:500;">📋 ${escapeHtml(d.workContent)}</div>`
+      : '';
     return `
       <div class="employee-item" style="${isEditing ? 'border:2px solid #f59e0b; background:#fffbeb;' : ''}">
         ${photoTag}
         <div class="info">
           <div class="name">${escapeHtml(d.empName)} ${tag} ${d.photo ? '<span class="badge" style="background:#dcfce7;color:#166534;">📷 有照片</span>' : ''} ${isEditing ? '<span class="badge" style="background:#fef3c7;color:#92400e;">編輯中</span>' : ''}</div>
           <div class="sub">${detail} = <strong>NT$ ${formatMoney(d.subtotal)}</strong></div>
+          ${timeInfo ? `<div class="sub" style="color:#ea580c; font-weight:500;">${timeInfo}</div>` : ''}
+          ${workDesc}
           ${d.note ? `<div class="sub" style="color:#6b7280;">${escapeHtml(d.note)}</div>` : ''}
         </div>
         <div class="actions">
@@ -1265,8 +1378,11 @@ function editDailyEntry(id) {
     sel.value = e.name;
     document.getElementById('pieceQty').value = e.qty;
     document.getElementById('piecePrice').value = e.price;
+    document.getElementById('pieceStart').value = e.startTime || '';
+    document.getElementById('pieceEnd').value = e.endTime || '';
     document.getElementById('pieceNote').value = e.note || '';
     updatePiecePreview();
+    updatePieceTime();
     // 照片
     currentPiecePhoto = e.photo || null;
     if (e.photo) showPhotoPreview('piece', e.photo);
@@ -1282,6 +1398,7 @@ function editDailyEntry(id) {
     document.getElementById('hourEnd').value = e.end;
     document.getElementById('hourBreak').value = e.breakMin || 0;
     document.getElementById('hourRate').value = e.rate;
+    document.getElementById('hourWorkContent').value = e.workContent || '';
     document.getElementById('hourNote').value = e.note || '';
     updateHourPreview();
     currentHourPhoto = e.photo || null;
@@ -1303,6 +1420,9 @@ function cancelDailyEdit() {
   document.getElementById('pieceQty').value = '';
   document.getElementById('piecePrice').value = '';
   document.getElementById('pieceSubtotal').value = '';
+  document.getElementById('pieceStart').value = '';
+  document.getElementById('pieceEnd').value = '';
+  document.getElementById('pieceTimeInfo').style.display = 'none';
   document.getElementById('pieceNote').value = '';
   clearPhoto('piece');
   document.getElementById('hourStart').value = '';
@@ -1310,6 +1430,7 @@ function cancelDailyEdit() {
   document.getElementById('hourBreak').value = '0';
   document.getElementById('hourBreakHr').value = '';
   document.getElementById('hourSubtotal').value = '';
+  document.getElementById('hourWorkContent').value = '';
   document.getElementById('hourNote').value = '';
   document.getElementById('hourBreakdown').style.display = 'none';
   clearPhoto('hour');
@@ -1557,6 +1678,134 @@ function refreshProductManagerList() {
   }).join('');
 }
 
+// ========= 扣款類別與項目 =========
+function toggleDeductCatManager() {
+  const pm = document.getElementById('deductCatManager');
+  if (!pm) return;
+  pm.style.display = pm.style.display === 'none' ? 'block' : 'none';
+  if (pm.style.display === 'block') refreshDeductCatList();
+}
+
+function addDeductCategory() {
+  const name = document.getElementById('newDeductCatName').value.trim();
+  const amount = parseFloat(document.getElementById('newDeductCatAmount').value) || 0;
+  if (!name) { alert('請輸入類別名稱'); return; }
+  if (deductCategories.find(c => c.name === name)) { alert('此類別已存在'); return; }
+  const cat = { _id: 'dc_' + Date.now(), name, defaultAmount: amount };
+  deductCategories.push(cat);
+  save(STORE.deductCats, deductCategories);
+  cloudSave('deductCats', cat);
+  document.getElementById('newDeductCatName').value = '';
+  document.getElementById('newDeductCatAmount').value = '';
+  refreshDeductCatList();
+}
+
+function deleteDeductCategory(id) {
+  if (!confirm('確定刪除此扣款類別？已建立的月薪記錄不受影響。')) return;
+  deductCategories = deductCategories.filter(c => c._id !== id);
+  save(STORE.deductCats, deductCategories);
+  cloudDelete('deductCats', id);
+  refreshDeductCatList();
+}
+
+function updateDeductCatAmount(id, newAmt) {
+  const c = deductCategories.find(x => x._id === id);
+  if (!c) return;
+  c.defaultAmount = parseFloat(newAmt) || 0;
+  save(STORE.deductCats, deductCategories);
+  cloudSave('deductCats', c);
+}
+
+function refreshDeductCatList() {
+  const box = document.getElementById('deductCatList');
+  if (!box) return;
+  if (deductCategories.length === 0) {
+    box.innerHTML = '<div style="text-align:center; padding:10px; color:#9ca3af; font-size:13px;">尚無類別，請新增</div>';
+    return;
+  }
+  box.innerHTML = deductCategories.map(c => `
+    <div style="display:flex; align-items:center; gap:6px; padding:6px; background:white; border-radius:6px; margin-bottom:4px;">
+      <div style="flex:1; font-weight:500;">${escapeHtml(c.name)}</div>
+      <input type="number" value="${c.defaultAmount || ''}" placeholder="預設金額" min="0"
+        onchange="updateDeductCatAmount('${c._id}', this.value)"
+        style="width:100px; padding:4px 8px; font-size:13px;">
+      <button type="button" class="btn btn-danger btn-sm" onclick="deleteDeductCategory('${c._id}')" style="padding:3px 8px; font-size:11px;">刪除</button>
+    </div>
+  `).join('');
+}
+
+// 扣款項目 (月薪表單裡的明細)
+function renderDeductItems() {
+  const box = document.getElementById('deductItems');
+  if (!box) return;
+  if (currentDeductItems.length === 0) {
+    box.innerHTML = '<div style="text-align:center; padding:8px; color:#9ca3af; font-size:12px;">尚無扣款項目</div>';
+  } else {
+    box.innerHTML = currentDeductItems.map((item, idx) => {
+      const catOpts = '<option value="">自訂類別</option>' +
+        deductCategories.map(c => `<option value="${escapeHtml(c.name)}" ${c.name === item.name ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('');
+      const useSelect = deductCategories.some(c => c.name === item.name) || !item.name;
+      return `
+        <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
+          <select onchange="onDeductCatChange(${idx}, this.value)" style="flex:1.2; padding:6px 8px; font-size:13px;">
+            ${catOpts}
+          </select>
+          <input type="text" value="${escapeHtml(item.name || '')}" placeholder="項目名稱"
+            oninput="updateDeductItem(${idx}, 'name', this.value)"
+            style="flex:1; padding:6px 8px; font-size:13px; ${useSelect && item.name ? 'display:none;' : ''}">
+          <input type="number" value="${item.amount || ''}" placeholder="金額" min="0"
+            oninput="updateDeductItem(${idx}, 'amount', this.value)"
+            style="width:90px; padding:6px 8px; font-size:13px;">
+          <button type="button" onclick="removeDeductItem(${idx})" style="border:none; background:#fee2e2; color:#991b1b; padding:4px 8px; border-radius:4px; cursor:pointer;">✕</button>
+        </div>
+      `;
+    }).join('');
+  }
+  updateDeductTotal();
+}
+
+function addDeductItem() {
+  currentDeductItems.push({ name: '', amount: 0 });
+  renderDeductItems();
+}
+
+function removeDeductItem(idx) {
+  currentDeductItems.splice(idx, 1);
+  renderDeductItems();
+}
+
+function updateDeductItem(idx, field, value) {
+  if (!currentDeductItems[idx]) return;
+  if (field === 'amount') {
+    currentDeductItems[idx].amount = parseFloat(value) || 0;
+  } else {
+    currentDeductItems[idx][field] = value;
+  }
+  updateDeductTotal();
+}
+
+function onDeductCatChange(idx, catName) {
+  if (!currentDeductItems[idx]) return;
+  if (catName) {
+    currentDeductItems[idx].name = catName;
+    const cat = deductCategories.find(c => c.name === catName);
+    if (cat && cat.defaultAmount && !currentDeductItems[idx].amount) {
+      currentDeductItems[idx].amount = cat.defaultAmount;
+    }
+  } else {
+    currentDeductItems[idx].name = '';
+  }
+  renderDeductItems();
+}
+
+function updateDeductTotal() {
+  const total = currentDeductItems.reduce((a, b) => a + (b.amount || 0), 0);
+  const el = document.getElementById('otherDeductTotal');
+  const hidden = document.getElementById('otherDeduct');
+  if (el) el.textContent = formatMoney(total);
+  if (hidden) hidden.value = total;
+}
+
 function onProductSelected() {
   const sel = document.getElementById('pieceName');
   if (!sel) return;
@@ -1655,6 +1904,10 @@ function saveSalaryRecord() {
   const input = gatherCalcInput();
   const r = computeSalary(emp, input);
   const original = editingRecordId ? records.find(x => x._id === editingRecordId) : null;
+  // 僅保留有名稱且金額 > 0 的扣款項目
+  const cleanedDeductItems = currentDeductItems
+    .filter(x => x.name && x.amount > 0)
+    .map(x => ({ name: x.name, amount: x.amount }));
   const rec = {
     _id: editingRecordId || ('rec_' + Date.now()),
     month,
@@ -1664,8 +1917,9 @@ function saveSalaryRecord() {
     empTitle: emp.title,
     ...input,
     ...r,
+    deductItems: cleanedDeductItems,
     createdAt: original ? original.createdAt : new Date().toISOString(),
-    updatedAt: editingRecordId ? new Date().toISOString() : undefined
+    updatedAt: editingRecordId ? new Date().toISOString() : null
   };
   if (editingRecordId) {
     records = records.map(x => x._id === editingRecordId ? rec : x);
@@ -1678,8 +1932,11 @@ function saveSalaryRecord() {
   editingRecordId = null;
   resetRecordButtons();
   // 清空表單
-  ['workDays','leaveDays','ot1','ot2','bonus','otherDeduct','laborIns','healthIns','calcNote']
+  ['workDays','leaveDays','ot1','ot2','bonus','laborIns','healthIns','calcNote']
     .forEach(id => document.getElementById(id).value = '');
+  document.getElementById('otherDeduct').value = '0';
+  currentDeductItems = [];
+  renderDeductItems();
   document.getElementById('calcResult').style.display = 'none';
   alert(wasEditing ? '修改已儲存' : ('已儲存：' + emp.name + ' · ' + month));
   refreshRecords();
@@ -1698,7 +1955,16 @@ function editSalaryRecord(id) {
   document.getElementById('ot1').value = r.ot1 || '';
   document.getElementById('ot2').value = r.ot2 || '';
   document.getElementById('bonus').value = r.bonus || '';
-  document.getElementById('otherDeduct').value = r.otherDeduct || '';
+  // 載入扣款明細；若沒明細但有總額，建立一筆「其他」
+  if (r.deductItems && r.deductItems.length > 0) {
+    currentDeductItems = r.deductItems.map(x => ({ name: x.name, amount: x.amount }));
+  } else if (r.otherDeduct > 0) {
+    currentDeductItems = [{ name: '其他', amount: r.otherDeduct }];
+  } else {
+    currentDeductItems = [];
+  }
+  renderDeductItems();
+  document.getElementById('otherDeduct').value = r.otherDeduct || 0;
   document.getElementById('laborIns').value = r.laborIns || '';
   document.getElementById('healthIns').value = r.healthIns || '';
   document.getElementById('calcNote').value = r.note || '';
@@ -1715,8 +1981,11 @@ function editSalaryRecord(id) {
 function cancelRecordEdit() {
   editingRecordId = null;
   resetRecordButtons();
-  ['workDays','leaveDays','ot1','ot2','bonus','otherDeduct','laborIns','healthIns','calcNote']
+  ['workDays','leaveDays','ot1','ot2','bonus','laborIns','healthIns','calcNote']
     .forEach(id => document.getElementById(id).value = '');
+  document.getElementById('otherDeduct').value = '0';
+  currentDeductItems = [];
+  renderDeductItems();
   document.getElementById('calcResult').style.display = 'none';
   refreshRecords();
 }
@@ -1806,16 +2075,19 @@ function exportToExcel() {
   const detailHead = [
     '月份','員工編號','姓名','職稱','出勤天數','請假天數',
     '平日加班(時)','假日加班(時)','底薪','平日加班費','假日加班費','獎金',
-    '請假扣款','應發合計','勞保','健保','其他扣款','扣除合計','實發金額','備註'
+    '請假扣款','應發合計','勞保','健保','其他扣款','扣款明細','扣除合計','實發金額','備註'
   ];
   const detailRows = [detailHead];
   data.forEach(r => {
+    const deductDetail = (r.deductItems && r.deductItems.length > 0)
+      ? r.deductItems.map(x => `${x.name}:${x.amount}`).join(', ')
+      : '';
     detailRows.push([
       r.month, r.empNo || '', r.empName, r.empTitle || '',
       r.workDays || 0, r.leaveDays || 0, r.ot1 || 0, r.ot2 || 0,
       r.base, r.otPay1, r.otPay2, r.bonus,
       r.leaveDeduct, r.gross, r.laborIns, r.healthIns,
-      r.otherDeduct, r.deductions, r.net, r.note || ''
+      r.otherDeduct, deductDetail, r.deductions, r.net, r.note || ''
     ]);
   });
   if (data.length > 0) {
@@ -1827,28 +2099,34 @@ function exportToExcel() {
   // === 每日記錄工作表 ===
   if (dailyData.length > 0) {
     // 每日明細
-    const dailyHead = ['日期','員工編號','姓名','類型','品名/時段','數量/時數','單價/時薪','小計','備註','照片檔名'];
+    const dailyHead = ['日期','員工編號','姓名','類型','品名/時段','數量/時數','單價/時薪','小計','開始時間','結束時間','工時(小時)','效率(個/時)','工作內容','備註','照片檔名'];
     const dailyRows = [dailyHead];
     dailyData.slice().sort((a,b) => a.date.localeCompare(b.date)).forEach(d => {
       const photoName = d.photo ? photoFileName(d) : '';
       if (d.type === 'piece') {
+        const hrs = d.workMinutes ? Math.round(d.workMinutes / 60 * 100) / 100 : '';
+        const eff = (d.workMinutes && d.qty) ? Math.round((d.qty / (d.workMinutes / 60)) * 10) / 10 : '';
         dailyRows.push([
           d.date, d.empNo || '', d.empName, '論件',
-          d.name, d.qty, d.price, d.subtotal, d.note || '', photoName
+          d.name, d.qty, d.price, d.subtotal,
+          d.startTime || '', d.endTime || '', hrs, eff,
+          '', d.note || '', photoName
         ]);
       } else {
         dailyRows.push([
           d.date, d.empNo || '', d.empName, '計時',
-          `${d.start}-${d.end}`, d.hours, d.rate, d.subtotal, d.note || '', photoName
+          `${d.start}-${d.end}`, d.hours, d.rate, d.subtotal,
+          d.start, d.end, d.hours, '',
+          d.workContent || '', d.note || '', photoName
         ]);
       }
     });
     const dailyTotal = dailyData.reduce((a,b) => a + b.subtotal, 0);
     dailyRows.push([]);
-    dailyRows.push(['', '', '', '', '', '', '總計', dailyTotal, '', '']);
+    dailyRows.push(['', '', '', '', '', '', '總計', dailyTotal, '', '', '', '', '', '', '']);
 
     const wsD = XLSX.utils.aoa_to_sheet(dailyRows);
-    wsD['!cols'] = [{wch:12},{wch:10},{wch:10},{wch:8},{wch:18},{wch:10},{wch:10},{wch:12},{wch:20},{wch:30}];
+    wsD['!cols'] = [{wch:12},{wch:10},{wch:10},{wch:8},{wch:18},{wch:10},{wch:10},{wch:12},{wch:10},{wch:10},{wch:10},{wch:12},{wch:25},{wch:20},{wch:30}];
     XLSX.utils.book_append_sheet(wb, wsD, '每日明細');
 
     // 每日摘要（依員工 × 日期）
@@ -1965,7 +2243,7 @@ function updateSummary() {
 
 // ========= 備份 =========
 function backupData() {
-  const blob = new Blob([JSON.stringify({ employees, records, dailyEntries, products, rates }, null, 2)],
+  const blob = new Blob([JSON.stringify({ employees, records, dailyEntries, products, deductCategories, rates }, null, 2)],
     { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1986,11 +2264,13 @@ function restoreData(e) {
       if (data.records) records = data.records;
       if (data.dailyEntries) dailyEntries = data.dailyEntries;
       if (data.products) products = data.products;
+      if (data.deductCategories) deductCategories = data.deductCategories;
       if (data.rates) rates = data.rates;
       save(STORE.employees, employees);
       save(STORE.records, records);
       save(STORE.daily, dailyEntries);
       save(STORE.products, products);
+      save(STORE.deductCats, deductCategories);
       save(STORE.rates, rates);
       refreshEmployeeList();
       refreshEmpDropdown();
@@ -2098,6 +2378,7 @@ function init() {
   refreshDailyEntries();
   refreshMonthlyDaily();
   refreshProductList();
+  renderDeductItems();
   initLiff();
   initFirebase();
 }
