@@ -276,14 +276,21 @@
         </div>
       </div>
       <div id="empLeaveHint" style="display:none; margin-top:-6px; margin-bottom:12px; padding:8px 10px; background:#f0fdf4; border-left:3px solid #06C755; border-radius:4px; font-size:12px; color:#166534;"></div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>月薪 (底薪) NT$ *</label>
-          <input type="number" id="empBaseSalary" placeholder="30000" min="0">
+      <div style="background:#eff6ff; border:1px solid #3b82f6; border-radius:8px; padding:10px; margin-bottom:12px;">
+        <div style="font-weight:700; color:#1e40af; margin-bottom:6px; font-size:13px;">💰 薪資設定</div>
+        <div class="form-row">
+          <div class="form-group" style="margin-bottom:0;">
+            <label>月薪 (底薪) NT$ <span style="color:#ef4444;">*</span> <span style="font-size:10px; color:#6b7280;">(月薪制)</span></label>
+            <input type="number" id="empBaseSalary" placeholder="30000" min="0">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label>時薪 NT$ <span style="font-size:10px; color:#6b7280;">(時薪制必填 / 月薪制可留空)</span></label>
+            <input type="number" id="empHourlyRate" placeholder="如 200" min="0">
+          </div>
         </div>
-        <div class="form-group">
-          <label>時薪 NT$ (加班用)</label>
-          <input type="number" id="empHourlyRate" placeholder="自動計算" min="0">
+        <div style="font-size:11px; color:#6b7280; margin-top:8px; padding:6px 8px; background:white; border-radius:4px;">
+          💡 <strong>月薪制</strong>員工 → 填月薪，時薪自動算（月薪÷30÷8）。<br>
+          💡 <strong>時薪制</strong>員工 → 月薪填 0，時薪必填（例如 200），此數值會用於：日常計薪、加班費、特休折算。
         </div>
       </div>
       <div class="form-row">
@@ -2545,13 +2552,13 @@ function toggleHourlyFields() {
   if (checked) {
     if (baseLabel) baseLabel.innerHTML = '月薪 (底薪) NT$ <span style="font-size:10px; color:#6b7280;">(時薪制可留 0)</span>';
     if (baseInput) baseInput.placeholder = '可留 0';
-    if (hourlyLabel) hourlyLabel.innerHTML = '時薪 NT$ <span style="color:#ef4444;">*</span>';
+    if (hourlyLabel) hourlyLabel.innerHTML = '時薪 (本薪) NT$ <span style="color:#ef4444;">*</span> <span style="font-size:10px; color:#dc2626;">(必填)</span>';
     if (hourlyInput) hourlyInput.placeholder = '必填 如 200';
   } else {
-    if (baseLabel) baseLabel.innerHTML = '月薪 (底薪) NT$ <span style="color:#ef4444;">*</span>';
+    if (baseLabel) baseLabel.innerHTML = '月薪 (底薪) NT$ <span style="color:#ef4444;">*</span> <span style="font-size:10px; color:#6b7280;">(月薪制)</span>';
     if (baseInput) baseInput.placeholder = '30000';
-    if (hourlyLabel) hourlyLabel.innerHTML = '時薪 NT$ <span style="font-size:10px; color:#6b7280;">(加班用，留空自動計算)</span>';
-    if (hourlyInput) hourlyInput.placeholder = '自動計算';
+    if (hourlyLabel) hourlyLabel.innerHTML = '時薪 NT$ <span style="font-size:10px; color:#6b7280;">(時薪制必填 / 月薪制可留空)</span>';
+    if (hourlyInput) hourlyInput.placeholder = '如 200';
   }
 }
 
