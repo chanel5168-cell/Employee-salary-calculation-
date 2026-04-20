@@ -897,6 +897,47 @@
       <div id="quickAttResult" style="display:none; margin-top:8px; padding:8px; background:#f0fdf4; border-radius:6px; font-size:12px;"></div>
     </div>
 
+    <!-- 批次新增整月出勤 (月薪制常用) -->
+    <div class="card">
+      <h3>📋 批次新增整月出勤 (月薪制常用)</h3>
+      <div style="padding:8px; background:#fef3c7; border-radius:6px; font-size:12px; color:#92400e; margin-bottom:10px;">
+        適合固定上下班時間的月薪制員工 — 設定預設時間後，勾選有上班的日期一次建立。已有記錄的日期會自動停用勾選。
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>上班時間</label>
+          <input type="time" id="batchStart" value="08:00">
+        </div>
+        <div class="form-group">
+          <label>下班時間</label>
+          <input type="time" id="batchEnd" value="17:00">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>休息 (分鐘)</label>
+          <div style="display:flex; gap:4px;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('batchBreak').value=0" style="padding:4px 8px; font-size:11px;">無</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('batchBreak').value=60" style="padding:4px 8px; font-size:11px;">1小時</button>
+            <input type="number" id="batchBreak" placeholder="分" value="60" min="0" step="5" style="flex:1;">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>工作內容</label>
+          <select id="batchWork">
+            <option value="">-- 選填 --</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex; gap:6px; margin-bottom:8px;">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="batchCheckAll('weekday')" style="flex:1; font-size:12px;">☑ 全選平日</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="batchCheckAll('all')" style="flex:1; font-size:12px;">☑ 全選</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="batchCheckAll('none')" style="flex:1; font-size:12px;">☐ 全不選</button>
+      </div>
+      <div id="batchAttList"></div>
+      <button type="button" class="btn btn-primary btn-block" onclick="batchSaveAttendance()" style="margin-top:8px;">批次儲存勾選日期</button>
+    </div>
+
     <div class="card">
       <div id="monthlyAttendance"></div>
     </div>
@@ -2790,9 +2831,10 @@ function refreshLeaveList() {
       : info.totalMonths < 6
         ? `未滿 6 個月 (${info.totalMonths} 個月)`
         : `到職 ${info.years} 年 ${info.months} 月`;
-    const typeBadge = isHourly
+    const typeBadge = (isHourly
       ? '<span class="badge" style="background:#fef3c7; color:#92400e;">時薪制</span>'
-      : '<span class="badge" style="background:#dbeafe; color:#1e40af;">月薪制</span>';
+      : '<span class="badge" style="background:#dbeafe; color:#1e40af;">月薪制</span>')
+      + (e.isShift ? ' <span class="badge" style="background:#ede9fe; color:#5b21b6;">排班制</span>' : '');
     const hourlyHint = isHourly
       ? `<div style="padding:8px 10px; background:#fef3c7; border-radius:6px; font-size:11px; color:#92400e;">
           📜 <strong>勞動部函釋</strong>：部分工時勞工特休 = 全時特休 × (每週工時 ÷ 40)
@@ -3442,6 +3484,118 @@ function onQuickAttTypeChange() {
   }
 }
 
+// ========= 批次新增整月出勤（月薪制常用）=========
+function renderBatchAttendance() {
+  const month = document.getElementById('calcMonth').value;
+  const empId = document.getElementById('calcEmp').value;
+  const box = document.getElementById('batchAttList');
+  if (!box) return;
+  if (!month || !empId) {
+    box.innerHTML = '<div style="text-align:center; padding:12px; color:#9ca3af; font-size:12px;">請先選員工與月份</div>';
+    return;
+  }
+  const emp = employees.find(e => e._id === empId);
+  const isShift = !!(emp && emp.isShift);
+  const [y, m] = month.split('-').map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const existingDates = new Set(
+    dailyEntries
+      .filter(d => d.empId === empId && d.date.startsWith(month) && d.type === 'hour')
+      .map(d => d.date)
+  );
+
+  const wdNames = ['日','一','二','三','四','五','六'];
+  let html = '<div style="max-height:360px; overflow-y:auto; border:1px solid #e5e7eb; border-radius:6px;">';
+  html += '<table style="font-size:12px;"><thead><tr style="background:#f3f4f6;"><th style="width:40px;">選</th><th>日</th><th>週</th><th>狀態</th></tr></thead><tbody>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${month}-${String(d).padStart(2,'0')}`;
+    const dow = new Date(y, m-1, d).getDay();
+    const isWeekendCal = dow === 0 || dow === 6;
+    const isHoliday = holidays.includes(dateStr);
+    const hasRecord = existingDates.has(dateStr);
+    // 排班制：預設不分平假日，全月可選；一般：預設只勾平日且未放假
+    const isSpecialDay = !isShift && (isWeekendCal || isHoliday);
+    const rowStyle = isHoliday ? 'background:#fee2e2;' : isWeekendCal ? 'background:#fed7aa;' : '';
+    const statusText = hasRecord ? '✅ 已記錄' : isHoliday ? '🎌 國定假日' : isWeekendCal ? '例假/休息日' : '平日';
+    const defaultCheck = !hasRecord && !isSpecialDay;
+    html += `<tr style="${rowStyle}">
+      <td style="text-align:center;">
+        <input type="checkbox" class="batch-day-chk" data-date="${dateStr}" data-weekday="${dow}" ${defaultCheck ? 'checked' : ''} ${hasRecord ? 'disabled' : ''}>
+      </td>
+      <td>${d}</td>
+      <td style="text-align:center; font-weight:700;">${wdNames[dow]}</td>
+      <td style="color:${hasRecord ? '#059669' : isHoliday ? '#991b1b' : isWeekendCal ? '#9a3412' : '#374151'};">${statusText}</td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  box.innerHTML = html;
+  // 批次工作內容下拉同步
+  const bw = document.getElementById('batchWork');
+  if (bw && bw.options.length <= 1) {
+    bw.innerHTML = '<option value="">-- 選填 --</option>' +
+      workContents.map(w => `<option value="${escapeHtml(w.name)}">${escapeHtml(w.name)}</option>`).join('');
+  }
+}
+
+function batchCheckAll(mode) {
+  const boxes = document.querySelectorAll('.batch-day-chk:not(:disabled)');
+  boxes.forEach(cb => {
+    const dow = parseInt(cb.dataset.weekday);
+    if (mode === 'weekday') cb.checked = (dow !== 0 && dow !== 6) && !holidays.includes(cb.dataset.date);
+    else if (mode === 'all') cb.checked = true;
+    else cb.checked = false;
+  });
+}
+
+function batchSaveAttendance() {
+  const empId = document.getElementById('calcEmp').value;
+  const emp = employees.find(e => e._id === empId);
+  if (!emp) { alert('請先選員工'); return; }
+  const start = document.getElementById('batchStart').value;
+  const end = document.getElementById('batchEnd').value;
+  const brk = parseFloat(document.getElementById('batchBreak').value) || 0;
+  const work = document.getElementById('batchWork').value;
+  if (!start || !end) { alert('請填預設上下班時間'); return; }
+  const hours = calcHours(start, end, brk);
+  if (hours <= 0) { alert('時數必須大於 0，請檢查時間/休息設定'); return; }
+  const rate = emp.hourlyRate || (emp.baseSalary ? Math.round(emp.baseSalary / 30 / 8) : 0);
+
+  const checkedDates = [...document.querySelectorAll('.batch-day-chk:checked:not(:disabled)')].map(c => c.dataset.date);
+  if (checkedDates.length === 0) { alert('請勾選要新增的日期'); return; }
+  if (!confirm(`將為 ${emp.name} 批次新增 ${checkedDates.length} 天出勤：\n  ${start}-${end}（休息 ${brk} 分 = ${hours} 小時/天）\n\n繼續？`)) return;
+
+  let baseId = Date.now();
+  let count = 0;
+  checkedDates.forEach(date => {
+    const entry = {
+      _id: 'd_' + (baseId + count),
+      date, empId, empName: emp.name, empNo: emp.id,
+      type: 'hour',
+      start, end, breakMin: brk,
+      hours: Math.round(hours * 100) / 100,
+      rate,
+      subtotal: Math.round(hours * rate * 100) / 100,
+      workContent: work,
+      attType: 'normal',
+      lateMinutes: 0,
+      note: '批次新增',
+      photo: null,
+      createdAt: new Date().toISOString()
+    };
+    dailyEntries.push(entry);
+    cloudSave('daily', entry);
+    count++;
+  });
+  try { save(STORE.daily, dailyEntries); }
+  catch (e) { alert('儲存失敗：' + e.message); }
+  alert(`✅ 已批次新增 ${count} 天出勤`);
+  renderBatchAttendance();
+  refreshMonthlyAttendance();
+  updateMonthlyDailyHint();
+  refreshDailyEntries();
+  refreshMonthlyDaily();
+}
+
 // 月薪頁快速新增出勤
 function quickAddAttendance() {
   const empId = document.getElementById('calcEmp').value;
@@ -3527,6 +3681,7 @@ function updateMonthlyDailyHint() {
   updateDailyRateHint();
   updateLateHint();
   refreshMonthlyAttendance();
+  renderBatchAttendance();
   const empId = document.getElementById('calcEmp').value;
   const month = document.getElementById('calcMonth').value;
   const hint = document.getElementById('monthlyDailyHint');
