@@ -1444,8 +1444,14 @@ function refreshEmployeeList() {
 function saveEmployee() {
   const name = document.getElementById('empName').value.trim();
   const baseSalary = parseFloat(document.getElementById('empBaseSalary').value) || 0;
+  const hourlyRate = parseFloat(document.getElementById('empHourlyRate').value) || 0;
+  const isHourly = document.getElementById('empIsHourly').checked;
   if (!name) { alert('請輸入姓名'); return; }
-  if (baseSalary <= 0) { alert('請輸入底薪'); return; }
+  if (isHourly) {
+    if (hourlyRate <= 0) { alert('時薪制員工必須填時薪'); return; }
+  } else {
+    if (baseSalary <= 0) { alert('月薪制員工必須填月薪'); return; }
+  }
 
   const emp = {
     _id: editingEmpId || ('emp_' + Date.now()),
@@ -1456,8 +1462,8 @@ function saveEmployee() {
     hireDate: document.getElementById('empHireDate').value,
     insuredDate: document.getElementById('empInsuredDate').value,
     baseSalary: baseSalary,
-    hourlyRate: parseFloat(document.getElementById('empHourlyRate').value) || Math.round(baseSalary / 30 / 8),
-    isHourly: document.getElementById('empIsHourly').checked,
+    hourlyRate: hourlyRate || (baseSalary > 0 ? Math.round(baseSalary / 30 / 8) : 0),
+    isHourly: isHourly,
     weeklyHours: parseFloat(document.getElementById('empWeeklyHours').value) || 0,
     dailyHours: parseFloat(document.getElementById('empDailyHours').value) || 0,
     insuredSalary: parseFloat(document.getElementById('empInsuredSalary').value) || 0,
@@ -2532,6 +2538,21 @@ function toggleHourlyFields() {
   const checked = document.getElementById('empIsHourly').checked;
   const box = document.getElementById('empHourlyOnly');
   if (box) box.style.display = checked ? 'block' : 'none';
+  const baseInput = document.getElementById('empBaseSalary');
+  const hourlyInput = document.getElementById('empHourlyRate');
+  const baseLabel = baseInput ? baseInput.parentElement.querySelector('label') : null;
+  const hourlyLabel = hourlyInput ? hourlyInput.parentElement.querySelector('label') : null;
+  if (checked) {
+    if (baseLabel) baseLabel.innerHTML = '月薪 (底薪) NT$ <span style="font-size:10px; color:#6b7280;">(時薪制可留 0)</span>';
+    if (baseInput) baseInput.placeholder = '可留 0';
+    if (hourlyLabel) hourlyLabel.innerHTML = '時薪 NT$ <span style="color:#ef4444;">*</span>';
+    if (hourlyInput) hourlyInput.placeholder = '必填 如 200';
+  } else {
+    if (baseLabel) baseLabel.innerHTML = '月薪 (底薪) NT$ <span style="color:#ef4444;">*</span>';
+    if (baseInput) baseInput.placeholder = '30000';
+    if (hourlyLabel) hourlyLabel.innerHTML = '時薪 NT$ <span style="font-size:10px; color:#6b7280;">(加班用，留空自動計算)</span>';
+    if (hourlyInput) hourlyInput.placeholder = '自動計算';
+  }
 }
 
 function getDailyRate(emp) {
@@ -4107,7 +4128,16 @@ function init() {
   document.getElementById('calcMonth').addEventListener('change', () => { refreshRecords(); updateMonthlyDailyHint(); });
   document.getElementById('calcEmp').addEventListener('change', updateMonthlyDailyHint);
   document.getElementById('dailyDate').addEventListener('change', refreshDailyEntries);
-  document.getElementById('dailyEmp').addEventListener('change', refreshDailyEntries);
+  document.getElementById('dailyEmp').addEventListener('change', () => {
+    refreshDailyEntries();
+    // 自動帶時薪到計時表單
+    const eid = document.getElementById('dailyEmp').value;
+    const emp = employees.find(e => e._id === eid);
+    if (emp) {
+      const hRate = document.getElementById('hourRate');
+      if (hRate && emp.hourlyRate > 0) { hRate.value = emp.hourlyRate; updateHourPreview(); }
+    }
+  });
 
   // 費率
   document.getElementById('laborRate').value = rates.labor;
