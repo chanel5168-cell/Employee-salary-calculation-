@@ -1472,6 +1472,8 @@ function subscribeAll() {
     if (snap.docs.length > 0) {
       workContents = snap.docs.map(d => d.data());
       save(STORE.workContents, workContents);
+      // 雲端可能還是舊名「打樣」/「半製品製作」→ 強制修正
+      forceFixWorkContents();
       refreshWorkContentDropdown();
       const wm = document.getElementById('workContentManager');
       if (wm && wm.style.display === 'block') refreshWorkContentList();
@@ -2313,6 +2315,46 @@ function refreshMonthlyDaily() {
 
 // ========= 工作地點 =========
 // 強制修正舊廠別名稱（每次載入都檢查；Firestore 與本機都覆寫）
+function forceFixWorkContents() {
+  // 強制把舊名「打樣」「半製品製作」統一改為「半成品加工」
+  const renameMap = { '打樣': '半成品加工', '半製品製作': '半成品加工' };
+  let changed = false;
+  workContents.forEach(w => {
+    if (renameMap[w.name]) {
+      w.name = renameMap[w.name];
+      changed = true;
+      if (cloudReady) cloudSave('workContents', w);
+    }
+  });
+  // 去重（若同時存在「打樣」與「半製品製作」會產生重複的「半成品加工」）
+  const seen = new Set();
+  workContents = workContents.filter(w => {
+    if (seen.has(w.name)) {
+      if (cloudReady) cloudDelete('workContents', w._id);
+      changed = true;
+      return false;
+    }
+    seen.add(w.name);
+    return true;
+  });
+  // 同步歷史每日記錄的 workContent 欄位
+  let entriesChanged = false;
+  dailyEntries.forEach(d => {
+    if (renameMap[d.workContent]) {
+      d.workContent = renameMap[d.workContent];
+      entriesChanged = true;
+      if (cloudReady) cloudSave('daily', d);
+    }
+  });
+  if (entriesChanged) save(STORE.daily, dailyEntries);
+  if (changed) {
+    save(STORE.workContents, workContents);
+    refreshWorkContentDropdown();
+    const wm = document.getElementById('workContentManager');
+    if (wm && wm.style.display === 'block') refreshWorkContentList();
+  }
+}
+
 function forceFixWorkplaces() {
   const fixes = {
     wp_1: '暘基',
@@ -4887,6 +4929,7 @@ function init() {
   refreshWorkContentDropdown();
   refreshWorkplaceDropdown();
   forceFixWorkplaces();
+  forceFixWorkContents();
   mergeDefaultCategories();
   renderDeductItems();
   renderBonusItems();
