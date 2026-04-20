@@ -636,6 +636,7 @@
           <input type="number" id="leavePayAmount" placeholder="自動計算" min="0" step="0.01">
         </div>
       </div>
+      <div id="dailyRateHint" style="display:none; padding:6px 10px; background:#f0fdf4; border-radius:6px; font-size:11px; color:#166534; margin-bottom:10px;"></div>
 
       <!-- 獎金 / 津貼明細 -->
       <div class="form-group">
@@ -776,9 +777,38 @@
   <div class="panel" id="panel-leave">
     <div class="card">
       <h3>🌴 特休管理</h3>
-      <div class="alert alert-info">
-        <strong>依勞基法規定</strong>：工作滿 6 個月 3 天、1 年 7 天、2 年 10 天、3 年 14 天、5 年 15 天、10 年以上每滿 1 年加 1 天，最多 30 天。
+
+      <div class="alert alert-info" style="background:#dbeafe; border-left-color:#3b82f6;">
+        <div style="font-weight:700; color:#1e40af; margin-bottom:6px;">📘 月薪制（勞基法 §38）</div>
+        <div style="font-size:13px; line-height:1.8;">
+          • 6 個月~1 年：<strong>3 天</strong><br>
+          • 1~2 年：<strong>7 天</strong><br>
+          • 2~3 年：<strong>10 天</strong><br>
+          • 3~5 年：<strong>14 天</strong><br>
+          • 5~10 年：<strong>15 天</strong><br>
+          • 10 年以上：每滿 1 年加 1 天，上限 <strong>30 天</strong>
+        </div>
       </div>
+
+      <div class="alert alert-warn" style="background:#fef3c7; border-left-color:#f59e0b;">
+        <div style="font-weight:700; color:#92400e; margin-bottom:6px;">📜 時薪制（勞動部函釋）</div>
+        <div style="font-size:13px; line-height:1.8; color:#78350f;">
+          部分工時勞工特休依比例計算：<br>
+          <strong style="color:#c2410c;">特休天數 = 全時特休 × (每週工時 ÷ 40)</strong>
+        </div>
+        <div style="font-size:12px; margin-top:6px; color:#78350f; padding:6px 8px; background:#fffbeb; border-radius:4px;">
+          <strong>系統自動判斷邏輯：</strong><br>
+          ✓ 若已填每週工時 → 依公式自動換算<br>
+          ✓ 若沒填工時但有手動覆寫 → 使用手動值<br>
+          ✓ 若都沒有 → 顯示「請填每週工時」<br>
+          ✓ 月薪制 → 直接依勞基法 §38 計算
+        </div>
+      </div>
+
+      <div class="alert alert-info" style="background:#f0fdf4; border-left-color:#06C755; font-size:12px;">
+        💡 <strong>範例</strong>：某時薪制員工到職 1 年 5 個月（全時應有 7 天），每週工時 20 小時 → 7 × (20 ÷ 40) = <strong>3.5 天</strong>
+      </div>
+
       <div class="form-group">
         <label>計算基準日 (預設今天)</label>
         <input type="date" id="leaveBaseDate" onchange="refreshLeaveList()">
@@ -1879,10 +1909,10 @@ function onLeaveCatChange(idx, catId) {
 }
 
 function updateLeaveTotal() {
-  // 計算請假扣款總額 (依給薪類型)
+  // 計算請假扣款總額 (依給薪類型與薪資制)
   const empId = document.getElementById('calcEmp').value;
   const emp = employees.find(e => e._id === empId);
-  const dailyRate = emp ? Math.round((emp.baseSalary || 0) / 30) : 0;
+  const dailyRate = emp ? getDailyRate(emp) : 0;
   let totalDays = 0, totalDeduct = 0;
   currentLeaveItems.forEach(it => {
     const cat = leaveCategories.find(c => c._id === it.categoryId);
@@ -2095,13 +2125,23 @@ function toggleHourlyFields() {
   if (box) box.style.display = checked ? 'block' : 'none';
 }
 
+function getDailyRate(emp) {
+  if (!emp) return 0;
+  if (emp.isHourly) {
+    const weekly = emp.weeklyHours || 40;
+    const hourly = emp.hourlyRate || 0;
+    return Math.round((weekly / 5) * hourly);
+  }
+  return Math.round((emp.baseSalary || 0) / 30);
+}
+
 function updateLeavePayPreview() {
   const empId = document.getElementById('calcEmp').value;
   if (!empId) return;
   const emp = employees.find(e => e._id === empId);
   if (!emp) return;
   const days = parseFloat(document.getElementById('leavePayDays').value) || 0;
-  const dailyRate = Math.round((emp.baseSalary || 0) / 30);
+  const dailyRate = getDailyRate(emp);
   const amount = Math.round(days * dailyRate);
   const amtField = document.getElementById('leavePayAmount');
   // 僅在使用者未手動改金額時自動填
@@ -2528,8 +2568,27 @@ function updateBonusTotal() {
   if (hidden) hidden.value = total;
 }
 
+// 顯示員工日薪計算方式（時薪制 vs 月薪制）
+function updateDailyRateHint() {
+  const empId = document.getElementById('calcEmp').value;
+  const emp = employees.find(e => e._id === empId);
+  const hint = document.getElementById('dailyRateHint');
+  if (!hint) return;
+  if (!emp) { hint.style.display = 'none'; return; }
+  const dailyRate = getDailyRate(emp);
+  if (emp.isHourly) {
+    const weekly = emp.weeklyHours || 40;
+    hint.style.display = 'block';
+    hint.innerHTML = `💡 <strong>時薪制日薪計算</strong>：(每週工時 ${weekly} ÷ 5) × 時薪 NT$ ${emp.hourlyRate || 0} = 日薪 <strong>NT$ ${formatMoney(dailyRate)}</strong>`;
+  } else {
+    hint.style.display = 'block';
+    hint.innerHTML = `💡 <strong>月薪制日薪計算</strong>：月薪 NT$ ${formatMoney(emp.baseSalary || 0)} ÷ 30 = 日薪 <strong>NT$ ${formatMoney(dailyRate)}</strong>`;
+  }
+}
+
 // 顯示該員工本月每日記錄合計，方便論件員工月結
 function updateMonthlyDailyHint() {
+  updateDailyRateHint();
   const empId = document.getElementById('calcEmp').value;
   const month = document.getElementById('calcMonth').value;
   const hint = document.getElementById('monthlyDailyHint');
@@ -2587,7 +2646,14 @@ function onProductSelected() {
 function computeSalary(emp, input) {
   const base = emp.baseSalary;
   const hourly = emp.hourlyRate || Math.round(base / 30 / 8);
-  const dailyRate = Math.round(base / 30);
+  // 日薪：時薪制用 (週工時/5)×時薪；月薪制用 月薪/30
+  let dailyRate;
+  if (emp.isHourly) {
+    const weekly = emp.weeklyHours || 40;
+    dailyRate = Math.round((weekly / 5) * hourly);
+  } else {
+    dailyRate = Math.round(base / 30);
+  }
   // 依請假項目給薪類型計算扣款；若沒 leaveItems 則退回舊邏輯
   let dailyDeduct = 0;
   if (input.leaveItems && input.leaveItems.length > 0) {
@@ -2608,7 +2674,7 @@ function computeSalary(emp, input) {
   const pieceIncome = input.pieceIncome || 0;
   const hourIncome = input.hourIncome || 0;
   const leavePayDays = input.leavePayDays || 0;
-  const leavePayAmount = input.leavePayAmount || (leavePayDays > 0 ? Math.round(base / 30 * leavePayDays) : 0);
+  const leavePayAmount = input.leavePayAmount || (leavePayDays > 0 ? Math.round(dailyRate * leavePayDays) : 0);
 
   const laborIns = input.laborIns != null && input.laborIns !== ''
     ? parseFloat(input.laborIns)
