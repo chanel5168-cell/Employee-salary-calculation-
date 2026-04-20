@@ -536,8 +536,8 @@
         </div>
       </div>
       <div class="form-group">
-        <label>遲到分鐘 <span style="font-size:10px; color:#6b7280;">(選填，每月累計超過 30 分鐘才扣款)</span></label>
-        <input type="number" id="hourLate" placeholder="0" min="0" step="1">
+        <label>遲到分鐘 <span style="font-size:10px; color:#6b7280;">(依上班時間自動填，可手動覆寫；每月累計超過 30 分鐘才扣款)</span></label>
+        <input type="number" id="hourLate" placeholder="0" min="0" step="1" oninput="onLateInput('hour')">
       </div>
       <div class="alert alert-info" style="font-size:12px; padding:8px;">
         📋 <strong>計時規則</strong><br>
@@ -883,7 +883,7 @@
         </div>
         <div class="form-group">
           <label>遲到 (分鐘)</label>
-          <input type="number" id="quickAttLate" placeholder="0" min="0" step="1">
+          <input type="number" id="quickAttLate" placeholder="0" min="0" step="1" oninput="onLateInput('quick')">
         </div>
       </div>
       <button type="button" class="btn btn-primary btn-block" onclick="quickAddAttendance()">新增出勤記錄</button>
@@ -1633,13 +1633,24 @@ function autoFillLate(kind) {
   if (!startEl || !lateEl) return;
   const start = startEl.value;
   if (!start) return;
-  // 若使用者曾手動改過遲到（value 與上次自動值不同），則不覆寫
   const autoStamp = lateEl.dataset.autoStamp;
+  // 規則 1: 若無 autoStamp 但已有值（編輯既有記錄 / 使用者先手填）→ 不覆寫
+  if (!autoStamp && lateEl.value !== '') return;
+  // 規則 2: 若有 autoStamp 但目前值 ≠ 上次自動值 → 使用者改過，不覆寫
   if (autoStamp && lateEl.value !== autoStamp && lateEl.value !== '') return;
   const [h, m] = start.split(':').map(Number);
   const lateMins = (isNaN(m) || m <= 0) ? 0 : m;
   lateEl.value = lateMins || '';
   lateEl.dataset.autoStamp = String(lateMins || '');
+}
+
+// 當使用者手動編輯遲到欄位時，清掉 autoStamp 鎖住該手動值
+function onLateInput(kind) {
+  const lateId = kind === 'hour' ? 'hourLate' : 'quickAttLate';
+  const lateEl = document.getElementById(lateId);
+  if (!lateEl) return;
+  // 標記為使用者手動修改（用特殊 token 讓它不等於任何數字）
+  lateEl.dataset.autoStamp = '__manual__';
 }
   const spanMins = calcSpanMins(start, end);
   const workMins = Math.max(0, spanMins - (breakMin || 0));
