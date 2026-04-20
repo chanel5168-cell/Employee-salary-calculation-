@@ -1012,6 +1012,25 @@
       </div>
     </div>
 
+    <!-- 國定假日管理 -->
+    <div class="card">
+      <h3>🎌 國定假日管理</h3>
+      <div class="alert alert-info" style="font-size:12px;">
+        國定假日會在月薪頁的出勤明細自動顯示紅色，並算入「例假日上班 / 例假日加班」。依人事行政總處公告更新。
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="margin-bottom:0;">
+          <label>新增國定假日</label>
+          <input type="date" id="newHoliday">
+        </div>
+        <div class="form-group" style="margin-bottom:0; display:flex; align-items:end;">
+          <button type="button" class="btn btn-primary btn-block" onclick="addHoliday()">新增</button>
+        </div>
+      </div>
+      <div style="margin-top:10px; font-size:12px; color:#6b7280;">目前共 <strong id="holidayCount">0</strong> 天</div>
+      <div id="holidayList" style="max-height:200px; overflow-y:auto; margin-top:6px;"></div>
+    </div>
+
     <div class="card">
       <h3>台灣勞健保參數 (2026年)</h3>
       <div class="form-row">
@@ -1044,6 +1063,7 @@ const STORE = {
   workContents: 'salary_work_contents',
   leaveCats: 'salary_leave_cats',
   workplaces: 'salary_workplaces',
+  holidays: 'salary_holidays',
   liffId: 'salary_liff_id',
   rates: 'salary_rates'
 };
@@ -1109,6 +1129,17 @@ const DEFAULT_WORKPLACES = [
 let workContents = load(STORE.workContents, DEFAULT_WORK_CONTENTS);
 let leaveCategories = load(STORE.leaveCats, DEFAULT_LEAVE_CATS);
 let workplaces = load(STORE.workplaces, DEFAULT_WORKPLACES);
+// 台灣國定假日（2025~2026，依人事行政總處公告）
+const DEFAULT_HOLIDAYS = [
+  // 2025
+  '2025-01-01','2025-01-27','2025-01-28','2025-01-29','2025-01-30','2025-01-31',
+  '2025-02-28','2025-04-03','2025-04-04','2025-05-01','2025-05-30','2025-10-06','2025-10-10',
+  // 2026
+  '2026-01-01','2026-02-16','2026-02-17','2026-02-18','2026-02-19','2026-02-20',
+  '2026-02-27','2026-02-28','2026-04-02','2026-04-03','2026-04-06',
+  '2026-05-01','2026-06-19','2026-09-25','2026-10-09','2026-10-10'
+];
+let holidays = load(STORE.holidays, DEFAULT_HOLIDAYS);
 let currentLeaveItems = [];
 let rates = load(STORE.rates, { labor: 2.42, health: 1.655 });
 let editingEmpId = null;
@@ -1476,6 +1507,7 @@ document.querySelectorAll('.tab').forEach(t => {
     if (t.dataset.panel === 'export') updateSummary();
     if (t.dataset.panel === 'calc') refreshEmpDropdown();
     if (t.dataset.panel === 'leave') refreshLeaveList();
+    if (t.dataset.panel === 'setup') refreshHolidayList();
     if (t.dataset.panel === 'daily') {
       refreshEmpDropdown();
       refreshDailyEntries();
@@ -1934,6 +1966,19 @@ function refreshDailyEntries() {
 }
 
 // 從月薪頁的出勤明細快速編輯
+// 強制依出勤明細重算月薪欄位（會覆蓋手動值）
+function forceRefillFromAttendance(workDays, leaveDays, ot1, ot2) {
+  const wd = document.getElementById('workDays');
+  const ld = document.getElementById('leaveDays');
+  const o1 = document.getElementById('ot1');
+  const o2 = document.getElementById('ot2');
+  if (wd) { wd.value = workDays || 0; delete wd.dataset.userEdited; }
+  if (ld) { ld.value = leaveDays || 0; delete ld.dataset.userEdited; }
+  if (o1) { o1.value = ot1 || 0; delete o1.dataset.userEdited; }
+  if (o2) { o2.value = ot2 || 0; delete o2.dataset.userEdited; }
+  alert(`✅ 已依出勤明細重算：\n  出勤 ${workDays} 天\n  請假 ${leaveDays} 天\n  平日加班 ${ot1} 時\n  例假加班 ${ot2} 時`);
+}
+
 function editAttendanceFromMonth(id) {
   const entry = dailyEntries.find(d => d._id === id);
   if (!entry) { alert('找不到此筆記錄'); return; }
@@ -2266,7 +2311,8 @@ function refreshMonthlyAttendance() {
   empEntries.forEach(d => {
     const type = d.attType || 'normal';
     const dow = new Date(d.date).getDay();
-    const isWeekend = (dow === 0 || dow === 6);
+    const isHoliday = holidays.includes(d.date);
+    const isWeekend = (dow === 0 || dow === 6) || isHoliday;  // 國定假日視同例假
     const isLeaveType = type !== 'normal' && type !== '加班';
 
     if (!isLeaveType) {
@@ -2310,7 +2356,11 @@ function refreshMonthlyAttendance() {
   if (o1 && !o1.dataset.userEdited) { o1.value = weekdayOtHours || ''; }
   if (o2 && !o2.dataset.userEdited) { o2.value = weekendOtHours || ''; }
 
-  let html = `<div style="font-weight:700; margin-bottom:8px; color:#059669; font-size:15px;">📅 本月出勤明細 <span style="font-size:12px; font-weight:400; color:#6b7280;">(已自動帶入上方欄位；點每列「✏️」可編輯)</span></div>
+  let html = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <div style="font-weight:700; color:#059669; font-size:15px;">📅 本月出勤明細</div>
+      <button type="button" onclick="forceRefillFromAttendance(${workDays}, ${totalLeaveDays}, ${weekdayOtHours}, ${weekendOtHours})" class="btn btn-primary btn-sm" style="padding:4px 10px; font-size:11px;">🔄 依出勤重算月薪欄位</button>
+    </div>
+    <div style="font-size:11px; color:#6b7280; margin-bottom:8px;">（點每列「✏️」可編輯，或按上方按鈕強制刷新上方出勤天數/加班時數）</div>
     <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-bottom:8px;">
       <div style="background:#ecfdf5; padding:8px; border-radius:6px; text-align:center;">
         <div style="font-size:11px; color:#6b7280;">📆 平日上班</div>
@@ -2365,7 +2415,8 @@ function refreshMonthlyAttendance() {
     const dayOfWeek = new Date(y, m - 1, d).getDay();
     const isSunday = dayOfWeek === 0;
     const isSaturday = dayOfWeek === 6;
-    const rowStyle = isSunday
+    const isNationalHoliday = holidays.includes(dateStr);
+    const rowStyle = (isSunday || isNationalHoliday)
       ? 'background:#fee2e2; color:#991b1b;'
       : isSaturday
         ? 'background:#fed7aa; color:#9a3412;'
@@ -2374,8 +2425,8 @@ function refreshMonthlyAttendance() {
     const hourEntries = dayEntries.filter(e => e.type === 'hour');
 
     if (hourEntries.length === 0) {
-      const marker = isSunday ? '例假' : isSaturday ? '休息日' : '';
-      html += `<tr style="${rowStyle}"><td>${d}</td><td style="text-align:center; font-weight:700;">${weekdayNames[dayOfWeek]}</td><td colspan="6" style="color:#9ca3af; font-style:italic;">${marker || '—'}</td></tr>`;
+      const marker = isNationalHoliday ? '🎌 國定假日' : isSunday ? '例假' : isSaturday ? '休息日' : '';
+      html += `<tr style="${rowStyle}"><td>${d}</td><td style="text-align:center; font-weight:700;">${weekdayNames[dayOfWeek]}</td><td colspan="6" style="color:${isNationalHoliday ? '#991b1b' : '#9ca3af'}; font-style:italic; font-weight:${isNationalHoliday ? '700' : '400'};">${marker || '—'}</td></tr>`;
     } else {
       hourEntries.forEach((e, i) => {
         const brkHr = (e.breakMin || 0) / 60;
@@ -4283,6 +4334,41 @@ function toggleLiffSettings() {
   } else {
     card.style.display = 'none';
   }
+}
+
+// ========= 國定假日管理 =========
+function addHoliday() {
+  const d = document.getElementById('newHoliday').value;
+  if (!d) { alert('請選擇日期'); return; }
+  if (holidays.includes(d)) { alert('此日期已存在'); return; }
+  holidays.push(d);
+  holidays.sort();
+  save(STORE.holidays, holidays);
+  document.getElementById('newHoliday').value = '';
+  refreshHolidayList();
+}
+
+function removeHoliday(d) {
+  if (!confirm(`確定刪除 ${d} ？`)) return;
+  holidays = holidays.filter(x => x !== d);
+  save(STORE.holidays, holidays);
+  refreshHolidayList();
+}
+
+function refreshHolidayList() {
+  const box = document.getElementById('holidayList');
+  const cnt = document.getElementById('holidayCount');
+  if (cnt) cnt.textContent = holidays.length;
+  if (!box) return;
+  const sorted = holidays.slice().sort();
+  box.innerHTML = sorted.map(d => {
+    const dt = new Date(d);
+    const wd = ['日','一','二','三','四','五','六'][dt.getDay()];
+    return `<div style="display:flex; justify-content:space-between; align-items:center; padding:4px 8px; border-bottom:1px solid #e5e7eb; font-size:12px;">
+      <span>${d} (週${wd})</span>
+      <button type="button" onclick="removeHoliday('${d}')" style="border:none; background:#fee2e2; color:#991b1b; padding:2px 8px; border-radius:4px; cursor:pointer; font-size:11px;">刪除</button>
+    </div>`;
+  }).join('');
 }
 
 function saveLiffId() {
