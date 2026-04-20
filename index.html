@@ -768,6 +768,53 @@
       <button class="btn btn-secondary btn-block" id="recordCancelBtn" onclick="cancelRecordEdit()" style="display:none; margin-top:6px;">取消編輯</button>
     </div>
 
+    <!-- 月薪頁快速新增當月出勤 -->
+    <div class="card">
+      <h3>⚡ 快速新增本月出勤</h3>
+      <div style="padding:8px; background:#eff6ff; border-radius:6px; font-size:12px; color:#1e40af; margin-bottom:10px;">
+        直接在月薪頁輸入今日或某日上下班時間，會自動儲存為「每日計時記錄」，並即時更新下方月曆與遲到提示。
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>日期 *</label>
+          <input type="date" id="quickAttDate">
+        </div>
+        <div class="form-group">
+          <label>工作內容</label>
+          <select id="quickAttWork">
+            <option value="">-- 請選擇 --</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>上班時間</label>
+          <input type="time" id="quickAttStart">
+        </div>
+        <div class="form-group">
+          <label>下班時間</label>
+          <input type="time" id="quickAttEnd">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>休息 (分鐘)</label>
+          <div style="display:flex; gap:4px;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('quickAttBreak').value=0" style="padding:4px 8px; font-size:11px;">無</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('quickAttBreak').value=30" style="padding:4px 8px; font-size:11px;">30分</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('quickAttBreak').value=60" style="padding:4px 8px; font-size:11px;">1小時</button>
+            <input type="number" id="quickAttBreak" placeholder="分" value="0" min="0" step="5" style="flex:1;">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>遲到 (分鐘)</label>
+          <input type="number" id="quickAttLate" placeholder="0" min="0" step="1">
+        </div>
+      </div>
+      <button type="button" class="btn btn-primary btn-block" onclick="quickAddAttendance()">新增出勤記錄</button>
+      <div id="quickAttResult" style="display:none; margin-top:8px; padding:8px; background:#f0fdf4; border-radius:6px; font-size:12px;"></div>
+    </div>
+
     <div class="card">
       <div id="monthlyAttendance"></div>
     </div>
@@ -2015,12 +2062,15 @@ function refreshMonthlyAttendance() {
 
 // ========= 工作類型 =========
 function refreshWorkContentDropdown() {
-  const sel = document.getElementById('hourWorkContent');
-  if (!sel) return;
-  const current = sel.value;
-  sel.innerHTML = '<option value="">-- 請選擇 --</option>' +
+  const options = '<option value="">-- 請選擇 --</option>' +
     workContents.map(w => `<option value="${escapeHtml(w.name)}">${escapeHtml(w.name)}</option>`).join('');
-  if (current && workContents.find(w => w.name === current)) sel.value = current;
+  ['hourWorkContent', 'quickAttWork'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = options;
+    if (current && workContents.find(w => w.name === current)) sel.value = current;
+  });
 }
 
 function toggleWorkContentManager() {
@@ -2838,6 +2888,62 @@ function updateLateHint() {
     hint.style.borderLeftColor = '#ef4444';
     hint.style.color = '#991b1b';
   }
+}
+
+// 月薪頁快速新增出勤
+function quickAddAttendance() {
+  const empId = document.getElementById('calcEmp').value;
+  if (!empId) { alert('請先選擇員工'); return; }
+  const emp = employees.find(e => e._id === empId);
+  if (!emp) return;
+  const date = document.getElementById('quickAttDate').value;
+  const start = document.getElementById('quickAttStart').value;
+  const end = document.getElementById('quickAttEnd').value;
+  const brk = parseFloat(document.getElementById('quickAttBreak').value) || 0;
+  const late = parseFloat(document.getElementById('quickAttLate').value) || 0;
+  const work = document.getElementById('quickAttWork').value;
+  if (!date || !start || !end) { alert('請填日期 + 上下班時間'); return; }
+
+  const hours = calcHours(start, end, brk);
+  if (hours <= 0) { alert('時數必須大於 0'); return; }
+  const rate = emp.hourlyRate || Math.round((emp.baseSalary || 0) / 30 / 8);
+
+  const entry = {
+    _id: 'd_' + Date.now(),
+    date, empId, empName: emp.name, empNo: emp.id,
+    type: 'hour',
+    start, end, breakMin: brk,
+    hours: Math.round(hours * 100) / 100,
+    rate,
+    subtotal: Math.round(hours * rate * 100) / 100,
+    workContent: work,
+    lateMinutes: late,
+    note: '',
+    photo: null,
+    createdAt: new Date().toISOString()
+  };
+  dailyEntries.push(entry);
+  try { save(STORE.daily, dailyEntries); }
+  catch (e) { dailyEntries.pop(); alert('儲存失敗：' + e.message); return; }
+  cloudSave('daily', entry);
+
+  const result = document.getElementById('quickAttResult');
+  result.style.display = 'block';
+  result.innerHTML = `✅ 已新增 ${date} 出勤：${start}-${end}（休息 ${brk}分，${entry.hours} 小時）${late > 0 ? ' · 遲到 ' + late + '分' : ''}`;
+
+  // 清空
+  document.getElementById('quickAttStart').value = '';
+  document.getElementById('quickAttEnd').value = '';
+  document.getElementById('quickAttBreak').value = '0';
+  document.getElementById('quickAttLate').value = '';
+  document.getElementById('quickAttWork').selectedIndex = 0;
+
+  // 刷新相關畫面
+  refreshMonthlyAttendance();
+  updateLateHint();
+  updateMonthlyDailyHint();
+  refreshDailyEntries();
+  refreshMonthlyDaily();
 }
 
 function addLateDeduction(amount) {
@@ -3788,6 +3894,8 @@ function init() {
   document.getElementById('dailyDate').value = d;
   document.getElementById('dailyMonthFilter').value = m;
   document.getElementById('leaveBaseDate').value = d;
+  const qd = document.getElementById('quickAttDate');
+  if (qd) qd.value = d;
   document.getElementById('calcMonth').addEventListener('change', () => { refreshRecords(); updateMonthlyDailyHint(); });
   document.getElementById('calcEmp').addEventListener('change', updateMonthlyDailyHint);
   document.getElementById('dailyDate').addEventListener('change', refreshDailyEntries);
