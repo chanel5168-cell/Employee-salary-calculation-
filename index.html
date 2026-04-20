@@ -525,6 +525,7 @@
           <label>出勤類型</label>
           <select id="hourAttType" onchange="onHourAttTypeChange()">
             <option value="normal">✅ 正常上班</option>
+            <option value="加班">💪 加班</option>
             <option value="特休">🌴 特休</option>
             <option value="事假">📋 事假（不給薪）</option>
             <option value="病假">🤒 病假（半薪）</option>
@@ -800,6 +801,7 @@
           <label>出勤類型</label>
           <select id="quickAttType" onchange="onQuickAttTypeChange()">
             <option value="normal">✅ 正常上班</option>
+            <option value="加班">💪 加班</option>
             <option value="特休">🌴 特休</option>
             <option value="事假">📋 事假（不給薪）</option>
             <option value="病假">🤒 病假（半薪）</option>
@@ -1035,7 +1037,8 @@ const DEFAULT_WORK_CONTENTS = [
   { _id: 'wc_4', name: '打樣' },
   { _id: 'wc_5', name: '送修零件' },
   { _id: 'wc_6', name: '包裝' },
-  { _id: 'wc_7', name: '檢驗' }
+  { _id: 'wc_7', name: '檢驗' },
+  { _id: 'wc_8', name: '加班' }
 ];
 const DEFAULT_LEAVE_CATS = [
   { _id: 'lc_1', name: '特休', payType: 'full' },
@@ -1081,7 +1084,7 @@ const WORKSPACE_ID = 'default';
 let db = null;
 let cloudReady = false;
 let suppressSubscription = false;
-const DATA_MIGRATION_VERSION = '2026-04-20-cats-v3-workplaces5';
+const DATA_MIGRATION_VERSION = '2026-04-20-cats-v4-overtime';
 
 function mergeDefaultCategories() {
   // 只跑一次；已跑過則略過。這樣使用者刪除的預設不會被復活
@@ -2045,35 +2048,54 @@ function refreshMonthlyAttendance() {
   });
 
   const weekdayNames = ['日','一','二','三','四','五','六'];
-  // 統計：上班天數 / 特休天數 / 其他休假天數
-  const dayStatus = {}; // dateStr → 狀態
+  // 統計：上班/加班/特休/其他休假/遲到
+  const dayStatus = {}; // dateStr → 狀態（優先非 normal）
+  const overtimeDates = new Set();
+  let overtimeHours = 0;
+  let totalLateMinutes = 0;
+  let lateDays = 0;
   empEntries.forEach(d => {
     const type = d.attType || 'normal';
+    if (type === '加班') {
+      overtimeDates.add(d.date);
+      overtimeHours += d.hours || 0;
+    }
     if (!dayStatus[d.date] || dayStatus[d.date] === 'normal') {
       dayStatus[d.date] = type;
-    } else if (type !== 'normal') {
+    } else if (type !== 'normal' && dayStatus[d.date] === '加班') {
       dayStatus[d.date] = type;
+    }
+    if (d.lateMinutes > 0) {
+      totalLateMinutes += d.lateMinutes;
+      lateDays++;
     }
   });
   let workDays = 0, annualLeave = 0, otherLeave = 0;
   Object.values(dayStatus).forEach(s => {
-    if (s === 'normal') workDays++;
+    if (s === 'normal' || s === '加班') workDays++;
     else if (s === '特休') annualLeave++;
     else otherLeave++;
   });
 
   let html = `<div style="font-weight:700; margin-bottom:8px; color:#059669;">📅 本月出勤明細</div>
-    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-bottom:10px;">
+    <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-bottom:8px;">
       <div style="background:#ecfdf5; padding:8px; border-radius:6px; text-align:center;">
         <div style="font-size:10px; color:#6b7280;">上班</div>
         <div style="font-weight:700; color:#059669; font-size:18px;">${workDays}</div>
         <div style="font-size:9px; color:#6b7280;">天</div>
       </div>
+      <div style="background:#dbeafe; padding:8px; border-radius:6px; text-align:center;">
+        <div style="font-size:10px; color:#6b7280;">💪 加班</div>
+        <div style="font-weight:700; color:#1d4ed8; font-size:16px;">${overtimeDates.size}</div>
+        <div style="font-size:9px; color:#6b7280;">天 / ${overtimeHours.toFixed(1)} 時</div>
+      </div>
       <div style="background:#fef3c7; padding:8px; border-radius:6px; text-align:center;">
-        <div style="font-size:10px; color:#6b7280;">特休</div>
+        <div style="font-size:10px; color:#6b7280;">🌴 特休</div>
         <div style="font-weight:700; color:#92400e; font-size:18px;">${annualLeave}</div>
         <div style="font-size:9px; color:#6b7280;">天</div>
       </div>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-bottom:10px;">
       <div style="background:#fee2e2; padding:8px; border-radius:6px; text-align:center;">
         <div style="font-size:10px; color:#6b7280;">其他休假</div>
         <div style="font-weight:700; color:#991b1b; font-size:18px;">${otherLeave}</div>
@@ -2083,6 +2105,11 @@ function refreshMonthlyAttendance() {
         <div style="font-size:10px; color:#6b7280;">休假合計</div>
         <div style="font-weight:700; color:#3730a3; font-size:18px;">${annualLeave + otherLeave}</div>
         <div style="font-size:9px; color:#6b7280;">天</div>
+      </div>
+      <div style="background:${totalLateMinutes > 30 ? '#fef2f2' : '#fff7ed'}; padding:8px; border-radius:6px; text-align:center;">
+        <div style="font-size:10px; color:#6b7280;">⏰ 遲到</div>
+        <div style="font-weight:700; color:${totalLateMinutes > 30 ? '#dc2626' : '#c2410c'}; font-size:16px;">${totalLateMinutes}</div>
+        <div style="font-size:9px; color:#6b7280;">分 (${lateDays} 天)</div>
       </div>
     </div>
     <table style="font-size:12px;">
