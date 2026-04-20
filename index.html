@@ -1361,6 +1361,8 @@ function subscribeAll() {
     if (snap.docs.length > 0) {
       workplaces = snap.docs.map(d => d.data());
       save(STORE.workplaces, workplaces);
+      // 雲端可能還是舊名 → 再次強制修正
+      forceFixWorkplaces();
       refreshWorkplaceDropdown();
       const wm = document.getElementById('workplaceManager');
       if (wm && wm.style.display === 'block') refreshWorkplaceList();
@@ -1626,6 +1628,7 @@ function updatePieceTime() {
   const start = document.getElementById('pieceStart').value;
   const end = document.getElementById('pieceEnd').value;
   const qty = parseFloat(document.getElementById('pieceQty').value) || 0;
+  const price = parseFloat(document.getElementById('piecePrice').value) || 0;
   const info = document.getElementById('pieceTimeInfo');
   if (!start || !end) {
     info.style.display = 'none';
@@ -1637,9 +1640,10 @@ function updatePieceTime() {
   document.getElementById('pieceDuration').textContent = `${hours.toFixed(2)} 小時 (${start} → ${end})`;
   if (qty > 0 && hours > 0) {
     const eff = (qty / hours).toFixed(1);
-    document.getElementById('pieceEfficiency').textContent = `${eff} 個/小時`;
+    const hourlyWage = (qty * price / hours).toFixed(0);
+    document.getElementById('pieceEfficiency').innerHTML = `${eff} 個/小時 · 換算時薪 <strong style="color:#059669;">NT$ ${formatMoney(hourlyWage)}</strong>`;
   } else {
-    document.getElementById('pieceEfficiency').textContent = '請填數量';
+    document.getElementById('pieceEfficiency').textContent = '請填數量與單價';
   }
 }
 
@@ -1929,6 +1933,28 @@ function refreshDailyEntries() {
   document.getElementById('dailyTotalAmt').textContent = 'NT$ ' + formatMoney(total);
 }
 
+// 從月薪頁的出勤明細快速編輯
+function editAttendanceFromMonth(id) {
+  const entry = dailyEntries.find(d => d._id === id);
+  if (!entry) { alert('找不到此筆記錄'); return; }
+  // 切換到「每日」頁籤並載入編輯
+  const dailyTab = document.querySelector('.tab[data-panel="daily"]');
+  if (dailyTab) dailyTab.click();
+  // 等 tab 切換完再載入
+  setTimeout(() => editDailyEntry(id), 100);
+}
+
+function deleteAttendanceFromMonth(id) {
+  if (!confirm('確定刪除此筆出勤記錄？')) return;
+  dailyEntries = dailyEntries.filter(d => d._id !== id);
+  save(STORE.daily, dailyEntries);
+  cloudDelete('daily', id);
+  refreshMonthlyAttendance();
+  updateLateHint();
+  refreshDailyEntries();
+  refreshMonthlyDaily();
+}
+
 function deleteDailyEntry(id) {
   if (!confirm('確定刪除此筆記錄？')) return;
   dailyEntries = dailyEntries.filter(d => d._id !== id);
@@ -2117,6 +2143,45 @@ function refreshMonthlyDaily() {
 }
 
 // ========= 工作地點 =========
+// 強制修正舊廠別名稱（每次載入都檢查；Firestore 與本機都覆寫）
+function forceFixWorkplaces() {
+  const fixes = {
+    wp_1: '暘基',
+    wp_2: '日盛暘',
+    wp_3: '草埔',
+    wp_4: '烤漆',
+    wp_5: '臨時'
+  };
+  let changed = false;
+  Object.entries(fixes).forEach(([id, newName]) => {
+    let wp = workplaces.find(x => x._id === id);
+    if (!wp) {
+      wp = { _id: id, name: newName };
+      workplaces.push(wp);
+      changed = true;
+      if (cloudReady) cloudSave('workplaces', wp);
+    } else if (wp.name !== newName) {
+      const oldName = wp.name;
+      wp.name = newName;
+      changed = true;
+      if (cloudReady) cloudSave('workplaces', wp);
+      // 同時更新員工的 workplace 欄位
+      employees.forEach(e => {
+        if (e.workplace === oldName) {
+          e.workplace = newName;
+          if (cloudReady) cloudSave('employees', e);
+        }
+      });
+    }
+  });
+  if (changed) {
+    save(STORE.workplaces, workplaces);
+    save(STORE.employees, employees);
+    refreshWorkplaceDropdown();
+    refreshEmployeeList();
+  }
+}
+
 function refreshWorkplaceDropdown() {
   const sel = document.getElementById('empWorkplace');
   if (!sel) return;
@@ -2218,7 +2283,7 @@ function refreshMonthlyAttendance() {
     else otherLeave++;
   });
 
-  let html = `<div style="font-weight:700; margin-bottom:8px; color:#059669;">📅 本月出勤明細</div>
+  let html = `<div style="font-weight:700; margin-bottom:8px; color:#059669;">📅 本月出勤明細 <span style="font-size:11px; font-weight:400; color:#6b7280;">(點每列右邊「✏️」可編輯)</span></div>
     <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-bottom:8px;">
       <div style="background:#ecfdf5; padding:8px; border-radius:6px; text-align:center;">
         <div style="font-size:10px; color:#6b7280;">上班</div>
@@ -2255,7 +2320,7 @@ function refreshMonthlyAttendance() {
     </div>
     <table style="font-size:12px;">
       <thead>
-        <tr><th>日期</th><th>週</th><th>上班</th><th>下班</th><th>休息</th><th>時數</th><th>工作內容</th></tr>
+        <tr><th>日期</th><th>週</th><th>上班</th><th>下班</th><th>休息</th><th>時數</th><th>工作內容</th><th>操作</th></tr>
       </thead><tbody>`;
 
   for (let d = 1; d <= daysInMonth; d++) {
@@ -2273,7 +2338,7 @@ function refreshMonthlyAttendance() {
 
     if (hourEntries.length === 0) {
       const marker = isSunday ? '例假' : isSaturday ? '休息日' : '';
-      html += `<tr style="${rowStyle}"><td>${d}</td><td style="text-align:center; font-weight:700;">${weekdayNames[dayOfWeek]}</td><td colspan="5" style="color:#9ca3af; font-style:italic;">${marker || '—'}</td></tr>`;
+      html += `<tr style="${rowStyle}"><td>${d}</td><td style="text-align:center; font-weight:700;">${weekdayNames[dayOfWeek]}</td><td colspan="6" style="color:#9ca3af; font-style:italic;">${marker || '—'}</td></tr>`;
     } else {
       hourEntries.forEach((e, i) => {
         const brkHr = (e.breakMin || 0) / 60;
@@ -2285,6 +2350,10 @@ function refreshMonthlyAttendance() {
           <td>${brkHr ? brkHr + 'h' : '—'}</td>
           <td><strong>${e.hours}h</strong></td>
           <td>${escapeHtml(e.workContent || '')}</td>
+          <td style="white-space:nowrap;">
+            <button type="button" onclick="editAttendanceFromMonth('${e._id}')" style="padding:2px 6px; border:none; background:#e5e7eb; color:#374151; border-radius:4px; cursor:pointer; font-size:11px;">✏️</button>
+            <button type="button" onclick="deleteAttendanceFromMonth('${e._id}')" style="padding:2px 6px; border:none; background:#fee2e2; color:#991b1b; border-radius:4px; cursor:pointer; font-size:11px;">🗑</button>
+          </td>
         </tr>`;
       });
     }
@@ -2294,7 +2363,7 @@ function refreshMonthlyAttendance() {
     .reduce((a,b) => a + (b.hours || 0), 0);
   html += `</tbody>
     <tfoot><tr style="background:#f0fdf4; font-weight:700;">
-      <td colspan="5">月合計工時</td><td colspan="2" style="color:#059669;">${totalHours.toFixed(2)} 小時</td>
+      <td colspan="5">月合計工時</td><td colspan="3" style="color:#059669;">${totalHours.toFixed(2)} 小時</td>
     </tr></tfoot></table>
     <div style="font-size:11px; color:#6b7280; margin-top:6px;">
       <span style="background:#fee2e2; padding:2px 6px; border-radius:3px;">週日（例假）</span>
@@ -3293,13 +3362,18 @@ function updateMonthlyDailyHint() {
 function importDailyIncomes() {
   const empId = document.getElementById('calcEmp').value;
   const month = document.getElementById('calcMonth').value;
-  if (!empId || !month) return;
+  if (!empId || !month) { alert('請先選擇員工與月份'); return; }
   const list = dailyEntries.filter(d => d.empId === empId && d.date.startsWith(month));
   const pieceTotal = list.filter(d => d.type === 'piece').reduce((a,b) => a + b.subtotal, 0);
-  const hourTotal = list.filter(d => d.type === 'hour').reduce((a,b) => a + b.subtotal, 0);
+  // 計時收入僅計算正常上班與加班（不含特休/請假等）
+  const hourTotal = list
+    .filter(d => d.type === 'hour' && (!d.attType || d.attType === 'normal' || d.attType === '加班'))
+    .reduce((a,b) => a + b.subtotal, 0);
   document.getElementById('pieceIncome').value = pieceTotal || '';
   document.getElementById('hourIncome').value = hourTotal || '';
-  alert(`已帶入：論件 NT$ ${formatMoney(pieceTotal)}，計時 NT$ ${formatMoney(hourTotal)}`);
+  // 自動執行預覽計算，讓應發金額立即更新
+  calculateAndPreview();
+  alert(`✅ 已帶入並計算：\n  論件 NT$ ${formatMoney(pieceTotal)}\n  計時 NT$ ${formatMoney(hourTotal)}\n\n應發合計已更新，請往下滑看結果。`);
 }
 
 function onProductSelected() {
@@ -4262,6 +4336,7 @@ function init() {
   refreshProductList();
   refreshWorkContentDropdown();
   refreshWorkplaceDropdown();
+  forceFixWorkplaces();
   mergeDefaultCategories();
   renderDeductItems();
   renderBonusItems();
