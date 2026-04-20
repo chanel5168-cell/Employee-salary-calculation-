@@ -334,6 +334,10 @@
           <input type="checkbox" id="empIsHourly" onchange="toggleHourlyFields()" style="width:auto;">
           <span>此員工為「時薪制」員工 (特休依比例計算)</span>
         </label>
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-top:6px;">
+          <input type="checkbox" id="empIsShift" style="width:auto;">
+          <span>此員工為「排班制」員工 <span style="font-size:11px; color:#6b7280;">(例假國定假日照班表不加倍)</span></span>
+        </label>
       </div>
       <div class="form-group" id="empHourlyOnly" style="display:none;">
         <div class="form-row">
@@ -411,7 +415,10 @@
 
       <!-- 產品管理子面板 -->
       <div id="productManager" style="display:none; background:#f0fdf4; border:1px dashed #06C755; border-radius:8px; padding:12px; margin-bottom:12px;">
-        <div style="font-weight:600; margin-bottom:8px; color:#06C755;">產品清單管理</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <div style="font-weight:600; color:#06C755;">產品清單管理</div>
+          <button type="button" onclick="exportProducts()" class="btn btn-primary btn-sm" style="padding:4px 10px; font-size:11px;">📥 匯出 Excel + 照片</button>
+        </div>
         <div class="form-row">
           <div class="form-group" style="margin-bottom:0;">
             <input type="text" id="newProductName" placeholder="產品名稱">
@@ -687,7 +694,7 @@
         <div class="form-row">
           <div class="form-group" style="margin-bottom:0;">
             <label>本月時薪 NT$</label>
-            <input type="number" id="monthHourly" placeholder="依員工資料" min="0" step="0.01">
+            <input type="number" id="monthHourly" placeholder="依員工資料" min="0" step="0.01" oninput="updateDailyRateHint(); updateLeaveTotal(); updateLeavePayPreview();">
           </div>
           <div class="form-group" style="margin-bottom:0;">
             <label>加班時薪 NT$ <span style="font-size:10px; color:#6b7280;">(預設同時薪)</span></label>
@@ -939,6 +946,7 @@
         <button class="btn btn-secondary" onclick="document.getElementById('restoreFile').click()">還原備份</button>
         <button class="btn btn-danger" onclick="clearAllData()">清除全部</button>
       </div>
+      <button class="btn btn-secondary btn-block" onclick="removeDuplicateRecords()" style="margin-top:8px;">🧹 清理重複的月薪記錄（同員工同月）</button>
       <input type="file" id="restoreFile" style="display:none" accept=".json" onchange="restoreData(event)">
     </div>
   </div>
@@ -1129,15 +1137,31 @@ const DEFAULT_WORKPLACES = [
 let workContents = load(STORE.workContents, DEFAULT_WORK_CONTENTS);
 let leaveCategories = load(STORE.leaveCats, DEFAULT_LEAVE_CATS);
 let workplaces = load(STORE.workplaces, DEFAULT_WORKPLACES);
-// 台灣國定假日（2025~2026，依人事行政總處公告）
+// 台灣國定假日（依人事行政總處中華民國 115 年行事曆更新）
+// 資料來源：行政院人事行政總處公告
 const DEFAULT_HOLIDAYS = [
-  // 2025
-  '2025-01-01','2025-01-27','2025-01-28','2025-01-29','2025-01-30','2025-01-31',
-  '2025-02-28','2025-04-03','2025-04-04','2025-05-01','2025-05-30','2025-10-06','2025-10-10',
-  // 2026
-  '2026-01-01','2026-02-16','2026-02-17','2026-02-18','2026-02-19','2026-02-20',
-  '2026-02-27','2026-02-28','2026-04-02','2026-04-03','2026-04-06',
-  '2026-05-01','2026-06-19','2026-09-25','2026-10-09','2026-10-10'
+  // === 民國 114 年（2025）===
+  '2025-01-01',                       // 元旦（週三）
+  // 春節 1/25(六)～2/2(日) 共 9 天
+  '2025-01-27','2025-01-28','2025-01-29','2025-01-30','2025-01-31',
+  '2025-02-28',                       // 228 和平紀念日（週五）
+  // 清明+兒童節 4/3(四)~4/6(日) 共 4 天
+  '2025-04-03','2025-04-04',
+  '2025-05-01',                       // 勞動節（週四，僅勞工）
+  '2025-05-30','2025-05-31',          // 端午節連假 5/30(五)~6/1(日)
+  '2025-10-06',                       // 中秋節（週一，連假 10/4~10/6）
+  '2025-10-10',                       // 國慶日（週五）
+
+  // === 民國 115 年（2026）人事行政總處公告 ===
+  '2026-01-01','2026-01-02',          // 元旦連假 1/1(四)~1/4(日)，1/2 補假
+  // 春節 2/14(六)~2/22(日) 共 9 天（2/7 週六補班）
+  '2026-02-14','2026-02-15','2026-02-16','2026-02-17','2026-02-18','2026-02-19','2026-02-20',
+  '2026-02-27','2026-02-28',          // 228 連假 2/27(五)~3/1(日)
+  '2026-04-03','2026-04-04','2026-04-05','2026-04-06',  // 清明+兒童節連假 4/3(五)~4/6(一)
+  '2026-05-01',                       // 勞動節（週五，僅勞工）
+  '2026-06-19','2026-06-20','2026-06-21',  // 端午節連假 6/19(五)~6/21(日)
+  '2026-09-25','2026-09-26','2026-09-27',  // 中秋節連假 9/25(五)~9/27(日)
+  '2026-10-09','2026-10-10'            // 國慶日連假 10/9(五) 補假 + 10/10(六)
 ];
 let holidays = load(STORE.holidays, DEFAULT_HOLIDAYS);
 let currentLeaveItems = [];
@@ -1163,7 +1187,7 @@ const WORKSPACE_ID = 'default';
 let db = null;
 let cloudReady = false;
 let suppressSubscription = false;
-const DATA_MIGRATION_VERSION = '2026-04-20-cats-v6-workplaces-rename';
+const DATA_MIGRATION_VERSION = '2026-04-20-cats-v7-holidays-115';
 
 function mergeDefaultCategories() {
   // 只跑一次；已跑過則略過。這樣使用者刪除的預設不會被復活
@@ -1217,6 +1241,21 @@ function mergeDefaultCategories() {
     save(STORE.employees, employees);
     refreshEmployeeList && refreshEmployeeList();
     refreshWorkplaceDropdown && refreshWorkplaceDropdown();
+    changed = true;
+  }
+
+  // v7: 補齊人事行政總處 115 年行事曆國定假日
+  let holidaysChanged = false;
+  DEFAULT_HOLIDAYS.forEach(d => {
+    if (!holidays.includes(d)) {
+      holidays.push(d);
+      holidaysChanged = true;
+    }
+  });
+  if (holidaysChanged) {
+    holidays.sort();
+    save(STORE.holidays, holidays);
+    refreshHolidayList && refreshHolidayList();
     changed = true;
   }
   const sets = [
@@ -1526,9 +1565,10 @@ function refreshEmployeeList() {
   }
   box.innerHTML = employees.map(e => {
     // 薪資顯示：時薪制凸顯時薪、月薪制凸顯月薪
+    const shiftBadge = e.isShift ? ' <span class="badge" style="background:#ede9fe; color:#5b21b6;">排班制</span>' : '';
     const salaryInfo = e.isHourly
-      ? `<span class="badge" style="background:#fef3c7; color:#92400e;">時薪制</span> 時薪 NT$ <strong>${formatMoney(e.hourlyRate || 0)}</strong>${e.baseSalary > 0 ? ` · 月薪 NT$ ${formatMoney(e.baseSalary)}` : ''}`
-      : `月薪 NT$ <strong>${formatMoney(e.baseSalary)}</strong>${e.hourlyRate > 0 ? ` · 時薪 NT$ ${formatMoney(e.hourlyRate)}` : ''}`;
+      ? `<span class="badge" style="background:#fef3c7; color:#92400e;">時薪制</span>${shiftBadge} 時薪 NT$ <strong>${formatMoney(e.hourlyRate || 0)}</strong>${e.baseSalary > 0 ? ` · 月薪 NT$ ${formatMoney(e.baseSalary)}` : ''}`
+      : `<span class="badge" style="background:#dbeafe; color:#1e40af;">月薪制</span>${shiftBadge} 月薪 NT$ <strong>${formatMoney(e.baseSalary)}</strong>${e.hourlyRate > 0 ? ` · 時薪 NT$ ${formatMoney(e.hourlyRate)}` : ''}`;
     const extraInfo = [];
     if (e.insuredSalary) extraInfo.push(`投保 NT$ ${formatMoney(e.insuredSalary)}`);
     if (e.dependents > 0) extraInfo.push(`眷口 ${e.dependents}`);
@@ -1573,6 +1613,7 @@ function saveEmployee() {
     baseSalary: baseSalary,
     hourlyRate: hourlyRate || (baseSalary > 0 ? Math.round(baseSalary / 30 / 8) : 0),
     isHourly: isHourly,
+    isShift: document.getElementById('empIsShift').checked,
     weeklyHours: parseFloat(document.getElementById('empWeeklyHours').value) || 0,
     dailyHours: parseFloat(document.getElementById('empDailyHours').value) || 0,
     insuredSalary: parseFloat(document.getElementById('empInsuredSalary').value) || 0,
@@ -1608,6 +1649,7 @@ function editEmployee(id) {
   document.getElementById('empBaseSalary').value = e.baseSalary;
   document.getElementById('empHourlyRate').value = e.hourlyRate || '';
   document.getElementById('empIsHourly').checked = !!e.isHourly;
+  document.getElementById('empIsShift').checked = !!e.isShift;
   document.getElementById('empWeeklyHours').value = e.weeklyHours || '';
   document.getElementById('empDailyHours').value = e.dailyHours || '';
   document.getElementById('empInsuredSalary').value = e.insuredSalary || '';
@@ -1633,6 +1675,7 @@ function clearEmpForm() {
   ['empId','empName','empTitle','empPhone','empHireDate','empInsuredDate','empBaseSalary','empHourlyRate','empInsuredSalary','empDependents','empPensionSelf','empNote']
     .forEach(id => document.getElementById(id).value = '');
   document.getElementById('empIsHourly').checked = false;
+  document.getElementById('empIsShift').checked = false;
   document.getElementById('empWorkplace').value = '';
   document.getElementById('empLeaveHint').style.display = 'none';
 }
@@ -2140,27 +2183,44 @@ function refreshMonthlyDaily() {
     byDate[d.date].push(d);
   });
 
+  // 選了特定員工 → 若為月薪制，自動算日薪帶入當日合計
+  const selectedEmp = empId ? employees.find(e => e._id === empId) : null;
+  const isMonthlyEmp = selectedEmp && !selectedEmp.isHourly && selectedEmp.baseSalary > 0;
+  const dailyWage = isMonthlyEmp ? Math.round(selectedEmp.baseSalary / 30) : 0;
+
   const dates = Object.keys(byDate).sort();
-  let pieceTotal = 0, hourTotal = 0, hoursSum = 0, qtySum = 0;
+  let pieceTotal = 0, hourTotal = 0, wageTotal = 0, hoursSum = 0, qtySum = 0;
   const rows = dates.map(date => {
     const items = byDate[date];
-    const dayTotal = items.reduce((a, b) => a + b.subtotal, 0);
     const dayPiece = items.filter(x => x.type === 'piece').reduce((a,b) => a + b.subtotal, 0);
     const dayHour = items.filter(x => x.type === 'hour').reduce((a,b) => a + b.subtotal, 0);
+    // 月薪制日薪：該日有正常上班/加班記錄才加
+    const hasWorkEntry = items.some(x => x.type === 'hour' && (!x.attType || x.attType === 'normal' || x.attType === '加班'));
+    const dayWage = (isMonthlyEmp && hasWorkEntry) ? dailyWage : 0;
+    const dayTotal = dayPiece + dayHour + dayWage;
     pieceTotal += dayPiece;
     hourTotal += dayHour;
+    wageTotal += dayWage;
     hoursSum += items.filter(x => x.type === 'hour').reduce((a,b) => a + b.hours, 0);
     qtySum += items.filter(x => x.type === 'piece').reduce((a,b) => a + b.qty, 0);
+    const wageCol = isMonthlyEmp ? `<td class="currency">${dayWage ? formatMoney(dayWage) : '—'}</td>` : '';
     return `<tr>
       <td>${date.slice(5)}</td>
       <td>${items.length}</td>
       <td class="currency">${formatMoney(dayPiece)}</td>
       <td class="currency">${formatMoney(dayHour)}</td>
+      ${wageCol}
       <td class="currency"><strong>${formatMoney(dayTotal)}</strong></td>
     </tr>`;
   }).join('');
 
-  const grand = pieceTotal + hourTotal;
+  const grand = pieceTotal + hourTotal + wageTotal;
+  const wageHead = isMonthlyEmp ? `<th class="currency">月薪日薪</th>` : '';
+  const wageFoot = isMonthlyEmp ? `<td class="currency">${formatMoney(wageTotal)}</td>` : '';
+  const wageHint = isMonthlyEmp
+    ? `<div style="margin-top:4px; font-size:11px; color:#6b7280;">💡 此員工為月薪制 (月薪 NT$ ${formatMoney(selectedEmp.baseSalary)})，每有上班記錄的一天自動加入日薪 NT$ ${formatMoney(dailyWage)}</div>`
+    : '';
+
   box.innerHTML = `
     <table>
       <thead>
@@ -2168,6 +2228,7 @@ function refreshMonthlyDaily() {
           <th>日期</th><th>筆數</th>
           <th class="currency">論件</th>
           <th class="currency">計時</th>
+          ${wageHead}
           <th class="currency">當日合計</th>
         </tr>
       </thead>
@@ -2177,10 +2238,12 @@ function refreshMonthlyDaily() {
           <td colspan="2">月合計</td>
           <td class="currency">${formatMoney(pieceTotal)}</td>
           <td class="currency">${formatMoney(hourTotal)}</td>
+          ${wageFoot}
           <td class="currency" style="color:#06C755;">NT$ ${formatMoney(grand)}</td>
         </tr>
       </tfoot>
     </table>
+    ${wageHint}
     <div class="alert alert-info" style="margin-top:12px;">
       共 <strong>${list.length}</strong> 筆記錄 · 論件總數量 <strong>${qtySum}</strong> · 計時總時數 <strong>${hoursSum.toFixed(2)}</strong> 小時
     </div>
@@ -2308,11 +2371,16 @@ function refreshMonthlyAttendance() {
   let weekendOtHours = 0;
   let totalLateMinutes = 0;
   let lateDays = 0;
+  // 若為排班制員工，例假日/國定假日視同平日（照班表不加倍）
+  const empObj = employees.find(x => x._id === empId);
+  const isShiftEmp = !!(empObj && empObj.isShift);
   empEntries.forEach(d => {
     const type = d.attType || 'normal';
     const dow = new Date(d.date).getDay();
     const isHoliday = holidays.includes(d.date);
-    const isWeekend = (dow === 0 || dow === 6) || isHoliday;  // 國定假日視同例假
+    const isWeekendCal = (dow === 0 || dow === 6) || isHoliday;
+    // 排班制 → 一律當平日；非排班 → 依日曆
+    const isWeekend = isShiftEmp ? false : isWeekendCal;
     const isLeaveType = type !== 'normal' && type !== '加班';
 
     if (!isLeaveType) {
@@ -2537,15 +2605,20 @@ function renderLeaveItems() {
       const cat = leaveCategories.find(c => c._id === it.categoryId);
       const color = cat ? payTypeColor(cat.payType) : '#6b7280';
       return `
-        <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
-          <select onchange="onLeaveCatChange(${idx}, this.value)" style="flex:2; padding:6px 8px; font-size:13px;">
+        <div style="display:flex; gap:4px; align-items:center; margin-bottom:6px; flex-wrap:wrap;">
+          <select onchange="onLeaveCatChange(${idx}, this.value)" style="flex:1.5; min-width:120px; padding:6px 8px; font-size:13px;">
             <option value="">-- 請選 --</option>
             ${catOpts}
           </select>
-          <input type="number" value="${it.days || ''}" placeholder="天數" min="0" step="0.5"
-            oninput="updateLeaveItem(${idx}, this.value)"
-            style="width:80px; padding:6px 8px; font-size:13px;">
-          <span style="color:${color}; font-size:11px; font-weight:700; width:50px; text-align:center;">${cat ? payTypeLabel(cat.payType) : ''}</span>
+          <input type="number" value="${it.days || ''}" placeholder="天" min="0" step="1"
+            oninput="updateLeaveItem(${idx}, 'days', this.value)"
+            style="width:55px; padding:6px; font-size:13px;">
+          <span style="font-size:11px; color:#6b7280;">天</span>
+          <input type="number" value="${it.hours || ''}" placeholder="時" min="0" max="23" step="0.5"
+            oninput="updateLeaveItem(${idx}, 'hours', this.value)"
+            style="width:55px; padding:6px; font-size:13px;">
+          <span style="font-size:11px; color:#6b7280;">時</span>
+          <span style="color:${color}; font-size:11px; font-weight:700; width:48px; text-align:center;">${cat ? payTypeLabel(cat.payType) : ''}</span>
           <button type="button" onclick="removeLeaveItem(${idx})" style="border:none; background:#fee2e2; color:#991b1b; padding:4px 8px; border-radius:4px; cursor:pointer;">✕</button>
         </div>
       `;
@@ -2555,7 +2628,7 @@ function renderLeaveItems() {
 }
 
 function addLeaveItem() {
-  currentLeaveItems.push({ categoryId: '', days: 0 });
+  currentLeaveItems.push({ categoryId: '', days: 0, hours: 0 });
   renderLeaveItems();
 }
 
@@ -2564,9 +2637,9 @@ function removeLeaveItem(idx) {
   renderLeaveItems();
 }
 
-function updateLeaveItem(idx, days) {
+function updateLeaveItem(idx, field, value) {
   if (!currentLeaveItems[idx]) return;
-  currentLeaveItems[idx].days = parseFloat(days) || 0;
+  currentLeaveItems[idx][field] = parseFloat(value) || 0;
   updateLeaveTotal();
 }
 
@@ -2577,22 +2650,38 @@ function onLeaveCatChange(idx, catId) {
 }
 
 function updateLeaveTotal() {
-  // 計算請假扣款總額 (依給薪類型與薪資制)
+  // 計算請假扣款總額 (依給薪類型與薪資制；支援「天 + 小時」)
   const empId = document.getElementById('calcEmp').value;
   const emp = employees.find(e => e._id === empId);
-  const dailyRate = emp ? getDailyRate(emp) : 0;
-  let totalDays = 0, totalDeduct = 0;
+  const override = getMonthHourlyOverride();
+  const dailyRate = emp ? getDailyRate(emp, override) : 0;
+  // 時薪：優先本月時薪 > 員工時薪 > 日薪/8
+  const hourlyRate = emp ? (override || emp.hourlyRate || Math.round(dailyRate / 8)) : 0;
+  let totalDays = 0, totalHours = 0, totalDeduct = 0;
   currentLeaveItems.forEach(it => {
     const cat = leaveCategories.find(c => c._id === it.categoryId);
     if (!cat) return;
-    totalDays += it.days || 0;
-    if (cat.payType === 'none') totalDeduct += (it.days || 0) * dailyRate;
-    else if (cat.payType === 'half') totalDeduct += (it.days || 0) * dailyRate / 2;
+    const d = it.days || 0;
+    const h = it.hours || 0;
+    totalDays += d;
+    totalHours += h;
+    // 日單位 × 日薪 + 時單位 × 時薪
+    const unitDeduct = d * dailyRate + h * hourlyRate;
+    if (cat.payType === 'none') totalDeduct += unitDeduct;
+    else if (cat.payType === 'half') totalDeduct += unitDeduct / 2;
   });
+  // 換算整體等效天數（含小時）— 填回「請假天數」欄位供月薪公式用
+  const dailyHours = emp && emp.dailyHours > 0 ? emp.dailyHours : 8;
+  const equivalentDays = totalDays + (totalHours / dailyHours);
   const ld = document.getElementById('leaveDays');
-  if (ld) ld.value = totalDays;
+  if (ld) ld.value = equivalentDays ? Math.round(equivalentDays * 100) / 100 : 0;
   const lt = document.getElementById('leaveTotalInfo');
-  if (lt) lt.innerHTML = `請假合計 ${totalDays} 天 · 扣款 <strong style="color:#dc2626;">NT$ ${formatMoney(totalDeduct)}</strong>`;
+  if (lt) {
+    const unitText = totalHours > 0
+      ? `${totalDays} 天 + ${totalHours} 小時 (約 ${equivalentDays.toFixed(2)} 天)`
+      : `${totalDays} 天`;
+    lt.innerHTML = `請假合計 ${unitText} · 扣款 <strong style="color:#dc2626;">NT$ ${formatMoney(Math.round(totalDeduct))}</strong>`;
+  }
 }
 
 // 請假類別管理
@@ -2808,16 +2897,22 @@ function toggleHourlyFields() {
   }
 }
 
-function getDailyRate(emp) {
+function getDailyRate(emp, overrideHourly) {
   if (!emp) return 0;
-  if (emp.isHourly) {
-    const hourly = emp.hourlyRate || 0;
-    // 優先用「每日工時」；若無則退回 (週工時/5)
-    if (emp.dailyHours > 0) return Math.round(emp.dailyHours * hourly);
-    const weekly = emp.weeklyHours || 40;
-    return Math.round((weekly / 5) * hourly);
+  // 優先：本月時薪 override > 員工時薪 > 推算
+  const effectiveHourly = overrideHourly || emp.hourlyRate || 0;
+  if (emp.isHourly || overrideHourly > 0) {
+    if (emp.dailyHours > 0) return Math.round(emp.dailyHours * effectiveHourly);
+    if (emp.weeklyHours > 0) return Math.round((emp.weeklyHours / 5) * effectiveHourly);
+    return Math.round(8 * effectiveHourly); // 預設 8 小時/天
   }
   return Math.round((emp.baseSalary || 0) / 30);
+}
+
+// 取得月薪表單上的「本月時薪」覆寫值
+function getMonthHourlyOverride() {
+  const el = document.getElementById('monthHourly');
+  return el ? (parseFloat(el.value) || 0) : 0;
 }
 
 function updateLeavePayPreview() {
@@ -2826,7 +2921,7 @@ function updateLeavePayPreview() {
   const emp = employees.find(e => e._id === empId);
   if (!emp) return;
   const days = parseFloat(document.getElementById('leavePayDays').value) || 0;
-  const dailyRate = getDailyRate(emp);
+  const dailyRate = getDailyRate(emp, getMonthHourlyOverride());
   const amount = Math.round(days * dailyRate);
   const amtField = document.getElementById('leavePayAmount');
   // 僅在使用者未手動改金額時自動填
@@ -3263,14 +3358,17 @@ function updateDailyRateHint() {
   // 自動帶出員工時薪到月薪表單
   const mh = document.getElementById('monthHourly');
   if (mh && !mh.value && emp.hourlyRate > 0) mh.value = emp.hourlyRate;
-  const dailyRate = getDailyRate(emp);
-  if (emp.isHourly) {
+  const override = getMonthHourlyOverride();
+  const dailyRate = getDailyRate(emp, override);
+  const effHourly = override || emp.hourlyRate || 0;
+  if (emp.isHourly || override > 0) {
     hint.style.display = 'block';
     if (emp.dailyHours > 0) {
-      hint.innerHTML = `💡 <strong>時薪制日薪</strong>：每日工時 ${emp.dailyHours} × 時薪 NT$ ${emp.hourlyRate || 0} = <strong>NT$ ${formatMoney(dailyRate)}</strong>`;
+      hint.innerHTML = `💡 <strong>時薪制日薪</strong>：每日工時 ${emp.dailyHours} × 時薪 NT$ ${effHourly} = <strong>NT$ ${formatMoney(dailyRate)}</strong>`;
+    } else if (emp.weeklyHours > 0) {
+      hint.innerHTML = `💡 <strong>時薪制日薪</strong>：(每週 ${emp.weeklyHours} ÷ 5) × 時薪 NT$ ${effHourly} = <strong>NT$ ${formatMoney(dailyRate)}</strong> <span style="color:#c2410c;">（建議在員工資料填「每日工時」更精準）</span>`;
     } else {
-      const weekly = emp.weeklyHours || 40;
-      hint.innerHTML = `💡 <strong>時薪制日薪</strong>：(每週 ${weekly} ÷ 5) × 時薪 NT$ ${emp.hourlyRate || 0} = <strong>NT$ ${formatMoney(dailyRate)}</strong> <span style="color:#c2410c;">（建議在員工資料填「每日工時」更精準）</span>`;
+      hint.innerHTML = `💡 <strong>時薪制日薪</strong>：預設 8 小時 × 時薪 NT$ ${effHourly} = <strong>NT$ ${formatMoney(dailyRate)}</strong> <span style="color:#c2410c;">（建議在員工資料填「每日工時」讓計算更精準）</span>`;
     }
   } else {
     hint.style.display = 'block';
@@ -3562,7 +3660,7 @@ function gatherCalcInput() {
   return {
     workDays: parseFloat(document.getElementById('workDays').value) || 0,
     leaveDays: parseFloat(document.getElementById('leaveDays').value) || 0,
-    leaveItems: currentLeaveItems.filter(x => x.categoryId && x.days > 0),
+    leaveItems: currentLeaveItems.filter(x => x.categoryId && ((x.days > 0) || (x.hours > 0))),
     ot1: parseFloat(document.getElementById('ot1').value) || 0,
     ot2: parseFloat(document.getElementById('ot2').value) || 0,
     monthHourly: parseFloat(document.getElementById('monthHourly').value) || 0,
@@ -3614,6 +3712,16 @@ function saveSalaryRecord() {
   const input = gatherCalcInput();
   const r = computeSalary(emp, input);
   const original = editingRecordId ? records.find(x => x._id === editingRecordId) : null;
+  // 檢查是否已有同員工同月份的記錄（避免重複）
+  if (!editingRecordId) {
+    const dup = records.find(x => x.empId === empId && x.month === month);
+    if (dup) {
+      const ok = confirm(`⚠ ${emp.name} 在 ${month} 已有一筆薪資記錄。\n\n按「確定」→ 覆蓋舊記錄\n按「取消」→ 放棄儲存（不會新增重複）`);
+      if (!ok) return;
+      // 使用舊記錄的 ID，讓儲存變成「覆蓋」
+      editingRecordId = dup._id;
+    }
+  }
   // 僅保留有名稱且金額 > 0 的扣款與獎金項目
   const cleanedDeductItems = currentDeductItems
     .filter(x => x.name && x.amount > 0)
@@ -3622,10 +3730,16 @@ function saveSalaryRecord() {
     .filter(x => x.name && x.amount > 0)
     .map(x => ({ name: x.name, amount: x.amount }));
   const cleanedLeaveItems = currentLeaveItems
-    .filter(x => x.categoryId && x.days > 0)
+    .filter(x => x.categoryId && ((x.days > 0) || (x.hours > 0)))
     .map(x => {
       const cat = leaveCategories.find(c => c._id === x.categoryId);
-      return { categoryId: x.categoryId, categoryName: cat ? cat.name : '', payType: cat ? cat.payType : 'none', days: x.days };
+      return {
+        categoryId: x.categoryId,
+        categoryName: cat ? cat.name : '',
+        payType: cat ? cat.payType : 'none',
+        days: x.days || 0,
+        hours: x.hours || 0
+      };
     });
   const rec = {
     _id: editingRecordId || ('rec_' + Date.now()),
@@ -3681,7 +3795,7 @@ function editSalaryRecord(id) {
   document.getElementById('leaveDays').value = r.leaveDays || '';
   // 載入請假明細
   if (r.leaveItems && r.leaveItems.length > 0) {
-    currentLeaveItems = r.leaveItems.map(x => ({ categoryId: x.categoryId, days: x.days }));
+    currentLeaveItems = r.leaveItems.map(x => ({ categoryId: x.categoryId, days: x.days || 0, hours: x.hours || 0 }));
   } else {
     currentLeaveItems = [];
   }
@@ -4195,6 +4309,71 @@ function photoFileName(d) {
   return `${d.date}_${safe(d.empName)}_${label}_${d._id.slice(-6)}.jpg`;
 }
 
+// 匯出產品清單：Excel + 照片 ZIP 一鍵打包
+async function exportProducts() {
+  if (products.length === 0) { alert('目前沒有產品可以匯出'); return; }
+  if (typeof XLSX === 'undefined' || typeof JSZip === 'undefined') {
+    alert('匯出套件未載入，請檢查網路'); return;
+  }
+
+  // 建立 Excel
+  const head = ['序號','品名','預設單價 NT$','有照片','照片檔名'];
+  const rows = [head];
+  products.forEach((p, i) => {
+    const hasPhoto = !!p.photo;
+    const safe = (p.name || '').replace(/[\\/:*?"<>|]/g, '_');
+    rows.push([
+      i + 1,
+      p.name || '',
+      p.defaultPrice || 0,
+      hasPhoto ? '是' : '否',
+      hasPhoto ? `photos/${safe}.jpg` : ''
+    ]);
+  });
+  rows.push([]);
+  rows.push(['', '總計產品數', products.length, '', '']);
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:6},{wch:25},{wch:14},{wch:10},{wch:30}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '產品清單');
+
+  // 若沒有任何照片 → 只下載 Excel
+  const hasAnyPhoto = products.some(p => p.photo);
+  const dateStr = new Date().toISOString().slice(0,10);
+  if (!hasAnyPhoto) {
+    XLSX.writeFile(wb, `產品清單_${dateStr}.xlsx`);
+    alert(`✅ 已匯出 ${products.length} 項產品（無照片）`);
+    return;
+  }
+
+  // 有照片 → 打包 ZIP
+  try {
+    const zip = new JSZip();
+    const excelBuffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+    zip.file('產品清單.xlsx', excelBuffer);
+    let photoCount = 0;
+    products.forEach(p => {
+      if (p.photo) {
+        const safe = (p.name || '').replace(/[\\/:*?"<>|]/g, '_');
+        const base64 = p.photo.split(',')[1] || '';
+        zip.file(`photos/${safe}.jpg`, base64, { base64: true });
+        photoCount++;
+      }
+    });
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `產品清單_${dateStr}.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
+    alert(`✅ 已匯出 ZIP：\n  ${products.length} 項產品 (Excel)\n  ${photoCount} 張照片`);
+  } catch (e) {
+    alert('匯出失敗：' + e.message);
+  }
+}
+
 async function exportPhotosZip() {
   const month = document.getElementById('exportMonth').value;
   const pool = month ? dailyEntries.filter(d => d.date.startsWith(month)) : dailyEntries;
@@ -4303,6 +4482,46 @@ function restoreData(e) {
     }
   };
   reader.readAsText(file);
+}
+
+// 清理重複月薪記錄（同員工同月只保留最新一筆）
+function removeDuplicateRecords() {
+  // 依 empId + month 分組
+  const groups = {};
+  records.forEach(r => {
+    const key = `${r.empId}|${r.month}`;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(r);
+  });
+  // 計算重複的數量
+  let dupCount = 0;
+  Object.values(groups).forEach(arr => { if (arr.length > 1) dupCount += arr.length - 1; });
+  if (dupCount === 0) { alert('✅ 沒有重複記錄，不需要清理'); return; }
+  if (!confirm(`發現 ${dupCount} 筆重複記錄（同員工同月）。\n\n將保留每組最新（依 createdAt/updatedAt）的 1 筆，刪除其餘。\n\n按「確定」繼續清理？此動作無法復原，建議先備份 JSON！`)) return;
+
+  const keepers = [];
+  const toDelete = [];
+  Object.values(groups).forEach(arr => {
+    if (arr.length === 1) {
+      keepers.push(arr[0]);
+      return;
+    }
+    // 依更新時間排序，取最新
+    arr.sort((a, b) => {
+      const ta = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const tb = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      return tb - ta;
+    });
+    keepers.push(arr[0]);
+    arr.slice(1).forEach(r => toDelete.push(r._id));
+  });
+
+  records = keepers;
+  save(STORE.records, records);
+  toDelete.forEach(id => cloudDelete('records', id));
+  refreshRecords();
+  updateSummary();
+  alert(`✅ 清理完成：\n  保留 ${keepers.length} 筆\n  刪除 ${toDelete.length} 筆重複`);
 }
 
 function clearAllData() {
