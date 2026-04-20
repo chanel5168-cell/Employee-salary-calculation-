@@ -281,6 +281,12 @@
         </div>
       </div>
       <div class="form-group">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="empIsHourly" style="width:auto;">
+          <span>此員工為「時薪制」員工 (特休依比例計算)</span>
+        </label>
+      </div>
+      <div class="form-group">
         <label>備註</label>
         <textarea id="empNote" placeholder="自訂資訊…"></textarea>
       </div>
@@ -465,8 +471,23 @@
         實際工作時數 = 總時段 − 休息時間
       </div>
       <div class="form-group">
-        <label>工作內容 *</label>
-        <input type="text" id="hourWorkContent" placeholder="例：整理倉庫、包裝商品、客戶接待" style="font-weight:500;">
+        <label style="display:flex; justify-content:space-between; align-items:center;">
+          <span>工作內容 *</span>
+          <button type="button" onclick="toggleWorkContentManager()" style="background:none; border:1px solid #06C755; color:#06C755; padding:2px 8px; border-radius:12px; cursor:pointer; font-size:11px;">⚙ 管理工作類型</button>
+        </label>
+        <select id="hourWorkContent" style="font-weight:500;">
+          <option value="">-- 請選擇 --</option>
+        </select>
+      </div>
+
+      <!-- 工作類型管理子面板 -->
+      <div id="workContentManager" style="display:none; background:#f0fdf4; border:1px dashed #06C755; border-radius:8px; padding:12px; margin-bottom:12px;">
+        <div style="font-weight:600; margin-bottom:8px; color:#06C755;">工作類型管理</div>
+        <div style="display:flex; gap:6px; margin-bottom:8px;">
+          <input type="text" id="newWorkContentName" placeholder="新工作類型 (如: 組裝)" style="flex:1;">
+          <button type="button" class="btn btn-primary btn-sm" onclick="addWorkContent()" style="padding:6px 12px;">新增</button>
+        </div>
+        <div id="workContentList"></div>
       </div>
       <div class="form-group">
         <label>備註 (選填)</label>
@@ -528,15 +549,43 @@
           <option value="">-- 請先新增員工 --</option>
         </select>
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>出勤天數</label>
-          <input type="number" id="workDays" placeholder="22" min="0" max="31">
+      <div class="form-group">
+        <label>出勤天數</label>
+        <input type="number" id="workDays" placeholder="22" min="0" max="31">
+      </div>
+
+      <!-- 請假明細 (含給薪類型) -->
+      <div class="form-group">
+        <label style="display:flex; justify-content:space-between; align-items:center;">
+          <span>請假明細</span>
+          <button type="button" onclick="toggleLeaveCatManager()" style="background:none; border:1px solid #06C755; color:#06C755; padding:2px 8px; border-radius:12px; cursor:pointer; font-size:11px;">⚙ 管理請假類別</button>
+        </label>
+        <div id="leaveItemsBox"></div>
+        <button type="button" onclick="addLeaveItem()" class="btn btn-secondary btn-sm btn-block" style="margin-top:6px;">+ 新增請假項目</button>
+        <input type="hidden" id="leaveDays" value="0">
+        <div id="leaveTotalInfo" style="text-align:right; margin-top:8px; padding:6px 10px; background:#fef2f2; border-radius:6px; font-size:12px; color:#374151;">
+          請假合計 0 天 · 扣款 NT$ 0
         </div>
-        <div class="form-group">
-          <label>請假天數</label>
-          <input type="number" id="leaveDays" placeholder="0" min="0">
+      </div>
+
+      <!-- 請假類別管理 -->
+      <div id="leaveCatManager" style="display:none; background:#f0fdf4; border:1px dashed #06C755; border-radius:8px; padding:12px; margin-bottom:12px;">
+        <div style="font-weight:600; margin-bottom:8px; color:#06C755;">請假類別管理</div>
+        <div class="form-row">
+          <div class="form-group" style="margin-bottom:0;">
+            <input type="text" id="newLeaveCatName" placeholder="類別名稱 (如: 颱風假)">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <select id="newLeaveCatPayType">
+              <option value="full">全薪</option>
+              <option value="half">半薪</option>
+              <option value="none">不給薪</option>
+            </select>
+          </div>
         </div>
+        <button type="button" class="btn btn-primary btn-sm btn-block" onclick="addLeaveCategory()" style="margin:8px 0;">新增類別</button>
+        <div id="leaveCatList"></div>
+        <div style="font-size:11px; color:#6b7280; margin-top:6px;">全薪=不扣錢，半薪=扣一半，不給薪=照日薪扣</div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -616,6 +665,9 @@
           <span>其他扣款明細</span>
           <button type="button" onclick="toggleDeductCatManager()" style="background:none; border:1px solid #06C755; color:#06C755; padding:2px 8px; border-radius:12px; cursor:pointer; font-size:11px;">⚙ 管理扣款類別</button>
         </label>
+        <div style="padding:8px 10px; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; font-size:11px; color:#991b1b; margin-bottom:6px;">
+          ⚠ <strong>勞基法提醒</strong>：全勤獎金屬工資一部分，<strong>病假、特休、公假、產假不得扣全勤</strong>；僅事假、曠職可扣。
+        </div>
         <div id="deductItems"></div>
         <button type="button" onclick="addDeductItem()" class="btn btn-secondary btn-sm btn-block" style="margin-top:6px;">+ 新增扣款項目</button>
         <input type="hidden" id="otherDeduct" value="0">
@@ -775,6 +827,8 @@ const STORE = {
   products: 'salary_products',
   deductCats: 'salary_deduct_cats',
   bonusCats: 'salary_bonus_cats',
+  workContents: 'salary_work_contents',
+  leaveCats: 'salary_leave_cats',
   liffId: 'salary_liff_id',
   rates: 'salary_rates'
 };
@@ -793,7 +847,11 @@ let deductCategories = load(STORE.deductCats, [
   { _id: 'dc_default_1', name: '借支', defaultAmount: 0 },
   { _id: 'dc_default_2', name: '水電', defaultAmount: 0 },
   { _id: 'dc_default_3', name: '瓦斯', defaultAmount: 0 },
-  { _id: 'dc_default_4', name: '伙食費', defaultAmount: 0 }
+  { _id: 'dc_default_4', name: '伙食費', defaultAmount: 0 },
+  { _id: 'dc_default_5', name: '住宿費', defaultAmount: 0 },
+  { _id: 'dc_default_6', name: '全勤扣減', defaultAmount: 0 },
+  { _id: 'dc_default_7', name: '遲到扣款', defaultAmount: 0 },
+  { _id: 'dc_default_8', name: '代扣稅款', defaultAmount: 0 }
 ]);
 let bonusCategories = load(STORE.bonusCats, [
   { _id: 'bc_default_1', name: '達標獎金', defaultAmount: 0 },
@@ -803,6 +861,27 @@ let bonusCategories = load(STORE.bonusCats, [
 ]);
 let currentDeductItems = [];
 let currentBonusItems = [];
+let workContents = load(STORE.workContents, [
+  { _id: 'wc_1', name: '烤漆' },
+  { _id: 'wc_2', name: '送貨' },
+  { _id: 'wc_3', name: '整理倉庫' },
+  { _id: 'wc_4', name: '打樣' },
+  { _id: 'wc_5', name: '送修零件' },
+  { _id: 'wc_6', name: '包裝' },
+  { _id: 'wc_7', name: '檢驗' }
+]);
+let leaveCategories = load(STORE.leaveCats, [
+  { _id: 'lc_1', name: '特休', payType: 'full' },
+  { _id: 'lc_2', name: '婚假', payType: 'full' },
+  { _id: 'lc_3', name: '喪假', payType: 'full' },
+  { _id: 'lc_4', name: '公假', payType: 'full' },
+  { _id: 'lc_5', name: '產假', payType: 'full' },
+  { _id: 'lc_6', name: '陪產假', payType: 'full' },
+  { _id: 'lc_7', name: '病假 (普通傷病)', payType: 'half' },
+  { _id: 'lc_8', name: '事假', payType: 'none' },
+  { _id: 'lc_9', name: '颱風假', payType: 'none' }
+]);
+let currentLeaveItems = [];
 let rates = load(STORE.rates, { labor: 2.42, health: 1.655 });
 let editingEmpId = null;
 let editingDailyId = null;
@@ -870,19 +949,21 @@ async function migrateAndSubscribe() {
     }
 
     setSyncStatus('檢查同步狀態…', 'syncing');
-    const [nEmp, nRec, nDaily, nProd, nDc, nBc] = await Promise.all([
+    const [nEmp, nRec, nDaily, nProd, nDc, nBc, nWc, nLc] = await Promise.all([
       syncMissing('employees', employees),
       syncMissing('records', records),
       syncMissing('daily', dailyEntries),
       syncMissing('products', products),
       syncMissing('deductCats', deductCategories),
-      syncMissing('bonusCats', bonusCategories)
+      syncMissing('bonusCats', bonusCategories),
+      syncMissing('workContents', workContents),
+      syncMissing('leaveCats', leaveCategories)
     ]);
     // 費率若雲端沒有也要補
     const rSnap = await ws().collection('config').doc('rates').get();
     if (!rSnap.exists) await ws().collection('config').doc('rates').set(rates);
 
-    const totalSynced = nEmp + nRec + nDaily + nProd + nDc + nBc;
+    const totalSynced = nEmp + nRec + nDaily + nProd + nDc + nBc + nWc + nLc;
     if (totalSynced > 0) {
       setSyncStatus(`已補傳 ${totalSynced} 筆遺漏記錄`, 'syncing');
     }
@@ -941,6 +1022,26 @@ function subscribeAll() {
       const bm = document.getElementById('bonusCatManager');
       if (bm && bm.style.display === 'block') refreshBonusCatList();
       if (currentBonusItems.length > 0) renderBonusItems();
+    }
+  });
+
+  col('workContents').onSnapshot(snap => {
+    if (snap.docs.length > 0) {
+      workContents = snap.docs.map(d => d.data());
+      save(STORE.workContents, workContents);
+      refreshWorkContentDropdown();
+      const wm = document.getElementById('workContentManager');
+      if (wm && wm.style.display === 'block') refreshWorkContentList();
+    }
+  });
+
+  col('leaveCats').onSnapshot(snap => {
+    if (snap.docs.length > 0) {
+      leaveCategories = snap.docs.map(d => d.data());
+      save(STORE.leaveCats, leaveCategories);
+      const lm = document.getElementById('leaveCatManager');
+      if (lm && lm.style.display === 'block') refreshLeaveCatList();
+      if (currentLeaveItems.length > 0) renderLeaveItems();
     }
   });
 
@@ -1097,6 +1198,7 @@ function saveEmployee() {
     hireDate: document.getElementById('empHireDate').value,
     baseSalary: baseSalary,
     hourlyRate: parseFloat(document.getElementById('empHourlyRate').value) || Math.round(baseSalary / 30 / 8),
+    isHourly: document.getElementById('empIsHourly').checked,
     note: document.getElementById('empNote').value.trim()
   };
 
@@ -1124,6 +1226,7 @@ function editEmployee(id) {
   updateEmpLeaveHint();
   document.getElementById('empBaseSalary').value = e.baseSalary;
   document.getElementById('empHourlyRate').value = e.hourlyRate || '';
+  document.getElementById('empIsHourly').checked = !!e.isHourly;
   document.getElementById('empNote').value = e.note || '';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -1141,6 +1244,7 @@ function clearEmpForm() {
   editingEmpId = null;
   ['empId','empName','empTitle','empPhone','empHireDate','empBaseSalary','empHourlyRate','empNote']
     .forEach(id => document.getElementById(id).value = '');
+  document.getElementById('empIsHourly').checked = false;
   document.getElementById('empLeaveHint').style.display = 'none';
 }
 
@@ -1324,7 +1428,7 @@ function addHourEntry() {
     hours: Math.round(hours * 100) / 100,
     rate,
     subtotal: Math.round(hours * rate * 100) / 100,
-    workContent: document.getElementById('hourWorkContent').value.trim(),
+    workContent: document.getElementById('hourWorkContent').value,
     note: document.getElementById('hourNote').value.trim(),
     photo: currentHourPhoto || null,
     createdAt: original ? original.createdAt : new Date().toISOString(),
@@ -1615,6 +1719,182 @@ function refreshMonthlyDaily() {
   `;
 }
 
+// ========= 工作類型 =========
+function refreshWorkContentDropdown() {
+  const sel = document.getElementById('hourWorkContent');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">-- 請選擇 --</option>' +
+    workContents.map(w => `<option value="${escapeHtml(w.name)}">${escapeHtml(w.name)}</option>`).join('');
+  if (current && workContents.find(w => w.name === current)) sel.value = current;
+}
+
+function toggleWorkContentManager() {
+  const pm = document.getElementById('workContentManager');
+  if (!pm) return;
+  pm.style.display = pm.style.display === 'none' ? 'block' : 'none';
+  if (pm.style.display === 'block') refreshWorkContentList();
+}
+
+function addWorkContent() {
+  const name = document.getElementById('newWorkContentName').value.trim();
+  if (!name) return;
+  if (workContents.find(w => w.name === name)) { alert('此項目已存在'); return; }
+  const w = { _id: 'wc_' + Date.now(), name };
+  workContents.push(w);
+  save(STORE.workContents, workContents);
+  cloudSave('workContents', w);
+  document.getElementById('newWorkContentName').value = '';
+  refreshWorkContentList();
+  refreshWorkContentDropdown();
+}
+
+function deleteWorkContent(id) {
+  if (!confirm('確定刪除此工作類型？')) return;
+  workContents = workContents.filter(w => w._id !== id);
+  save(STORE.workContents, workContents);
+  cloudDelete('workContents', id);
+  refreshWorkContentList();
+  refreshWorkContentDropdown();
+}
+
+function refreshWorkContentList() {
+  const box = document.getElementById('workContentList');
+  if (!box) return;
+  if (workContents.length === 0) {
+    box.innerHTML = '<div style="text-align:center; padding:10px; color:#9ca3af; font-size:13px;">尚無工作類型</div>';
+    return;
+  }
+  box.innerHTML = workContents.map(w => `
+    <div style="display:flex; align-items:center; gap:6px; padding:6px; background:white; border-radius:6px; margin-bottom:4px;">
+      <div style="flex:1; font-weight:500;">${escapeHtml(w.name)}</div>
+      <button type="button" class="btn btn-danger btn-sm" onclick="deleteWorkContent('${w._id}')" style="padding:3px 8px; font-size:11px;">刪除</button>
+    </div>
+  `).join('');
+}
+
+// ========= 請假類別（含給薪狀態） =========
+function payTypeLabel(t) {
+  return t === 'full' ? '全薪' : t === 'half' ? '半薪' : '不給薪';
+}
+function payTypeColor(t) {
+  return t === 'full' ? '#059669' : t === 'half' ? '#d97706' : '#dc2626';
+}
+
+function renderLeaveItems() {
+  const box = document.getElementById('leaveItemsBox');
+  if (!box) return;
+  if (currentLeaveItems.length === 0) {
+    box.innerHTML = '<div style="text-align:center; padding:8px; color:#9ca3af; font-size:12px;">尚無請假項目</div>';
+  } else {
+    box.innerHTML = currentLeaveItems.map((it, idx) => {
+      const catOpts = leaveCategories.map(c => `<option value="${c._id}" ${c._id === it.categoryId ? 'selected' : ''}>${escapeHtml(c.name)} (${payTypeLabel(c.payType)})</option>`).join('');
+      const cat = leaveCategories.find(c => c._id === it.categoryId);
+      const color = cat ? payTypeColor(cat.payType) : '#6b7280';
+      return `
+        <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
+          <select onchange="onLeaveCatChange(${idx}, this.value)" style="flex:2; padding:6px 8px; font-size:13px;">
+            <option value="">-- 請選 --</option>
+            ${catOpts}
+          </select>
+          <input type="number" value="${it.days || ''}" placeholder="天數" min="0" step="0.5"
+            oninput="updateLeaveItem(${idx}, this.value)"
+            style="width:80px; padding:6px 8px; font-size:13px;">
+          <span style="color:${color}; font-size:11px; font-weight:700; width:50px; text-align:center;">${cat ? payTypeLabel(cat.payType) : ''}</span>
+          <button type="button" onclick="removeLeaveItem(${idx})" style="border:none; background:#fee2e2; color:#991b1b; padding:4px 8px; border-radius:4px; cursor:pointer;">✕</button>
+        </div>
+      `;
+    }).join('');
+  }
+  updateLeaveTotal();
+}
+
+function addLeaveItem() {
+  currentLeaveItems.push({ categoryId: '', days: 0 });
+  renderLeaveItems();
+}
+
+function removeLeaveItem(idx) {
+  currentLeaveItems.splice(idx, 1);
+  renderLeaveItems();
+}
+
+function updateLeaveItem(idx, days) {
+  if (!currentLeaveItems[idx]) return;
+  currentLeaveItems[idx].days = parseFloat(days) || 0;
+  updateLeaveTotal();
+}
+
+function onLeaveCatChange(idx, catId) {
+  if (!currentLeaveItems[idx]) return;
+  currentLeaveItems[idx].categoryId = catId;
+  renderLeaveItems();
+}
+
+function updateLeaveTotal() {
+  // 計算請假扣款總額 (依給薪類型)
+  const empId = document.getElementById('calcEmp').value;
+  const emp = employees.find(e => e._id === empId);
+  const dailyRate = emp ? Math.round((emp.baseSalary || 0) / 30) : 0;
+  let totalDays = 0, totalDeduct = 0;
+  currentLeaveItems.forEach(it => {
+    const cat = leaveCategories.find(c => c._id === it.categoryId);
+    if (!cat) return;
+    totalDays += it.days || 0;
+    if (cat.payType === 'none') totalDeduct += (it.days || 0) * dailyRate;
+    else if (cat.payType === 'half') totalDeduct += (it.days || 0) * dailyRate / 2;
+  });
+  const ld = document.getElementById('leaveDays');
+  if (ld) ld.value = totalDays;
+  const lt = document.getElementById('leaveTotalInfo');
+  if (lt) lt.innerHTML = `請假合計 ${totalDays} 天 · 扣款 <strong style="color:#dc2626;">NT$ ${formatMoney(totalDeduct)}</strong>`;
+}
+
+// 請假類別管理
+function toggleLeaveCatManager() {
+  const pm = document.getElementById('leaveCatManager');
+  if (!pm) return;
+  pm.style.display = pm.style.display === 'none' ? 'block' : 'none';
+  if (pm.style.display === 'block') refreshLeaveCatList();
+}
+
+function addLeaveCategory() {
+  const name = document.getElementById('newLeaveCatName').value.trim();
+  const payType = document.getElementById('newLeaveCatPayType').value;
+  if (!name) { alert('請輸入類別名稱'); return; }
+  if (leaveCategories.find(c => c.name === name)) { alert('此類別已存在'); return; }
+  const cat = { _id: 'lc_' + Date.now(), name, payType };
+  leaveCategories.push(cat);
+  save(STORE.leaveCats, leaveCategories);
+  cloudSave('leaveCats', cat);
+  document.getElementById('newLeaveCatName').value = '';
+  refreshLeaveCatList();
+}
+
+function deleteLeaveCategory(id) {
+  if (!confirm('確定刪除此請假類別？')) return;
+  leaveCategories = leaveCategories.filter(c => c._id !== id);
+  save(STORE.leaveCats, leaveCategories);
+  cloudDelete('leaveCats', id);
+  refreshLeaveCatList();
+}
+
+function refreshLeaveCatList() {
+  const box = document.getElementById('leaveCatList');
+  if (!box) return;
+  if (leaveCategories.length === 0) {
+    box.innerHTML = '<div style="text-align:center; padding:10px; color:#9ca3af; font-size:13px;">尚無類別</div>';
+    return;
+  }
+  box.innerHTML = leaveCategories.map(c => `
+    <div style="display:flex; align-items:center; gap:6px; padding:6px; background:white; border-radius:6px; margin-bottom:4px;">
+      <div style="flex:1; font-weight:500;">${escapeHtml(c.name)}</div>
+      <span style="font-size:11px; font-weight:700; color:${payTypeColor(c.payType)}; padding:2px 8px; border-radius:10px; background:${c.payType === 'full' ? '#dcfce7' : c.payType === 'half' ? '#fef3c7' : '#fee2e2'};">${payTypeLabel(c.payType)}</span>
+      <button type="button" class="btn btn-danger btn-sm" onclick="deleteLeaveCategory('${c._id}')" style="padding:3px 8px; font-size:11px;">刪除</button>
+    </div>
+  `).join('');
+}
+
 // ========= 特休管理（依勞基法） =========
 function calcAnnualLeave(hireDate, baseDate) {
   if (!hireDate) return { totalMonths: 0, years: 0, months: 0, entitled: 0, valid: false };
@@ -1652,22 +1932,38 @@ function refreshLeaveList() {
   box.innerHTML = employees.map(e => {
     const info = calcAnnualLeave(e.hireDate, baseDate);
     const used = parseFloat(e.leaveUsed) || 0;
-    const remaining = Math.max(0, info.entitled - used);
+    const isHourly = !!e.isHourly;
+    // 時薪制：使用手動覆寫值，否則依月薪制公式
+    const override = parseFloat(e.leaveEntitledOverride);
+    const entitled = isHourly
+      ? (isNaN(override) ? 0 : override)
+      : info.entitled;
+    const remaining = Math.max(0, entitled - used);
     const tierHint = !info.valid
       ? '<span style="color:#9ca3af;">未填到職日</span>'
       : info.totalMonths < 6
-        ? `未滿 6 個月，尚無特休 (${info.totalMonths} 個月)`
+        ? `未滿 6 個月 (${info.totalMonths} 個月)`
         : `到職 ${info.years} 年 ${info.months} 月`;
+    const typeBadge = isHourly
+      ? '<span class="badge" style="background:#fef3c7; color:#92400e;">時薪制</span>'
+      : '<span class="badge" style="background:#dbeafe; color:#1e40af;">月薪制</span>';
+    const hourlyHint = isHourly
+      ? '<div style="padding:6px 8px; background:#fef3c7; border-radius:6px; font-size:11px; color:#92400e;">⚠ 時薪制依比例計算特休，請手動填入「應有」天數（例如每月工時 87 小時 = 月薪制一半 → 應有天數也減半）</div>'
+      : '';
+    const entitledField = isHourly
+      ? `<input type="number" value="${entitled || ''}" placeholder="手動" min="0" step="0.5" onchange="updateEmpLeaveEntitled('${e._id}', this.value)" style="width:100%; text-align:center; font-weight:700; color:#1e40af; font-size:18px; border:1px solid #3b82f6; border-radius:4px; background:white;">`
+      : `<div style="font-weight:700; color:#1e40af; font-size:18px;">${entitled}</div>`;
     return `
       <div class="employee-item" style="flex-direction:column; align-items:stretch; gap:8px;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div class="name">${escapeHtml(e.name)} <span class="badge">${escapeHtml(e.id || '-')}</span></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+          <div class="name">${escapeHtml(e.name)} <span class="badge">${escapeHtml(e.id || '-')}</span> ${typeBadge}</div>
           <div style="font-size:12px; color:#6b7280;">${tierHint}</div>
         </div>
+        ${hourlyHint}
         <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; font-size:13px;">
           <div style="background:#eff6ff; padding:8px; border-radius:6px; text-align:center;">
             <div style="color:#6b7280; font-size:11px;">應有</div>
-            <div style="font-weight:700; color:#1e40af; font-size:18px;">${info.entitled}</div>
+            ${entitledField}
             <div style="font-size:10px; color:#6b7280;">天</div>
           </div>
           <div style="background:#fef3c7; padding:8px; border-radius:6px; text-align:center;">
@@ -1705,6 +2001,15 @@ function updateEmpLeaveUsed(empId, value) {
   const emp = employees.find(e => e._id === empId);
   if (!emp) return;
   emp.leaveUsed = parseFloat(value) || 0;
+  save(STORE.employees, employees);
+  cloudSave('employees', emp);
+  refreshLeaveList();
+}
+
+function updateEmpLeaveEntitled(empId, value) {
+  const emp = employees.find(e => e._id === empId);
+  if (!emp) return;
+  emp.leaveEntitledOverride = parseFloat(value) || 0;
   save(STORE.employees, employees);
   cloudSave('employees', emp);
   refreshLeaveList();
@@ -2202,7 +2507,20 @@ function onProductSelected() {
 function computeSalary(emp, input) {
   const base = emp.baseSalary;
   const hourly = emp.hourlyRate || Math.round(base / 30 / 8);
-  const dailyDeduct = Math.round(base / 30) * (input.leaveDays || 0);
+  const dailyRate = Math.round(base / 30);
+  // 依請假項目給薪類型計算扣款；若沒 leaveItems 則退回舊邏輯
+  let dailyDeduct = 0;
+  if (input.leaveItems && input.leaveItems.length > 0) {
+    input.leaveItems.forEach(it => {
+      const cat = leaveCategories.find(c => c._id === it.categoryId);
+      if (!cat) return;
+      if (cat.payType === 'none') dailyDeduct += (it.days || 0) * dailyRate;
+      else if (cat.payType === 'half') dailyDeduct += (it.days || 0) * dailyRate / 2;
+    });
+    dailyDeduct = Math.round(dailyDeduct);
+  } else {
+    dailyDeduct = Math.round(dailyRate * (input.leaveDays || 0));
+  }
 
   const otPay1 = Math.round(hourly * 1.34 * (input.ot1 || 0));
   const otPay2 = Math.round(hourly * 1.67 * (input.ot2 || 0));
@@ -2239,6 +2557,7 @@ function gatherCalcInput() {
   return {
     workDays: parseFloat(document.getElementById('workDays').value) || 0,
     leaveDays: parseFloat(document.getElementById('leaveDays').value) || 0,
+    leaveItems: currentLeaveItems.filter(x => x.categoryId && x.days > 0),
     ot1: parseFloat(document.getElementById('ot1').value) || 0,
     ot2: parseFloat(document.getElementById('ot2').value) || 0,
     pieceIncome: parseFloat(document.getElementById('pieceIncome').value) || 0,
@@ -2294,6 +2613,12 @@ function saveSalaryRecord() {
   const cleanedBonusItems = currentBonusItems
     .filter(x => x.name && x.amount > 0)
     .map(x => ({ name: x.name, amount: x.amount }));
+  const cleanedLeaveItems = currentLeaveItems
+    .filter(x => x.categoryId && x.days > 0)
+    .map(x => {
+      const cat = leaveCategories.find(c => c._id === x.categoryId);
+      return { categoryId: x.categoryId, categoryName: cat ? cat.name : '', payType: cat ? cat.payType : 'none', days: x.days };
+    });
   const rec = {
     _id: editingRecordId || ('rec_' + Date.now()),
     month,
@@ -2305,6 +2630,7 @@ function saveSalaryRecord() {
     ...r,
     deductItems: cleanedDeductItems,
     bonusItems: cleanedBonusItems,
+    leaveItems: cleanedLeaveItems,
     createdAt: original ? original.createdAt : new Date().toISOString(),
     updatedAt: editingRecordId ? new Date().toISOString() : null
   };
@@ -2326,8 +2652,10 @@ function saveSalaryRecord() {
   document.getElementById('bonus').value = '0';
   currentDeductItems = [];
   currentBonusItems = [];
+  currentLeaveItems = [];
   renderDeductItems();
   renderBonusItems();
+  renderLeaveItems();
   document.getElementById('calcResult').style.display = 'none';
   alert(wasEditing ? '修改已儲存' : ('已儲存：' + emp.name + ' · ' + month));
   refreshRecords();
@@ -2343,6 +2671,13 @@ function editSalaryRecord(id) {
   document.getElementById('calcEmp').value = r.empId;
   document.getElementById('workDays').value = r.workDays || '';
   document.getElementById('leaveDays').value = r.leaveDays || '';
+  // 載入請假明細
+  if (r.leaveItems && r.leaveItems.length > 0) {
+    currentLeaveItems = r.leaveItems.map(x => ({ categoryId: x.categoryId, days: x.days }));
+  } else {
+    currentLeaveItems = [];
+  }
+  renderLeaveItems();
   document.getElementById('ot1').value = r.ot1 || '';
   document.getElementById('ot2').value = r.ot2 || '';
   document.getElementById('pieceIncome').value = r.pieceIncome || '';
@@ -2392,8 +2727,10 @@ function cancelRecordEdit() {
   document.getElementById('bonus').value = '0';
   currentDeductItems = [];
   currentBonusItems = [];
+  currentLeaveItems = [];
   renderDeductItems();
   renderBonusItems();
+  renderLeaveItems();
   document.getElementById('calcResult').style.display = 'none';
   refreshRecords();
 }
@@ -2657,7 +2994,7 @@ function updateSummary() {
 
 // ========= 備份 =========
 function backupData() {
-  const blob = new Blob([JSON.stringify({ employees, records, dailyEntries, products, deductCategories, bonusCategories, rates }, null, 2)],
+  const blob = new Blob([JSON.stringify({ employees, records, dailyEntries, products, deductCategories, bonusCategories, workContents, leaveCategories, rates }, null, 2)],
     { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -2680,6 +3017,8 @@ function restoreData(e) {
       if (data.products) products = data.products;
       if (data.deductCategories) deductCategories = data.deductCategories;
       if (data.bonusCategories) bonusCategories = data.bonusCategories;
+      if (data.workContents) workContents = data.workContents;
+      if (data.leaveCategories) leaveCategories = data.leaveCategories;
       if (data.rates) rates = data.rates;
       save(STORE.employees, employees);
       save(STORE.records, records);
@@ -2687,6 +3026,8 @@ function restoreData(e) {
       save(STORE.products, products);
       save(STORE.deductCats, deductCategories);
       save(STORE.bonusCats, bonusCategories);
+      save(STORE.workContents, workContents);
+      save(STORE.leaveCats, leaveCategories);
       save(STORE.rates, rates);
       refreshEmployeeList();
       refreshEmpDropdown();
@@ -2796,8 +3137,10 @@ function init() {
   refreshDailyEntries();
   refreshMonthlyDaily();
   refreshProductList();
+  refreshWorkContentDropdown();
   renderDeductItems();
   renderBonusItems();
+  renderLeaveItems();
   initLiff();
   initFirebase();
 }
