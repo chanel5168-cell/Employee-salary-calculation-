@@ -1980,11 +1980,23 @@ function refreshLeaveList() {
     const info = calcAnnualLeave(e.hireDate, baseDate);
     const used = parseFloat(e.leaveUsed) || 0;
     const isHourly = !!e.isHourly;
-    // 時薪制：使用手動覆寫值，否則依月薪制公式
+    const weekly = parseFloat(e.weeklyHours) || 0;
     const override = parseFloat(e.leaveEntitledOverride);
-    const entitled = isHourly
-      ? (isNaN(override) ? 0 : override)
-      : info.entitled;
+    // 時薪制特休 = 全時應有 × (每週工時 ÷ 40)；若沒週工時，用手動覆寫值
+    let entitled = info.entitled;
+    let formulaNote = '';
+    if (isHourly) {
+      if (weekly > 0 && info.valid) {
+        entitled = Math.round(info.entitled * weekly / 40 * 10) / 10;
+        formulaNote = `${info.entitled} 天 × (${weekly} ÷ 40) = ${entitled} 天`;
+      } else if (!isNaN(override)) {
+        entitled = override;
+        formulaNote = '手動設定';
+      } else {
+        entitled = 0;
+        formulaNote = '請填每週工時';
+      }
+    }
     const remaining = Math.max(0, entitled - used);
     const tierHint = !info.valid
       ? '<span style="color:#9ca3af;">未填到職日</span>'
@@ -1995,11 +2007,17 @@ function refreshLeaveList() {
       ? '<span class="badge" style="background:#fef3c7; color:#92400e;">時薪制</span>'
       : '<span class="badge" style="background:#dbeafe; color:#1e40af;">月薪制</span>';
     const hourlyHint = isHourly
-      ? '<div style="padding:6px 8px; background:#fef3c7; border-radius:6px; font-size:11px; color:#92400e;">⚠ 時薪制依比例計算特休，請手動填入「應有」天數（例如每月工時 87 小時 = 月薪制一半 → 應有天數也減半）</div>'
+      ? `<div style="padding:8px 10px; background:#fef3c7; border-radius:6px; font-size:11px; color:#92400e;">
+          📜 <strong>勞動部函釋</strong>：部分工時勞工特休 = 全時特休 × (每週工時 ÷ 40)
+          <div style="margin-top:4px; display:flex; gap:8px; align-items:center;">
+            <span>每週工時:</span>
+            <input type="number" value="${weekly || ''}" placeholder="例:20" min="0" max="40" step="0.5" onchange="updateEmpWeeklyHours('${e._id}', this.value)" style="width:80px; padding:3px 6px; font-size:12px; border:1px solid #f59e0b; border-radius:4px;">
+            <span>小時</span>
+            ${formulaNote ? `<span style="color:#78350f; font-weight:600;">→ ${formulaNote}</span>` : ''}
+          </div>
+         </div>`
       : '';
-    const entitledField = isHourly
-      ? `<input type="number" value="${entitled || ''}" placeholder="手動" min="0" step="0.5" onchange="updateEmpLeaveEntitled('${e._id}', this.value)" style="width:100%; text-align:center; font-weight:700; color:#1e40af; font-size:18px; border:1px solid #3b82f6; border-radius:4px; background:white;">`
-      : `<div style="font-weight:700; color:#1e40af; font-size:18px;">${entitled}</div>`;
+    const entitledField = `<div style="font-weight:700; color:#1e40af; font-size:18px;">${entitled}</div>`;
     return `
       <div class="employee-item" style="flex-direction:column; align-items:stretch; gap:8px;">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
@@ -2060,6 +2078,21 @@ function updateEmpLeaveEntitled(empId, value) {
   save(STORE.employees, employees);
   cloudSave('employees', emp);
   refreshLeaveList();
+}
+
+function updateEmpWeeklyHours(empId, value) {
+  const emp = employees.find(e => e._id === empId);
+  if (!emp) return;
+  emp.weeklyHours = parseFloat(value) || 0;
+  save(STORE.employees, employees);
+  cloudSave('employees', emp);
+  refreshLeaveList();
+}
+
+function toggleHourlyFields() {
+  const checked = document.getElementById('empIsHourly').checked;
+  const box = document.getElementById('empHourlyOnly');
+  if (box) box.style.display = checked ? 'block' : 'none';
 }
 
 function updateLeavePayPreview() {
