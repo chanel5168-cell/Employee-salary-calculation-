@@ -644,8 +644,8 @@
         </select>
       </div>
       <div class="form-group">
-        <label>出勤天數</label>
-        <input type="number" id="workDays" placeholder="22" min="0" max="31">
+        <label>出勤天數 <span style="font-size:10px; color:#6b7280;">(自動從出勤明細帶入，可手動改)</span></label>
+        <input type="number" id="workDays" placeholder="22" min="0" max="31" oninput="this.dataset.userEdited='1'">
       </div>
 
       <!-- 請假明細 (含給薪類型) -->
@@ -698,12 +698,12 @@
 
       <div class="form-row">
         <div class="form-group">
-          <label>平日加班時數 (×1.34)</label>
-          <input type="number" id="ot1" placeholder="0" min="0" step="0.5">
+          <label>平日加班時數 (×1.34) <span style="font-size:10px; color:#6b7280;">(自動)</span></label>
+          <input type="number" id="ot1" placeholder="0" min="0" step="0.5" oninput="this.dataset.userEdited='1'">
         </div>
         <div class="form-group">
-          <label>假日加班時數 (×1.67)</label>
-          <input type="number" id="ot2" placeholder="0" min="0" step="0.5">
+          <label>假日加班時數 (×1.67) <span style="font-size:10px; color:#6b7280;">(自動)</span></label>
+          <input type="number" id="ot2" placeholder="0" min="0" step="0.5" oninput="this.dataset.userEdited='1'">
         </div>
       </div>
       <!-- 薪資來源：論件收入 + 計時收入（獨立於獎金） -->
@@ -2254,18 +2254,34 @@ function refreshMonthlyAttendance() {
   });
 
   const weekdayNames = ['日','一','二','三','四','五','六'];
-  // 統計：上班/加班/特休/其他休假/遲到
-  const dayStatus = {}; // dateStr → 狀態（優先非 normal）
-  const overtimeDates = new Set();
-  let overtimeHours = 0;
+  // 統計：依平日/例假日分別計算
+  // 平日 = Mon-Fri (1-5)，例假日 = Sat/Sun (0, 6)
+  const dayStatus = {};
+  const weekdayWorkDates = new Set();
+  const weekendWorkDates = new Set();
+  let weekdayOtHours = 0;
+  let weekendOtHours = 0;
   let totalLateMinutes = 0;
   let lateDays = 0;
   empEntries.forEach(d => {
     const type = d.attType || 'normal';
-    if (type === '加班') {
-      overtimeDates.add(d.date);
-      overtimeHours += d.hours || 0;
+    const dow = new Date(d.date).getDay();
+    const isWeekend = (dow === 0 || dow === 6);
+    const isLeaveType = type !== 'normal' && type !== '加班';
+
+    if (!isLeaveType) {
+      // 上班或加班
+      if (isWeekend) {
+        weekendWorkDates.add(d.date);
+        // 例假日工作視為例假日加班時數（含 normal & 加班）
+        weekendOtHours += d.hours || 0;
+      } else {
+        weekdayWorkDates.add(d.date);
+        // 平日加班 = 明確選「加班」的時數
+        if (type === '加班') weekdayOtHours += d.hours || 0;
+      }
     }
+    // 日狀態：以請假/特休為主
     if (!dayStatus[d.date] || dayStatus[d.date] === 'normal') {
       dayStatus[d.date] = type;
     } else if (type !== 'normal' && dayStatus[d.date] === '加班') {
@@ -2276,46 +2292,67 @@ function refreshMonthlyAttendance() {
       lateDays++;
     }
   });
-  let workDays = 0, annualLeave = 0, otherLeave = 0;
+  let annualLeave = 0, otherLeave = 0;
   Object.values(dayStatus).forEach(s => {
-    if (s === 'normal' || s === '加班') workDays++;
-    else if (s === '特休') annualLeave++;
-    else otherLeave++;
+    if (s === '特休') annualLeave++;
+    else if (s !== 'normal' && s !== '加班') otherLeave++;
   });
+  const workDays = weekdayWorkDates.size; // 平日上班天數（會連動到「出勤天數」）
+  const totalLeaveDays = annualLeave + otherLeave;
 
-  let html = `<div style="font-weight:700; margin-bottom:8px; color:#059669;">📅 本月出勤明細 <span style="font-size:11px; font-weight:400; color:#6b7280;">(點每列右邊「✏️」可編輯)</span></div>
-    <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-bottom:8px;">
+  // 自動帶入月薪表單（若使用者未手動填過才填）
+  const wd = document.getElementById('workDays');
+  const ld = document.getElementById('leaveDays');
+  const o1 = document.getElementById('ot1');
+  const o2 = document.getElementById('ot2');
+  if (wd && !wd.dataset.userEdited) { wd.value = workDays || ''; }
+  if (ld && !ld.dataset.userEdited) { ld.value = totalLeaveDays || ''; }
+  if (o1 && !o1.dataset.userEdited) { o1.value = weekdayOtHours || ''; }
+  if (o2 && !o2.dataset.userEdited) { o2.value = weekendOtHours || ''; }
+
+  let html = `<div style="font-weight:700; margin-bottom:8px; color:#059669; font-size:15px;">📅 本月出勤明細 <span style="font-size:12px; font-weight:400; color:#6b7280;">(已自動帶入上方欄位；點每列「✏️」可編輯)</span></div>
+    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-bottom:8px;">
       <div style="background:#ecfdf5; padding:8px; border-radius:6px; text-align:center;">
-        <div style="font-size:10px; color:#6b7280;">上班</div>
-        <div style="font-weight:700; color:#059669; font-size:18px;">${workDays}</div>
-        <div style="font-size:9px; color:#6b7280;">天</div>
+        <div style="font-size:11px; color:#6b7280;">📆 平日上班</div>
+        <div style="font-weight:700; color:#059669; font-size:19px;">${weekdayWorkDates.size}</div>
+        <div style="font-size:10px; color:#6b7280;">天</div>
+      </div>
+      <div style="background:#fef2f2; padding:8px; border-radius:6px; text-align:center;">
+        <div style="font-size:11px; color:#6b7280;">🔴 例假日上班</div>
+        <div style="font-weight:700; color:#b91c1c; font-size:19px;">${weekendWorkDates.size}</div>
+        <div style="font-size:10px; color:#6b7280;">天</div>
       </div>
       <div style="background:#dbeafe; padding:8px; border-radius:6px; text-align:center;">
-        <div style="font-size:10px; color:#6b7280;">💪 加班</div>
-        <div style="font-weight:700; color:#1d4ed8; font-size:16px;">${overtimeDates.size}</div>
-        <div style="font-size:9px; color:#6b7280;">天 / ${overtimeHours.toFixed(1)} 時</div>
+        <div style="font-size:11px; color:#6b7280;">💪 平日加班</div>
+        <div style="font-weight:700; color:#1d4ed8; font-size:17px;">${weekdayOtHours.toFixed(1)}</div>
+        <div style="font-size:10px; color:#6b7280;">小時</div>
       </div>
-      <div style="background:#fef3c7; padding:8px; border-radius:6px; text-align:center;">
-        <div style="font-size:10px; color:#6b7280;">🌴 特休</div>
-        <div style="font-weight:700; color:#92400e; font-size:18px;">${annualLeave}</div>
-        <div style="font-size:9px; color:#6b7280;">天</div>
+      <div style="background:#fce7f3; padding:8px; border-radius:6px; text-align:center;">
+        <div style="font-size:11px; color:#6b7280;">💪 例假日加班</div>
+        <div style="font-weight:700; color:#9d174d; font-size:17px;">${weekendOtHours.toFixed(1)}</div>
+        <div style="font-size:10px; color:#6b7280;">小時</div>
       </div>
     </div>
-    <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-bottom:10px;">
+    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-bottom:10px;">
+      <div style="background:#fef3c7; padding:8px; border-radius:6px; text-align:center;">
+        <div style="font-size:11px; color:#6b7280;">🌴 特休</div>
+        <div style="font-weight:700; color:#92400e; font-size:19px;">${annualLeave}</div>
+        <div style="font-size:10px; color:#6b7280;">天</div>
+      </div>
       <div style="background:#fee2e2; padding:8px; border-radius:6px; text-align:center;">
-        <div style="font-size:10px; color:#6b7280;">其他休假</div>
-        <div style="font-weight:700; color:#991b1b; font-size:18px;">${otherLeave}</div>
-        <div style="font-size:9px; color:#6b7280;">天</div>
+        <div style="font-size:11px; color:#6b7280;">📋 其他休假</div>
+        <div style="font-weight:700; color:#991b1b; font-size:19px;">${otherLeave}</div>
+        <div style="font-size:10px; color:#6b7280;">天</div>
       </div>
       <div style="background:#e0e7ff; padding:8px; border-radius:6px; text-align:center;">
-        <div style="font-size:10px; color:#6b7280;">休假合計</div>
-        <div style="font-weight:700; color:#3730a3; font-size:18px;">${annualLeave + otherLeave}</div>
-        <div style="font-size:9px; color:#6b7280;">天</div>
+        <div style="font-size:11px; color:#6b7280;">休假合計</div>
+        <div style="font-weight:700; color:#3730a3; font-size:19px;">${totalLeaveDays}</div>
+        <div style="font-size:10px; color:#6b7280;">天</div>
       </div>
       <div style="background:${totalLateMinutes > 30 ? '#fef2f2' : '#fff7ed'}; padding:8px; border-radius:6px; text-align:center;">
-        <div style="font-size:10px; color:#6b7280;">⏰ 遲到</div>
-        <div style="font-weight:700; color:${totalLateMinutes > 30 ? '#dc2626' : '#c2410c'}; font-size:16px;">${totalLateMinutes}</div>
-        <div style="font-size:9px; color:#6b7280;">分 (${lateDays} 天)</div>
+        <div style="font-size:11px; color:#6b7280;">⏰ 遲到</div>
+        <div style="font-weight:700; color:${totalLateMinutes > 30 ? '#dc2626' : '#c2410c'}; font-size:17px;">${totalLateMinutes}</div>
+        <div style="font-size:10px; color:#6b7280;">分 (${lateDays} 天)</div>
       </div>
     </div>
     <table style="font-size:12px;">
@@ -3203,17 +3240,17 @@ function updateLateHint() {
     .filter(d => d.empId === empId && d.date.startsWith(month) && d.type === 'hour')
     .reduce((a, b) => a + (b.lateMinutes || 0), 0);
   if (totalLate === 0) { hint.style.display = 'none'; return; }
-  const excess = Math.max(0, totalLate - 30);
   const hourly = emp.hourlyRate || Math.round((emp.baseSalary || 0) / 30 / 8);
-  const deduction = Math.round(excess * hourly / 60);
+  // 規則：≤30分免扣，>30分則連同前30分全部扣
+  const deduction = totalLate > 30 ? Math.round(totalLate * hourly / 60) : 0;
   hint.style.display = 'block';
-  if (excess === 0) {
+  if (totalLate <= 30) {
     hint.innerHTML = `⏰ 本月遲到累計 <strong>${totalLate}</strong> 分鐘（未超 30 分，免扣款）`;
     hint.style.background = '#f0fdf4';
     hint.style.borderLeftColor = '#10b981';
     hint.style.color = '#065f46';
   } else {
-    hint.innerHTML = `⏰ 本月遲到累計 <strong>${totalLate}</strong> 分鐘，超過 30 分 <strong>${excess}</strong> 分 → 扣款 NT$ <strong>${formatMoney(deduction)}</strong> (${excess} × ${hourly} ÷ 60)
+    hint.innerHTML = `⏰ 本月遲到累計 <strong>${totalLate}</strong> 分鐘，<strong style="color:#dc2626;">超過 30 分全數扣款</strong> → NT$ <strong>${formatMoney(deduction)}</strong> (${totalLate} 分 × ${hourly} ÷ 60)
       <button type="button" onclick="addLateDeduction(${deduction})" class="btn btn-primary btn-sm" style="margin-left:8px; padding:4px 10px; font-size:11px;">一鍵加入扣款</button>`;
     hint.style.background = '#fef2f2';
     hint.style.borderLeftColor = '#ef4444';
@@ -4307,8 +4344,14 @@ function init() {
   document.getElementById('leaveBaseDate').value = d;
   const qd = document.getElementById('quickAttDate');
   if (qd) qd.value = d;
-  document.getElementById('calcMonth').addEventListener('change', () => { refreshRecords(); updateMonthlyDailyHint(); });
-  document.getElementById('calcEmp').addEventListener('change', updateMonthlyDailyHint);
+  function resetAutoFillFlags() {
+    ['workDays','leaveDays','ot1','ot2'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) delete el.dataset.userEdited;
+    });
+  }
+  document.getElementById('calcMonth').addEventListener('change', () => { resetAutoFillFlags(); refreshRecords(); updateMonthlyDailyHint(); });
+  document.getElementById('calcEmp').addEventListener('change', () => { resetAutoFillFlags(); updateMonthlyDailyHint(); });
   document.getElementById('dailyDate').addEventListener('change', refreshDailyEntries);
   document.getElementById('dailyEmp').addEventListener('change', () => {
     refreshDailyEntries();
