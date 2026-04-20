@@ -520,14 +520,31 @@
         • 不足 10 分鐘不計，30 分鐘為單位<br>
         • 每月遲到累計 &le; 30 分免扣，超過以「時薪 ÷ 60 × 超過分鐘」扣除
       </div>
-      <div class="form-group">
-        <label style="display:flex; justify-content:space-between; align-items:center;">
-          <span>工作內容 *</span>
-          <button type="button" onclick="toggleWorkContentManager()" style="background:none; border:1px solid #06C755; color:#06C755; padding:2px 8px; border-radius:12px; cursor:pointer; font-size:11px;">⚙ 管理工作類型</button>
-        </label>
-        <select id="hourWorkContent" style="font-weight:500;">
-          <option value="">-- 請選擇 --</option>
-        </select>
+      <div class="form-row">
+        <div class="form-group">
+          <label>出勤類型</label>
+          <select id="hourAttType" onchange="onHourAttTypeChange()">
+            <option value="normal">✅ 正常上班</option>
+            <option value="特休">🌴 特休</option>
+            <option value="事假">📋 事假（不給薪）</option>
+            <option value="病假">🤒 病假（半薪）</option>
+            <option value="公假">🏛 公假</option>
+            <option value="婚假">💒 婚假</option>
+            <option value="喪假">🕊 喪假</option>
+            <option value="產假">👶 產假</option>
+            <option value="陪產假">👨 陪產假</option>
+            <option value="颱風假">🌀 颱風假</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label style="display:flex; justify-content:space-between; align-items:center;">
+            <span>工作內容 *</span>
+            <button type="button" onclick="toggleWorkContentManager()" style="background:none; border:1px solid #06C755; color:#06C755; padding:2px 8px; border-radius:12px; cursor:pointer; font-size:11px;">⚙ 管理</button>
+          </label>
+          <select id="hourWorkContent" style="font-weight:500;">
+            <option value="">-- 請選擇 --</option>
+          </select>
+        </div>
       </div>
 
       <!-- 工作類型管理子面板 -->
@@ -780,11 +797,26 @@
           <input type="date" id="quickAttDate">
         </div>
         <div class="form-group">
-          <label>工作內容</label>
-          <select id="quickAttWork">
-            <option value="">-- 請選擇 --</option>
+          <label>出勤類型</label>
+          <select id="quickAttType" onchange="onQuickAttTypeChange()">
+            <option value="normal">✅ 正常上班</option>
+            <option value="特休">🌴 特休</option>
+            <option value="事假">📋 事假（不給薪）</option>
+            <option value="病假">🤒 病假（半薪）</option>
+            <option value="公假">🏛 公假</option>
+            <option value="婚假">💒 婚假</option>
+            <option value="喪假">🕊 喪假</option>
+            <option value="產假">👶 產假</option>
+            <option value="陪產假">👨 陪產假</option>
+            <option value="颱風假">🌀 颱風假</option>
           </select>
         </div>
+      </div>
+      <div class="form-group">
+        <label>工作內容</label>
+        <select id="quickAttWork">
+          <option value="">-- 請選擇 --</option>
+        </select>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -1017,9 +1049,11 @@ const DEFAULT_LEAVE_CATS = [
   { _id: 'lc_9', name: '颱風假', payType: 'none' }
 ];
 const DEFAULT_WORKPLACES = [
-  { _id: 'wp_1', name: '一廠 陽基' },
-  { _id: 'wp_2', name: '二廠 日勝陽' },
-  { _id: 'wp_3', name: '三廠 草埔' }
+  { _id: 'wp_1', name: '暘基' },
+  { _id: 'wp_2', name: '日盛暘' },
+  { _id: 'wp_3', name: '草埔' },
+  { _id: 'wp_4', name: '烤漆' },
+  { _id: 'wp_5', name: '臨時' }
 ];
 let workContents = load(STORE.workContents, DEFAULT_WORK_CONTENTS);
 let leaveCategories = load(STORE.leaveCats, DEFAULT_LEAVE_CATS);
@@ -1047,7 +1081,7 @@ const WORKSPACE_ID = 'default';
 let db = null;
 let cloudReady = false;
 let suppressSubscription = false;
-const DATA_MIGRATION_VERSION = '2026-04-20-cats-v2';
+const DATA_MIGRATION_VERSION = '2026-04-20-cats-v3-workplaces5';
 
 function mergeDefaultCategories() {
   // 只跑一次；已跑過則略過。這樣使用者刪除的預設不會被復活
@@ -1058,7 +1092,8 @@ function mergeDefaultCategories() {
     { key: STORE.deductCats, arr: deductCategories, defaults: DEFAULT_DEDUCT_CATS, cloud: 'deductCats' },
     { key: STORE.bonusCats, arr: bonusCategories, defaults: DEFAULT_BONUS_CATS, cloud: 'bonusCats' },
     { key: STORE.workContents, arr: workContents, defaults: DEFAULT_WORK_CONTENTS, cloud: 'workContents' },
-    { key: STORE.leaveCats, arr: leaveCategories, defaults: DEFAULT_LEAVE_CATS, cloud: 'leaveCats' }
+    { key: STORE.leaveCats, arr: leaveCategories, defaults: DEFAULT_LEAVE_CATS, cloud: 'leaveCats' },
+    { key: STORE.workplaces, arr: workplaces, defaults: DEFAULT_WORKPLACES, cloud: 'workplaces' }
   ];
   sets.forEach(s => {
     const ids = new Set(s.arr.map(x => x._id));
@@ -1641,6 +1676,7 @@ function addHourEntry() {
     rate,
     subtotal: Math.round(hours * rate * 100) / 100,
     workContent: document.getElementById('hourWorkContent').value,
+    attType: document.getElementById('hourAttType').value || 'normal',
     lateMinutes: parseFloat(document.getElementById('hourLate').value) || 0,
     note: document.getElementById('hourNote').value.trim(),
     photo: currentHourPhoto || null,
@@ -1817,6 +1853,7 @@ function editDailyEntry(id) {
     document.getElementById('hourRate').value = e.rate;
     document.getElementById('hourWorkContent').value = e.workContent || '';
     document.getElementById('hourLate').value = e.lateMinutes || '';
+    document.getElementById('hourAttType').value = e.attType || 'normal';
     document.getElementById('hourNote').value = e.note || '';
     updateHourPreview();
     currentHourPhoto = e.photo || null;
@@ -2008,7 +2045,46 @@ function refreshMonthlyAttendance() {
   });
 
   const weekdayNames = ['日','一','二','三','四','五','六'];
+  // 統計：上班天數 / 特休天數 / 其他休假天數
+  const dayStatus = {}; // dateStr → 狀態
+  empEntries.forEach(d => {
+    const type = d.attType || 'normal';
+    if (!dayStatus[d.date] || dayStatus[d.date] === 'normal') {
+      dayStatus[d.date] = type;
+    } else if (type !== 'normal') {
+      dayStatus[d.date] = type;
+    }
+  });
+  let workDays = 0, annualLeave = 0, otherLeave = 0;
+  Object.values(dayStatus).forEach(s => {
+    if (s === 'normal') workDays++;
+    else if (s === '特休') annualLeave++;
+    else otherLeave++;
+  });
+
   let html = `<div style="font-weight:700; margin-bottom:8px; color:#059669;">📅 本月出勤明細</div>
+    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-bottom:10px;">
+      <div style="background:#ecfdf5; padding:8px; border-radius:6px; text-align:center;">
+        <div style="font-size:10px; color:#6b7280;">上班</div>
+        <div style="font-weight:700; color:#059669; font-size:18px;">${workDays}</div>
+        <div style="font-size:9px; color:#6b7280;">天</div>
+      </div>
+      <div style="background:#fef3c7; padding:8px; border-radius:6px; text-align:center;">
+        <div style="font-size:10px; color:#6b7280;">特休</div>
+        <div style="font-weight:700; color:#92400e; font-size:18px;">${annualLeave}</div>
+        <div style="font-size:9px; color:#6b7280;">天</div>
+      </div>
+      <div style="background:#fee2e2; padding:8px; border-radius:6px; text-align:center;">
+        <div style="font-size:10px; color:#6b7280;">其他休假</div>
+        <div style="font-weight:700; color:#991b1b; font-size:18px;">${otherLeave}</div>
+        <div style="font-size:9px; color:#6b7280;">天</div>
+      </div>
+      <div style="background:#e0e7ff; padding:8px; border-radius:6px; text-align:center;">
+        <div style="font-size:10px; color:#6b7280;">休假合計</div>
+        <div style="font-weight:700; color:#3730a3; font-size:18px;">${annualLeave + otherLeave}</div>
+        <div style="font-size:9px; color:#6b7280;">天</div>
+      </div>
+    </div>
     <table style="font-size:12px;">
       <thead>
         <tr><th>日期</th><th>週</th><th>上班</th><th>下班</th><th>休息</th><th>時數</th><th>工作內容</th></tr>
@@ -2890,6 +2966,41 @@ function updateLateHint() {
   }
 }
 
+// 出勤類型切換 - 選擇特休/請假時自動帶入工作內容
+function onHourAttTypeChange() {
+  const type = document.getElementById('hourAttType').value;
+  if (type && type !== 'normal') {
+    // 設定工作內容為請假類型
+    const workSel = document.getElementById('hourWorkContent');
+    if (workSel) {
+      // 若選項中沒有，加入暫用
+      if (!Array.from(workSel.options).some(o => o.value === type)) {
+        const opt = document.createElement('option');
+        opt.value = type;
+        opt.textContent = type;
+        workSel.appendChild(opt);
+      }
+      workSel.value = type;
+    }
+  }
+}
+
+function onQuickAttTypeChange() {
+  const type = document.getElementById('quickAttType').value;
+  if (type && type !== 'normal') {
+    const workSel = document.getElementById('quickAttWork');
+    if (workSel) {
+      if (!Array.from(workSel.options).some(o => o.value === type)) {
+        const opt = document.createElement('option');
+        opt.value = type;
+        opt.textContent = type;
+        workSel.appendChild(opt);
+      }
+      workSel.value = type;
+    }
+  }
+}
+
 // 月薪頁快速新增出勤
 function quickAddAttendance() {
   const empId = document.getElementById('calcEmp').value;
@@ -2908,15 +3019,18 @@ function quickAddAttendance() {
   if (hours <= 0) { alert('時數必須大於 0'); return; }
   const rate = emp.hourlyRate || Math.round((emp.baseSalary || 0) / 30 / 8);
 
+  const attType = document.getElementById('quickAttType').value || 'normal';
+  const isLeave = attType !== 'normal';
   const entry = {
     _id: 'd_' + Date.now(),
     date, empId, empName: emp.name, empNo: emp.id,
     type: 'hour',
     start, end, breakMin: brk,
     hours: Math.round(hours * 100) / 100,
-    rate,
-    subtotal: Math.round(hours * rate * 100) / 100,
-    workContent: work,
+    rate: isLeave ? 0 : rate,
+    subtotal: isLeave ? 0 : Math.round(hours * rate * 100) / 100,
+    workContent: work || attType,
+    attType: attType,
     lateMinutes: late,
     note: '',
     photo: null,
@@ -2926,6 +3040,13 @@ function quickAddAttendance() {
   try { save(STORE.daily, dailyEntries); }
   catch (e) { dailyEntries.pop(); alert('儲存失敗：' + e.message); return; }
   cloudSave('daily', entry);
+
+  // 若為特休，自動累加員工的 leaveUsed
+  if (attType === '特休') {
+    emp.leaveUsed = (parseFloat(emp.leaveUsed) || 0) + 1;
+    save(STORE.employees, employees);
+    cloudSave('employees', emp);
+  }
 
   const result = document.getElementById('quickAttResult');
   result.style.display = 'block';
@@ -2937,6 +3058,7 @@ function quickAddAttendance() {
   document.getElementById('quickAttBreak').value = '0';
   document.getElementById('quickAttLate').value = '';
   document.getElementById('quickAttWork').selectedIndex = 0;
+  document.getElementById('quickAttType').value = 'normal';
 
   // 刷新相關畫面
   refreshMonthlyAttendance();
