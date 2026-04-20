@@ -993,8 +993,15 @@
 
   <!-- 設定 -->
   <div class="panel" id="panel-setup">
-    <div class="card">
+    <!-- LINE LIFF 設定（隱藏，管理者要用可以按「顯示 LIFF 設定」）-->
+    <div style="text-align:right; margin-bottom:8px;">
+      <button type="button" onclick="toggleLiffSettings()" style="background:none; border:1px solid #d1d5db; color:#6b7280; padding:4px 10px; border-radius:8px; font-size:11px; cursor:pointer;">🔧 管理者設定</button>
+    </div>
+    <div class="card" id="liffSettingsCard" style="display:none;">
       <h3>LINE LIFF 設定</h3>
+      <div class="alert alert-warn" style="font-size:12px;">
+        ⚠ 此區為管理者設定區，一般使用者不需要修改。如不小心改了會導致員工無法登入。
+      </div>
       <div class="form-group">
         <label>LIFF ID (從 LINE Developers 取得)</label>
         <input type="text" id="liffId" placeholder="例如: 1234567890-AbCdEfGh">
@@ -1125,7 +1132,7 @@ const WORKSPACE_ID = 'default';
 let db = null;
 let cloudReady = false;
 let suppressSubscription = false;
-const DATA_MIGRATION_VERSION = '2026-04-20-cats-v5-semi-product';
+const DATA_MIGRATION_VERSION = '2026-04-20-cats-v6-workplaces-rename';
 
 function mergeDefaultCategories() {
   // 只跑一次；已跑過則略過。這樣使用者刪除的預設不會被復活
@@ -1139,7 +1146,6 @@ function mergeDefaultCategories() {
     rename.name = '半製品製作';
     save(STORE.workContents, workContents);
     if (cloudReady) cloudSave('workContents', rename);
-    // 同步更新歷史每日記錄中的 workContent 欄位
     let entriesChanged = false;
     dailyEntries.forEach(d => {
       if (d.workContent === '打樣') {
@@ -1149,6 +1155,37 @@ function mergeDefaultCategories() {
       }
     });
     if (entriesChanged) save(STORE.daily, dailyEntries);
+    changed = true;
+  }
+
+  // v6: 強制修正廠別名稱（舊版建立的 wp_1/2/3 可能還是舊名稱）
+  const wpRenames = {
+    wp_1: '暘基',
+    wp_2: '日盛暘',
+    wp_3: '草埔'
+  };
+  let wpChanged = false;
+  Object.entries(wpRenames).forEach(([id, newName]) => {
+    const wp = workplaces.find(x => x._id === id);
+    if (wp && wp.name !== newName) {
+      const oldName = wp.name;
+      wp.name = newName;
+      if (cloudReady) cloudSave('workplaces', wp);
+      // 同步員工的 workplace 欄位
+      employees.forEach(e => {
+        if (e.workplace === oldName) {
+          e.workplace = newName;
+          if (cloudReady) cloudSave('employees', e);
+        }
+      });
+      wpChanged = true;
+    }
+  });
+  if (wpChanged) {
+    save(STORE.workplaces, workplaces);
+    save(STORE.employees, employees);
+    refreshEmployeeList && refreshEmployeeList();
+    refreshWorkplaceDropdown && refreshWorkplaceDropdown();
     changed = true;
   }
   const sets = [
@@ -4125,6 +4162,18 @@ function clearAllData() {
 }
 
 // ========= LIFF =========
+function toggleLiffSettings() {
+  const card = document.getElementById('liffSettingsCard');
+  if (!card) return;
+  if (card.style.display === 'none') {
+    const pw = prompt('請輸入管理者密碼');
+    if (pw !== '$$$Ps880229') { alert('密碼錯誤'); return; }
+    card.style.display = 'block';
+  } else {
+    card.style.display = 'none';
+  }
+}
+
 function saveLiffId() {
   const id = document.getElementById('liffId').value.trim();
   save(STORE.liffId, id);
