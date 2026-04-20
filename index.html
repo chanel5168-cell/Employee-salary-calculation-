@@ -850,7 +850,7 @@ let employees = load(STORE.employees, []);
 let records = load(STORE.records, []);
 let dailyEntries = load(STORE.daily, []);
 let products = load(STORE.products, []);
-let deductCategories = load(STORE.deductCats, [
+const DEFAULT_DEDUCT_CATS = [
   { _id: 'dc_default_1', name: '借支', defaultAmount: 0 },
   { _id: 'dc_default_2', name: '水電', defaultAmount: 0 },
   { _id: 'dc_default_3', name: '瓦斯', defaultAmount: 0 },
@@ -859,16 +859,18 @@ let deductCategories = load(STORE.deductCats, [
   { _id: 'dc_default_6', name: '全勤扣減', defaultAmount: 0 },
   { _id: 'dc_default_7', name: '遲到扣款', defaultAmount: 0 },
   { _id: 'dc_default_8', name: '代扣稅款', defaultAmount: 0 }
-]);
-let bonusCategories = load(STORE.bonusCats, [
+];
+let deductCategories = load(STORE.deductCats, DEFAULT_DEDUCT_CATS);
+const DEFAULT_BONUS_CATS = [
   { _id: 'bc_default_1', name: '達標獎金', defaultAmount: 0 },
   { _id: 'bc_default_2', name: '全勤獎金', defaultAmount: 0 },
   { _id: 'bc_default_3', name: '交通津貼', defaultAmount: 0 },
   { _id: 'bc_default_4', name: '伙食津貼', defaultAmount: 0 }
-]);
+];
+let bonusCategories = load(STORE.bonusCats, DEFAULT_BONUS_CATS);
 let currentDeductItems = [];
 let currentBonusItems = [];
-let workContents = load(STORE.workContents, [
+const DEFAULT_WORK_CONTENTS = [
   { _id: 'wc_1', name: '烤漆' },
   { _id: 'wc_2', name: '送貨' },
   { _id: 'wc_3', name: '整理倉庫' },
@@ -876,8 +878,8 @@ let workContents = load(STORE.workContents, [
   { _id: 'wc_5', name: '送修零件' },
   { _id: 'wc_6', name: '包裝' },
   { _id: 'wc_7', name: '檢驗' }
-]);
-let leaveCategories = load(STORE.leaveCats, [
+];
+const DEFAULT_LEAVE_CATS = [
   { _id: 'lc_1', name: '特休', payType: 'full' },
   { _id: 'lc_2', name: '婚假', payType: 'full' },
   { _id: 'lc_3', name: '喪假', payType: 'full' },
@@ -887,7 +889,9 @@ let leaveCategories = load(STORE.leaveCats, [
   { _id: 'lc_7', name: '病假 (普通傷病)', payType: 'half' },
   { _id: 'lc_8', name: '事假', payType: 'none' },
   { _id: 'lc_9', name: '颱風假', payType: 'none' }
-]);
+];
+let workContents = load(STORE.workContents, DEFAULT_WORK_CONTENTS);
+let leaveCategories = load(STORE.leaveCats, DEFAULT_LEAVE_CATS);
 let currentLeaveItems = [];
 let rates = load(STORE.rates, { labor: 2.42, health: 1.655 });
 let editingEmpId = null;
@@ -911,6 +915,37 @@ const WORKSPACE_ID = 'default';
 let db = null;
 let cloudReady = false;
 let suppressSubscription = false;
+const DATA_MIGRATION_VERSION = '2026-04-20-cats-v2';
+
+function mergeDefaultCategories() {
+  // 只跑一次；已跑過則略過。這樣使用者刪除的預設不會被復活
+  const done = localStorage.getItem('salary_defaults_migrated');
+  if (done === DATA_MIGRATION_VERSION) return;
+  let changed = false;
+  const sets = [
+    { key: STORE.deductCats, arr: deductCategories, defaults: DEFAULT_DEDUCT_CATS, cloud: 'deductCats' },
+    { key: STORE.bonusCats, arr: bonusCategories, defaults: DEFAULT_BONUS_CATS, cloud: 'bonusCats' },
+    { key: STORE.workContents, arr: workContents, defaults: DEFAULT_WORK_CONTENTS, cloud: 'workContents' },
+    { key: STORE.leaveCats, arr: leaveCategories, defaults: DEFAULT_LEAVE_CATS, cloud: 'leaveCats' }
+  ];
+  sets.forEach(s => {
+    const ids = new Set(s.arr.map(x => x._id));
+    const missing = s.defaults.filter(d => !ids.has(d._id));
+    if (missing.length > 0) {
+      missing.forEach(d => s.arr.push(d));
+      save(s.key, s.arr);
+      missing.forEach(d => { if (cloudReady) cloudSave(s.cloud, d); });
+      changed = true;
+    }
+  });
+  localStorage.setItem('salary_defaults_migrated', DATA_MIGRATION_VERSION);
+  if (changed) {
+    refreshDeductCatList && refreshDeductCatList();
+    refreshBonusCatList && refreshBonusCatList();
+    refreshLeaveCatList && refreshLeaveCatList();
+    refreshWorkContentDropdown && refreshWorkContentDropdown();
+  }
+}
 
 function setSyncStatus(text, tone) {
   const el = document.getElementById('syncStatus');
@@ -974,6 +1009,8 @@ async function migrateAndSubscribe() {
     if (totalSynced > 0) {
       setSyncStatus(`已補傳 ${totalSynced} 筆遺漏記錄`, 'syncing');
     }
+    // 補齊新的預設類別到雲端 (只執行一次)
+    mergeDefaultCategories();
     subscribeAll();
   } catch (e) {
     console.error('Migration/Subscribe failed:', e);
@@ -2828,22 +2865,30 @@ function exportToExcel() {
 
   // 明細表
   const detailHead = [
-    '月份','員工編號','姓名','職稱','出勤天數','請假天數',
+    '月份','員工編號','姓名','職稱','電話','到職日','薪資制',
+    '出勤天數','請假天數','請假明細',
     '平日加班(時)','假日加班(時)','底薪','論件收入','計時收入','特休折算天','特休折算金',
     '平日加班費','假日加班費','獎金','獎金明細',
     '請假扣款','應發合計','勞保','健保','其他扣款','扣款明細','扣除合計','實發金額','備註'
   ];
   const detailRows = [detailHead];
   data.forEach(r => {
+    const emp = employees.find(x => x._id === r.empId) || {};
     const deductDetail = (r.deductItems && r.deductItems.length > 0)
       ? r.deductItems.map(x => `${x.name}:${x.amount}`).join(', ')
       : '';
     const bonusDetail = (r.bonusItems && r.bonusItems.length > 0)
       ? r.bonusItems.map(x => `${x.name}:${x.amount}`).join(', ')
       : '';
+    const leaveDetail = (r.leaveItems && r.leaveItems.length > 0)
+      ? r.leaveItems.map(x => `${x.categoryName}(${payTypeLabel(x.payType)}):${x.days}天`).join(', ')
+      : '';
+    const empType = emp.isHourly ? '時薪制' : '月薪制';
     detailRows.push([
       r.month, r.empNo || '', r.empName, r.empTitle || '',
-      r.workDays || 0, r.leaveDays || 0, r.ot1 || 0, r.ot2 || 0,
+      emp.phone || '', emp.hireDate || '', empType,
+      r.workDays || 0, r.leaveDays || 0, leaveDetail,
+      r.ot1 || 0, r.ot2 || 0,
       r.base, r.pieceIncome || 0, r.hourIncome || 0,
       r.leavePayDays || 0, r.leavePayAmount || 0,
       r.otPay1, r.otPay2, r.bonus, bonusDetail,
@@ -2853,8 +2898,46 @@ function exportToExcel() {
   });
   if (data.length > 0) {
     const ws2 = XLSX.utils.aoa_to_sheet(detailRows);
-    ws2['!cols'] = detailHead.map(h => ({wch: h.length > 6 ? 12 : 10}));
+    ws2['!cols'] = detailHead.map(h => {
+      if (h === '請假明細' || h === '獎金明細' || h === '扣款明細') return {wch: 25};
+      if (h === '電話' || h === '到職日') return {wch: 12};
+      if (h === '備註') return {wch: 20};
+      return {wch: 10};
+    });
     XLSX.utils.book_append_sheet(wb, ws2, '月薪明細');
+  }
+
+  // === 員工資料 + 特休狀態工作表 ===
+  if (employees.length > 0) {
+    const empHead = [
+      '員工編號','姓名','職稱','電話','到職日','到職年資','薪資制','每週工時',
+      '月薪','時薪','特休應有','特休已休','特休剩餘','備註'
+    ];
+    const empRows = [empHead];
+    const baseDate = new Date();
+    employees.forEach(e => {
+      const info = calcAnnualLeave(e.hireDate, baseDate.toISOString().slice(0,10));
+      const override = parseFloat(e.leaveEntitledOverride);
+      const entitled = e.isHourly
+        ? (e.weeklyHours > 0 ? Math.round(info.entitled * e.weeklyHours / 40 * 10) / 10 : (isNaN(override) ? 0 : override))
+        : info.entitled;
+      const used = parseFloat(e.leaveUsed) || 0;
+      const remaining = Math.max(0, entitled - used);
+      const tenure = info.valid
+        ? (info.totalMonths < 6 ? `${info.totalMonths} 個月` : `${info.years} 年 ${info.months} 月`)
+        : '未填';
+      empRows.push([
+        e.id || '', e.name, e.title || '', e.phone || '', e.hireDate || '',
+        tenure, e.isHourly ? '時薪制' : '月薪制', e.weeklyHours || '',
+        e.baseSalary || 0, e.hourlyRate || '', entitled, used, remaining, e.note || ''
+      ]);
+    });
+    const wsEmp = XLSX.utils.aoa_to_sheet(empRows);
+    wsEmp['!cols'] = [
+      {wch:10},{wch:12},{wch:14},{wch:14},{wch:12},{wch:14},{wch:8},{wch:10},
+      {wch:10},{wch:10},{wch:10},{wch:10},{wch:10},{wch:20}
+    ];
+    XLSX.utils.book_append_sheet(wb, wsEmp, '員工資料');
   }
 
   // === 每日記錄工作表 ===
@@ -3148,6 +3231,7 @@ function init() {
   refreshMonthlyDaily();
   refreshProductList();
   refreshWorkContentDropdown();
+  mergeDefaultCategories();
   renderDeductItems();
   renderBonusItems();
   renderLeaveItems();
