@@ -1624,7 +1624,7 @@ function roundWorkMinutes(mins) {
 
 // 自動帶入遲到分鐘：以上班時間「整點往前」為基準
 // 例：8:06 → 遲到 6 分；8:00 → 遲到 0 分
-// 使用者可手動覆寫：若自動填入後使用者又改了，尊重使用者的值
+// 僅在遲到欄位「完全空白」時自動填入，其他情況完全尊重使用者的值
 function autoFillLate(kind) {
   const startId = kind === 'hour' ? 'hourStart' : 'quickAttStart';
   const lateId = kind === 'hour' ? 'hourLate' : 'quickAttLate';
@@ -1633,24 +1633,16 @@ function autoFillLate(kind) {
   if (!startEl || !lateEl) return;
   const start = startEl.value;
   if (!start) return;
-  const autoStamp = lateEl.dataset.autoStamp;
-  // 規則 1: 若無 autoStamp 但已有值（編輯既有記錄 / 使用者先手填）→ 不覆寫
-  if (!autoStamp && lateEl.value !== '') return;
-  // 規則 2: 若有 autoStamp 但目前值 ≠ 上次自動值 → 使用者改過，不覆寫
-  if (autoStamp && lateEl.value !== autoStamp && lateEl.value !== '') return;
+  // 若遲到欄已有任何值（包含 0）→ 不動它
+  if (lateEl.value !== '' && lateEl.value !== null) return;
   const [h, m] = start.split(':').map(Number);
   const lateMins = (isNaN(m) || m <= 0) ? 0 : m;
-  lateEl.value = lateMins || '';
-  lateEl.dataset.autoStamp = String(lateMins || '');
+  if (lateMins > 0) lateEl.value = lateMins;
 }
 
-// 當使用者手動編輯遲到欄位時，清掉 autoStamp 鎖住該手動值
+// 使用者手動編輯遲到欄位（保留為 placeholder，無特殊處理）
 function onLateInput(kind) {
-  const lateId = kind === 'hour' ? 'hourLate' : 'quickAttLate';
-  const lateEl = document.getElementById(lateId);
-  if (!lateEl) return;
-  // 標記為使用者手動修改（用特殊 token 讓它不等於任何數字）
-  lateEl.dataset.autoStamp = '__manual__';
+  // 純粹保留給 HTML 用，不做任何事 — 讓使用者自由編輯
 }
   const spanMins = calcSpanMins(start, end);
   const workMins = Math.max(0, spanMins - (breakMin || 0));
