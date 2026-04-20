@@ -489,7 +489,7 @@
       <div class="form-row">
         <div class="form-group">
           <label>開始時間 *</label>
-          <input type="time" id="hourStart" oninput="updateHourPreview()">
+          <input type="time" id="hourStart" oninput="updateHourPreview(); autoFillLate('hour')">
         </div>
         <div class="form-group">
           <label>結束時間 *</label>
@@ -541,8 +541,9 @@
       </div>
       <div class="alert alert-info" style="font-size:12px; padding:8px;">
         📋 <strong>計時規則</strong><br>
-        • 實際工作時數 = (總時段 − 休息) 後依規則四捨五入<br>
-        • 不足 10 分鐘不計，30 分鐘為單位<br>
+        • 實際工作時數 = (總時段 − 休息) 後依規則捨去<br>
+        • <strong>當日不足 30 分鐘不計</strong>，滿 30 分為一單位（捨去）<br>
+        • 範例：45分→30分，59分→30分，60分→60分，89分→60分<br>
         • 每月遲到累計 &le; 30 分免扣，超過以「時薪 ÷ 60 × 超過分鐘」扣除
       </div>
       <div class="form-row">
@@ -863,7 +864,7 @@
       <div class="form-row">
         <div class="form-group">
           <label>上班時間</label>
-          <input type="time" id="quickAttStart">
+          <input type="time" id="quickAttStart" oninput="autoFillLate('quick')">
         </div>
         <div class="form-group">
           <label>下班時間</label>
@@ -1074,7 +1075,7 @@ const DEFAULT_WORK_CONTENTS = [
   { _id: 'wc_1', name: '烤漆' },
   { _id: 'wc_2', name: '送貨' },
   { _id: 'wc_3', name: '整理倉庫' },
-  { _id: 'wc_4', name: '打樣' },
+  { _id: 'wc_4', name: '半製品製作' },
   { _id: 'wc_5', name: '送修零件' },
   { _id: 'wc_6', name: '包裝' },
   { _id: 'wc_7', name: '檢驗' },
@@ -1124,13 +1125,32 @@ const WORKSPACE_ID = 'default';
 let db = null;
 let cloudReady = false;
 let suppressSubscription = false;
-const DATA_MIGRATION_VERSION = '2026-04-20-cats-v4-overtime';
+const DATA_MIGRATION_VERSION = '2026-04-20-cats-v5-semi-product';
 
 function mergeDefaultCategories() {
   // 只跑一次；已跑過則略過。這樣使用者刪除的預設不會被復活
   const done = localStorage.getItem('salary_defaults_migrated');
   if (done === DATA_MIGRATION_VERSION) return;
   let changed = false;
+
+  // v5: 把舊的「打樣」改名為「半製品製作」
+  const rename = workContents.find(w => w.name === '打樣');
+  if (rename) {
+    rename.name = '半製品製作';
+    save(STORE.workContents, workContents);
+    if (cloudReady) cloudSave('workContents', rename);
+    // 同步更新歷史每日記錄中的 workContent 欄位
+    let entriesChanged = false;
+    dailyEntries.forEach(d => {
+      if (d.workContent === '打樣') {
+        d.workContent = '半製品製作';
+        entriesChanged = true;
+        if (cloudReady) cloudSave('daily', d);
+      }
+    });
+    if (entriesChanged) save(STORE.daily, dailyEntries);
+    changed = true;
+  }
   const sets = [
     { key: STORE.deductCats, arr: deductCategories, defaults: DEFAULT_DEDUCT_CATS, cloud: 'deductCats' },
     { key: STORE.bonusCats, arr: bonusCategories, defaults: DEFAULT_BONUS_CATS, cloud: 'bonusCats' },
@@ -1433,11 +1453,21 @@ function refreshEmployeeList() {
     box.innerHTML = '<div class="empty">尚無員工資料，請新增</div>';
     return;
   }
-  box.innerHTML = employees.map(e => `
+  box.innerHTML = employees.map(e => {
+    // 薪資顯示：時薪制凸顯時薪、月薪制凸顯月薪
+    const salaryInfo = e.isHourly
+      ? `<span class="badge" style="background:#fef3c7; color:#92400e;">時薪制</span> 時薪 NT$ <strong>${formatMoney(e.hourlyRate || 0)}</strong>${e.baseSalary > 0 ? ` · 月薪 NT$ ${formatMoney(e.baseSalary)}` : ''}`
+      : `月薪 NT$ <strong>${formatMoney(e.baseSalary)}</strong>${e.hourlyRate > 0 ? ` · 時薪 NT$ ${formatMoney(e.hourlyRate)}` : ''}`;
+    const extraInfo = [];
+    if (e.insuredSalary) extraInfo.push(`投保 NT$ ${formatMoney(e.insuredSalary)}`);
+    if (e.dependents > 0) extraInfo.push(`眷口 ${e.dependents}`);
+    if (e.pensionSelf > 0) extraInfo.push(`自提退 ${e.pensionSelf}%`);
+    return `
     <div class="employee-item">
       <div class="info">
         <div class="name">${escapeHtml(e.name)} <span class="badge">${escapeHtml(e.id || '-')}</span>${e.workplace ? ` <span class="badge" style="background:#ddd6fe; color:#5b21b6;">${escapeHtml(e.workplace)}</span>` : ''}</div>
-        <div class="sub">${escapeHtml(e.title || '未填')} · 月薪 NT$ ${formatMoney(e.baseSalary)}${e.insuredSalary ? ` · 投保 NT$ ${formatMoney(e.insuredSalary)}` : ''}</div>
+        <div class="sub">${escapeHtml(e.title || '未填')} · ${salaryInfo}</div>
+        ${extraInfo.length > 0 ? `<div class="sub" style="font-size:11px; color:#6b7280;">${extraInfo.join(' · ')}</div>` : ''}
         ${e.phone ? `<div class="sub">📞 <a href="tel:${escapeHtml(e.phone)}" style="color:#06C755;">${escapeHtml(e.phone)}</a></div>` : ''}
       </div>
       <div class="actions">
@@ -1445,7 +1475,8 @@ function refreshEmployeeList() {
         <button class="btn btn-danger btn-sm" onclick="deleteEmployee('${e._id}')">刪除</button>
       </div>
     </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 function saveEmployee() {
@@ -1584,16 +1615,32 @@ function calcSpanMins(start, end) {
   return Math.max(0, mins);
 }
 
-// 時數四捨五入規則：不足 10 分鐘不計，30 分鐘為單位
-// 範例：0~9→0，10~29→30，30~39→30，40~59→60，60~69→60，70~89→90，...
+// 時數規則：不足 30 分鐘不計，30 分鐘為單位（捨去）
+// 範例：0~29→0，30~59→30，60~89→60，90~119→90，120~149→120，...
 function roundWorkMinutes(mins) {
-  if (mins < 10) return 0;
-  const fullUnits = Math.floor(mins / 30);
-  const extra = mins % 30;
-  return extra < 10 ? fullUnits * 30 : (fullUnits + 1) * 30;
+  if (mins < 30) return 0;
+  return Math.floor(mins / 30) * 30;
 }
 
-function calcHours(start, end, breakMin) {
+// 自動帶入遲到分鐘：以上班時間「整點往前」為基準
+// 例：8:06 → 遲到 6 分；8:00 → 遲到 0 分
+// 使用者可手動覆寫：若自動填入後使用者又改了，尊重使用者的值
+function autoFillLate(kind) {
+  const startId = kind === 'hour' ? 'hourStart' : 'quickAttStart';
+  const lateId = kind === 'hour' ? 'hourLate' : 'quickAttLate';
+  const startEl = document.getElementById(startId);
+  const lateEl = document.getElementById(lateId);
+  if (!startEl || !lateEl) return;
+  const start = startEl.value;
+  if (!start) return;
+  // 若使用者曾手動改過遲到（value 與上次自動值不同），則不覆寫
+  const autoStamp = lateEl.dataset.autoStamp;
+  if (autoStamp && lateEl.value !== autoStamp && lateEl.value !== '') return;
+  const [h, m] = start.split(':').map(Number);
+  const lateMins = (isNaN(m) || m <= 0) ? 0 : m;
+  lateEl.value = lateMins || '';
+  lateEl.dataset.autoStamp = String(lateMins || '');
+}
   const spanMins = calcSpanMins(start, end);
   const workMins = Math.max(0, spanMins - (breakMin || 0));
   const rounded = roundWorkMinutes(workMins);
@@ -1627,7 +1674,7 @@ function updateHourPreview() {
     document.getElementById('hourSpan').textContent = spanHours.toFixed(2) + ' 小時';
     document.getElementById('hourBreakShow').textContent = '− ' + (brk / 60).toFixed(2) + ' 小時 (' + brk + '分)';
     const rounding = rawWorkMins !== roundedMins
-      ? ` <span style="color:#ef4444; font-size:11px;">(原 ${rawWorkMins} 分 → 依規定四捨五入為 ${roundedMins} 分)</span>`
+      ? ` <span style="color:#ef4444; font-size:11px;">(原 ${rawWorkMins} 分 → 依規定捨去為 ${roundedMins} 分${roundedMins === 0 ? '，當日不足 30 分不計' : ''})</span>`
       : '';
     document.getElementById('hourTotal').innerHTML = workHours.toFixed(2) + ' 小時' + rounding;
   } else {
