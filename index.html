@@ -1644,6 +1644,8 @@ function autoFillLate(kind) {
 function onLateInput(kind) {
   // 純粹保留給 HTML 用，不做任何事 — 讓使用者自由編輯
 }
+
+function calcHours(start, end, breakMin) {
   const spanMins = calcSpanMins(start, end);
   const workMins = Math.max(0, spanMins - (breakMin || 0));
   const rounded = roundWorkMinutes(workMins);
