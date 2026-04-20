@@ -1151,7 +1151,7 @@ const DEFAULT_WORK_CONTENTS = [
   { _id: 'wc_1', name: '烤漆' },
   { _id: 'wc_2', name: '送貨' },
   { _id: 'wc_3', name: '整理倉庫' },
-  { _id: 'wc_4', name: '半製品製作' },
+  { _id: 'wc_4', name: '半成品加工' },
   { _id: 'wc_5', name: '送修零件' },
   { _id: 'wc_6', name: '包裝' },
   { _id: 'wc_7', name: '檢驗' },
@@ -1228,7 +1228,7 @@ const WORKSPACE_ID = 'default';
 let db = null;
 let cloudReady = false;
 let suppressSubscription = false;
-const DATA_MIGRATION_VERSION = '2026-04-20-cats-v7-holidays-115';
+const DATA_MIGRATION_VERSION = '2026-04-20-cats-v8-semi-product-rename';
 
 function mergeDefaultCategories() {
   // 只跑一次；已跑過則略過。這樣使用者刪除的預設不會被復活
@@ -1236,23 +1236,34 @@ function mergeDefaultCategories() {
   if (done === DATA_MIGRATION_VERSION) return;
   let changed = false;
 
-  // v5: 把舊的「打樣」改名為「半製品製作」
-  const rename = workContents.find(w => w.name === '打樣');
-  if (rename) {
-    rename.name = '半製品製作';
-    save(STORE.workContents, workContents);
-    if (cloudReady) cloudSave('workContents', rename);
-    let entriesChanged = false;
-    dailyEntries.forEach(d => {
-      if (d.workContent === '打樣') {
-        d.workContent = '半製品製作';
-        entriesChanged = true;
-        if (cloudReady) cloudSave('daily', d);
-      }
-    });
-    if (entriesChanged) save(STORE.daily, dailyEntries);
-    changed = true;
-  }
+  // v5+v8: 把舊的「打樣」「半製品製作」全部統一為「半成品加工」
+  const renameMap = { '打樣': '半成品加工', '半製品製作': '半成品加工' };
+  let wcChanged = false;
+  workContents.forEach(w => {
+    if (renameMap[w.name]) {
+      w.name = renameMap[w.name];
+      wcChanged = true;
+      if (cloudReady) cloudSave('workContents', w);
+    }
+  });
+  // 去除重名（舊版可能同時有打樣+半製品製作）
+  const seen = new Set();
+  workContents = workContents.filter(w => {
+    if (seen.has(w.name)) { if (cloudReady) cloudDelete('workContents', w._id); return false; }
+    seen.add(w.name); return true;
+  });
+  if (wcChanged) save(STORE.workContents, workContents);
+  // 同步歷史 dailyEntries
+  let entriesChanged = false;
+  dailyEntries.forEach(d => {
+    if (renameMap[d.workContent]) {
+      d.workContent = renameMap[d.workContent];
+      entriesChanged = true;
+      if (cloudReady) cloudSave('daily', d);
+    }
+  });
+  if (entriesChanged) save(STORE.daily, dailyEntries);
+  if (wcChanged || entriesChanged) changed = true;
 
   // v6: 強制修正廠別名稱（舊版建立的 wp_1/2/3 可能還是舊名稱）
   const wpRenames = {
@@ -4561,6 +4572,13 @@ async function exportPhotosZip() {
 }
 
 // ========= 統計 =========
+let summaryExpanded = {}; // 各月份展開狀態
+
+function toggleSummaryDetail(month) {
+  summaryExpanded[month] = !summaryExpanded[month];
+  updateSummary();
+}
+
 function updateSummary() {
   const box = document.getElementById('summaryBox');
   if (records.length === 0) {
@@ -4570,18 +4588,35 @@ function updateSummary() {
   const months = [...new Set(records.map(r => r.month))].sort();
   const rows = months.map(m => {
     const ms = records.filter(r => r.month === m);
-    const g = ms.reduce((a,b) => a + b.gross, 0);
-    const n = ms.reduce((a,b) => a + b.net, 0);
-    return `<tr>
-      <td>${m}</td>
+    const g = ms.reduce((a,b) => a + (b.gross || 0), 0);
+    const n = ms.reduce((a,b) => a + (b.net || 0), 0);
+    const isOpen = !!summaryExpanded[m];
+    const arrow = isOpen ? '▼' : '▶';
+    let detailRows = '';
+    if (isOpen) {
+      // 依員工編號排序
+      const sorted = [...ms].sort((a,b) => (a.empNo || '').localeCompare(b.empNo || ''));
+      const detail = sorted.map(r => `
+        <tr style="background:#f8f9fa; font-size:13px;">
+          <td style="padding-left:24px;">${r.empNo || ''} ${r.empName || ''}</td>
+          <td>${r.empTitle || ''}</td>
+          <td class="currency">${formatMoney(r.gross || 0)}</td>
+          <td class="currency">${formatMoney(r.net || 0)}</td>
+        </tr>
+      `).join('');
+      detailRows = detail;
+    }
+    return `<tr style="cursor:pointer;" onclick="toggleSummaryDetail('${m}')">
+      <td><strong>${arrow} ${m}</strong></td>
       <td>${ms.length} 人</td>
-      <td class="currency">${formatMoney(g)}</td>
-      <td class="currency">${formatMoney(n)}</td>
-    </tr>`;
+      <td class="currency"><strong>${formatMoney(g)}</strong></td>
+      <td class="currency"><strong>${formatMoney(n)}</strong></td>
+    </tr>${detailRows}`;
   }).join('');
   box.innerHTML = `
+    <div style="font-size:12px; color:#666; margin-bottom:6px;">點月份列可展開明細，檢查每位員工的應發/實發金額</div>
     <table>
-      <thead><tr><th>月份</th><th>人數</th><th class="currency">應發合計</th><th class="currency">實發合計</th></tr></thead>
+      <thead><tr><th>月份 / 員工</th><th>人數 / 職稱</th><th class="currency">應發合計</th><th class="currency">實發合計</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
   `;
