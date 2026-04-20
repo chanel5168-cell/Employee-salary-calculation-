@@ -265,11 +265,17 @@
           <input type="tel" id="empPhone" placeholder="0912345678">
         </div>
       </div>
-      <div class="form-group">
-        <label>到職日</label>
-        <input type="date" id="empHireDate" oninput="updateEmpLeaveHint()">
-        <div id="empLeaveHint" style="display:none; margin-top:6px; padding:8px 10px; background:#f0fdf4; border-left:3px solid #06C755; border-radius:4px; font-size:12px; color:#166534;"></div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>到職日</label>
+          <input type="date" id="empHireDate" oninput="updateEmpLeaveHint()">
+        </div>
+        <div class="form-group">
+          <label>投保日 <span style="font-size:10px; color:#6b7280;">(勞健保起算日)</span></label>
+          <input type="date" id="empInsuredDate">
+        </div>
       </div>
+      <div id="empLeaveHint" style="display:none; margin-top:-6px; margin-bottom:12px; padding:8px 10px; background:#f0fdf4; border-left:3px solid #06C755; border-radius:4px; font-size:12px; color:#166534;"></div>
       <div class="form-row">
         <div class="form-group">
           <label>月薪 (底薪) NT$ *</label>
@@ -293,6 +299,18 @@
             </select>
             <button type="button" onclick="toggleWorkplaceManager()" style="padding:6px 10px; border:1px solid #06C755; background:white; color:#06C755; border-radius:6px; cursor:pointer; font-size:12px;">⚙</button>
           </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>健保眷口數</label>
+          <input type="number" id="empDependents" placeholder="0" min="0" max="3" step="1">
+          <div style="font-size:11px; color:#6b7280; margin-top:2px;">健保費 = 月投保薪資 × 1.655% × (1 + 眷口數)，眷口上限 3 口</div>
+        </div>
+        <div class="form-group">
+          <label>自提勞退 %</label>
+          <input type="number" id="empPensionSelf" placeholder="0" min="0" max="6" step="0.5">
+          <div style="font-size:11px; color:#6b7280; margin-top:2px;">0~6%，從薪資扣除，可享所得稅優惠</div>
         </div>
       </div>
       <!-- 工作地點管理 -->
@@ -655,6 +673,21 @@
         <div id="leaveCatList"></div>
         <div style="font-size:11px; color:#6b7280; margin-top:6px;">全薪=不扣錢，半薪=扣一半，不給薪=照日薪扣</div>
       </div>
+      <!-- 時薪設定（時薪制員工必填，月薪制會自動帶出）-->
+      <div style="background:#fef3c7; border:1px solid #f59e0b; border-radius:8px; padding:10px; margin-bottom:10px;">
+        <div style="font-weight:700; color:#92400e; margin-bottom:6px; font-size:13px;">⏱ 時薪設定 <span style="font-size:10px; font-weight:400;">(時薪制員工必填正確時薪才會算對薪水)</span></div>
+        <div class="form-row">
+          <div class="form-group" style="margin-bottom:0;">
+            <label>本月時薪 NT$</label>
+            <input type="number" id="monthHourly" placeholder="依員工資料" min="0" step="0.01">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label>加班時薪 NT$ <span style="font-size:10px; color:#6b7280;">(預設同時薪)</span></label>
+            <input type="number" id="monthOtHourly" placeholder="依時薪" min="0" step="0.01">
+          </div>
+        </div>
+      </div>
+
       <div class="form-row">
         <div class="form-group">
           <label>平日加班時數 (×1.34)</label>
@@ -1421,12 +1454,15 @@ function saveEmployee() {
     title: document.getElementById('empTitle').value.trim(),
     phone: document.getElementById('empPhone').value.trim(),
     hireDate: document.getElementById('empHireDate').value,
+    insuredDate: document.getElementById('empInsuredDate').value,
     baseSalary: baseSalary,
     hourlyRate: parseFloat(document.getElementById('empHourlyRate').value) || Math.round(baseSalary / 30 / 8),
     isHourly: document.getElementById('empIsHourly').checked,
     weeklyHours: parseFloat(document.getElementById('empWeeklyHours').value) || 0,
     dailyHours: parseFloat(document.getElementById('empDailyHours').value) || 0,
     insuredSalary: parseFloat(document.getElementById('empInsuredSalary').value) || 0,
+    dependents: parseFloat(document.getElementById('empDependents').value) || 0,
+    pensionSelf: parseFloat(document.getElementById('empPensionSelf').value) || 0,
     workplace: document.getElementById('empWorkplace').value,
     note: document.getElementById('empNote').value.trim()
   };
@@ -1452,6 +1488,7 @@ function editEmployee(id) {
   document.getElementById('empTitle').value = e.title || '';
   document.getElementById('empPhone').value = e.phone || '';
   document.getElementById('empHireDate').value = e.hireDate || '';
+  document.getElementById('empInsuredDate').value = e.insuredDate || '';
   updateEmpLeaveHint();
   document.getElementById('empBaseSalary').value = e.baseSalary;
   document.getElementById('empHourlyRate').value = e.hourlyRate || '';
@@ -1459,6 +1496,8 @@ function editEmployee(id) {
   document.getElementById('empWeeklyHours').value = e.weeklyHours || '';
   document.getElementById('empDailyHours').value = e.dailyHours || '';
   document.getElementById('empInsuredSalary').value = e.insuredSalary || '';
+  document.getElementById('empDependents').value = e.dependents || '';
+  document.getElementById('empPensionSelf').value = e.pensionSelf || '';
   document.getElementById('empWorkplace').value = e.workplace || '';
   toggleHourlyFields();
   document.getElementById('empNote').value = e.note || '';
@@ -1476,7 +1515,7 @@ function deleteEmployee(id) {
 
 function clearEmpForm() {
   editingEmpId = null;
-  ['empId','empName','empTitle','empPhone','empHireDate','empBaseSalary','empHourlyRate','empInsuredSalary','empNote']
+  ['empId','empName','empTitle','empPhone','empHireDate','empInsuredDate','empBaseSalary','empHourlyRate','empInsuredSalary','empDependents','empPensionSelf','empNote']
     .forEach(id => document.getElementById(id).value = '');
   document.getElementById('empIsHourly').checked = false;
   document.getElementById('empWorkplace').value = '';
@@ -2947,6 +2986,9 @@ function updateDailyRateHint() {
   const hint = document.getElementById('dailyRateHint');
   if (!hint) return;
   if (!emp) { hint.style.display = 'none'; return; }
+  // 自動帶出員工時薪到月薪表單
+  const mh = document.getElementById('monthHourly');
+  if (mh && !mh.value && emp.hourlyRate > 0) mh.value = emp.hourlyRate;
   const dailyRate = getDailyRate(emp);
   if (emp.isHourly) {
     hint.style.display = 'block';
@@ -3168,13 +3210,20 @@ function onProductSelected() {
 }
 
 function computeSalary(emp, input) {
-  const base = emp.baseSalary;
-  const hourly = emp.hourlyRate || Math.round(base / 30 / 8);
-  // 日薪：時薪制用 (週工時/5)×時薪；月薪制用 月薪/30
+  const base = emp.baseSalary || 0;
+  // 優先順序：月薪表單輸入 > 員工資料 > 月薪推算
+  const hourly = input.monthHourly > 0
+    ? input.monthHourly
+    : (emp.hourlyRate || (base > 0 ? Math.round(base / 30 / 8) : 0));
+  const otHourly = input.monthOtHourly > 0 ? input.monthOtHourly : hourly;
+  // 日薪：時薪制優先用 每日工時×時薪；月薪制用 月薪/30
   let dailyRate;
   if (emp.isHourly) {
-    const weekly = emp.weeklyHours || 40;
-    dailyRate = Math.round((weekly / 5) * hourly);
+    if (emp.dailyHours > 0) dailyRate = Math.round(emp.dailyHours * hourly);
+    else {
+      const weekly = emp.weeklyHours || 40;
+      dailyRate = Math.round((weekly / 5) * hourly);
+    }
   } else {
     dailyRate = Math.round(base / 30);
   }
@@ -3192,33 +3241,39 @@ function computeSalary(emp, input) {
     dailyDeduct = Math.round(dailyRate * (input.leaveDays || 0));
   }
 
-  const otPay1 = Math.round(hourly * 1.34 * (input.ot1 || 0));
-  const otPay2 = Math.round(hourly * 1.67 * (input.ot2 || 0));
+  const otPay1 = Math.round(otHourly * 1.34 * (input.ot1 || 0));
+  const otPay2 = Math.round(otHourly * 1.67 * (input.ot2 || 0));
 
   const pieceIncome = input.pieceIncome || 0;
   const hourIncome = input.hourIncome || 0;
   const leavePayDays = input.leavePayDays || 0;
   const leavePayAmount = input.leavePayAmount || (leavePayDays > 0 ? Math.round(dailyRate * leavePayDays) : 0);
 
-  const insBase = emp.insuredSalary > 0 ? emp.insuredSalary : base;
+  const insBase = emp.insuredSalary > 0 ? emp.insuredSalary : (base > 0 ? base : hourly * 8 * 30);
+  const dependents = Math.min(3, parseFloat(emp.dependents) || 0);
   const laborIns = input.laborIns != null && input.laborIns !== ''
     ? parseFloat(input.laborIns)
     : Math.round(insBase * rates.labor / 100);
+  // 健保 = 月投保薪資 × 1.655% × (1 + 眷口數)
   const healthIns = input.healthIns != null && input.healthIns !== ''
     ? parseFloat(input.healthIns)
-    : Math.round(insBase * rates.health / 100);
+    : Math.round(insBase * rates.health / 100 * (1 + dependents));
+  // 自提勞退（員工端扣款，員工自願 0~6%）
+  const pensionSelfRate = Math.min(6, parseFloat(emp.pensionSelf) || 0);
+  const pensionSelf = Math.round(insBase * pensionSelfRate / 100);
 
   const gross = base + otPay1 + otPay2 + pieceIncome + hourIncome + leavePayAmount + (input.bonus || 0) - dailyDeduct;
-  const deductions = laborIns + healthIns + (input.otherDeduct || 0);
+  const deductions = laborIns + healthIns + pensionSelf + (input.otherDeduct || 0);
   const net = gross - deductions;
 
   return {
-    base, otPay1, otPay2,
+    base, hourly, otHourly, otPay1, otPay2,
     pieceIncome, hourIncome,
     leavePayDays, leavePayAmount,
     bonus: input.bonus || 0,
     leaveDeduct: dailyDeduct,
-    laborIns, healthIns,
+    laborIns, healthIns, dependents,
+    pensionSelf, pensionSelfRate,
     otherDeduct: input.otherDeduct || 0,
     gross, deductions, net
   };
@@ -3231,6 +3286,8 @@ function gatherCalcInput() {
     leaveItems: currentLeaveItems.filter(x => x.categoryId && x.days > 0),
     ot1: parseFloat(document.getElementById('ot1').value) || 0,
     ot2: parseFloat(document.getElementById('ot2').value) || 0,
+    monthHourly: parseFloat(document.getElementById('monthHourly').value) || 0,
+    monthOtHourly: parseFloat(document.getElementById('monthOtHourly').value) || 0,
     pieceIncome: parseFloat(document.getElementById('pieceIncome').value) || 0,
     hourIncome: parseFloat(document.getElementById('hourIncome').value) || 0,
     leavePayDays: parseFloat(document.getElementById('leavePayDays').value) || 0,
@@ -3262,7 +3319,8 @@ function calculateAndPreview() {
     <div class="result-row"><span>請假扣款</span><span>-NT$ ${formatMoney(r.leaveDeduct)}</span></div>
     <div class="result-row"><span>應發合計</span><span>NT$ ${formatMoney(r.gross)}</span></div>
     <div class="result-row"><span>勞保</span><span>-NT$ ${formatMoney(r.laborIns)}</span></div>
-    <div class="result-row"><span>健保</span><span>-NT$ ${formatMoney(r.healthIns)}</span></div>
+    <div class="result-row"><span>健保${r.dependents ? ' (含 ' + r.dependents + ' 眷口)' : ''}</span><span>-NT$ ${formatMoney(r.healthIns)}</span></div>
+    ${r.pensionSelf ? `<div class="result-row"><span>自提勞退 (${r.pensionSelfRate}%)</span><span>-NT$ ${formatMoney(r.pensionSelf)}</span></div>` : ''}
     <div class="result-row"><span>其他扣款</span><span>-NT$ ${formatMoney(r.otherDeduct)}</span></div>
     <div class="result-row total"><span>實發金額</span><span>NT$ ${formatMoney(r.net)}</span></div>
   `;
@@ -3316,7 +3374,7 @@ function saveSalaryRecord() {
   editingRecordId = null;
   resetRecordButtons();
   // 清空表單
-  ['workDays','leaveDays','ot1','ot2','pieceIncome','hourIncome','leavePayDays','leavePayAmount','laborIns','healthIns','calcNote']
+  ['workDays','leaveDays','ot1','ot2','monthHourly','monthOtHourly','pieceIncome','hourIncome','leavePayDays','leavePayAmount','laborIns','healthIns','calcNote']
     .forEach(id => document.getElementById(id).value = '');
   document.getElementById('leavePayAmount').dataset.autoFilled = '';
   document.getElementById('otherDeduct').value = '0';
@@ -3391,7 +3449,7 @@ function editSalaryRecord(id) {
 function cancelRecordEdit() {
   editingRecordId = null;
   resetRecordButtons();
-  ['workDays','leaveDays','ot1','ot2','pieceIncome','hourIncome','leavePayDays','leavePayAmount','laborIns','healthIns','calcNote']
+  ['workDays','leaveDays','ot1','ot2','monthHourly','monthOtHourly','pieceIncome','hourIncome','leavePayDays','leavePayAmount','laborIns','healthIns','calcNote']
     .forEach(id => document.getElementById(id).value = '');
   document.getElementById('leavePayAmount').dataset.autoFilled = '';
   document.getElementById('otherDeduct').value = '0';
@@ -3732,8 +3790,8 @@ function exportToExcel() {
   // === 員工資料 + 特休狀態工作表 ===
   if (employees.length > 0) {
     const empHead = [
-      '員工編號','姓名','職稱','工作地點','電話','到職日','到職年資','薪資制','每週工時',
-      '月薪','時薪','月投保薪資','特休應有','特休已休','特休剩餘','備註'
+      '員工編號','姓名','職稱','工作地點','電話','到職日','投保日','到職年資','薪資制','每週工時',
+      '月薪','時薪','月投保薪資','健保眷口','自提勞退%','特休應有','特休已休','特休剩餘','備註'
     ];
     const empRows = [empHead];
     const baseDate = new Date();
@@ -3750,16 +3808,17 @@ function exportToExcel() {
         : '未填';
       empRows.push([
         e.id || '', e.name, e.title || '', e.workplace || '',
-        e.phone || '', e.hireDate || '',
+        e.phone || '', e.hireDate || '', e.insuredDate || '',
         tenure, e.isHourly ? '時薪制' : '月薪制', e.weeklyHours || '',
         e.baseSalary || 0, e.hourlyRate || '', e.insuredSalary || 0,
+        e.dependents || 0, e.pensionSelf || 0,
         entitled, used, remaining, e.note || ''
       ]);
     });
     const wsEmp = XLSX.utils.aoa_to_sheet(empRows);
     wsEmp['!cols'] = [
-      {wch:10},{wch:12},{wch:14},{wch:14},{wch:14},{wch:12},{wch:14},{wch:8},{wch:10},
-      {wch:10},{wch:10},{wch:12},{wch:10},{wch:10},{wch:10},{wch:20}
+      {wch:10},{wch:12},{wch:14},{wch:14},{wch:14},{wch:12},{wch:12},{wch:14},{wch:8},{wch:10},
+      {wch:10},{wch:10},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:10},{wch:20}
     ];
     XLSX.utils.book_append_sheet(wb, wsEmp, '員工資料');
   }
