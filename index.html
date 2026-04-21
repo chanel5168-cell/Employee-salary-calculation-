@@ -272,9 +272,9 @@
     <div class="tab active" data-panel="employees">員工</div>
     <div class="tab" data-panel="daily">每日</div>
     <div class="tab" data-panel="calc">月薪</div>
-    <div class="tab" data-panel="export">匯出</div>
+    <div class="tab hide-for-employee" data-panel="export">匯出</div>
     <div class="tab" data-panel="leave">特休</div>
-    <div class="tab" data-panel="setup">設定</div>
+    <div class="tab hide-for-employee hide-for-factory" data-panel="setup">設定</div>
   </div>
 
   <!-- 員工管理 -->
@@ -1839,6 +1839,7 @@ function wipeLocalSilently() {
 
 // 從雲端強制同步：清空本地後重新從雲端下載（使用者主動觸發）
 async function forcePullFromCloud() {
+  if (!requireAdmin('從雲端強制同步資料')) return;
   if (!cloudReady) { alert('雲端尚未連線，請稍候再試'); return; }
   if (!confirm('⚠ 此操作會：\n\n1. 清空本地的員工、薪資、每日、產品資料\n2. 重新從雲端下載最新版\n\n本地未同步到雲端的資料會遺失。要繼續嗎？')) return;
   suppressSubscription = true;
@@ -6008,6 +6009,11 @@ function buildAttendanceSheets(wb, targetMonth) {
 
 // ========= 匯出 Excel =========
 function exportToExcel() {
+  // 員工只能匯出自己的，且要求身份為管理者以上才能匯出「全部」
+  if (currentUser && currentUser.role === 'employee') {
+    alert('⚠ 員工僅能在員工頁查看自己的資料，不提供 Excel 匯出功能。');
+    return;
+  }
   const month = document.getElementById('exportMonth').value;
   const data = month ? records.filter(r => r.month === month) : records;
   const dailyData = month
@@ -6132,27 +6138,36 @@ function exportToExcel() {
   // === 論件計酬明細工作表（以員工為分類）===
   const pieceData = dailyData.filter(d => d.type === 'piece');
   if (pieceData.length > 0) {
-    const pieceHead = ['日期', '品名', '數量', '單價', '小計', '開始時間', '結束時間', '工時(小時)', '效率(個/時)', '工作內容', '備註', '照片檔名'];
+    // ★ 勞基法基本工資時薪參考（114 年 = 2026 起 NT$ 190/h）
+    const minWage = 190;
+    const pieceHead = ['日期', '品名', '數量', '單價', '小計', '開始時間', '結束時間', '工時(小時)', '效率(個/時)', '換算時薪(NT$/h)', '是否達基本工資', '工作內容', '備註', '照片檔名'];
     const pieceRows = [];
-    // 依員工分組
+    // 報表開頭加法規提醒
+    pieceRows.push([`📋 論件計酬明細（${month || '全部'}）`]);
+    pieceRows.push([`⚖ 勞基法提醒：論件換算時薪不得低於基本工資 NT$ ${minWage} / 小時（114 年起）。若低於，公司應補足差額。`]);
+    pieceRows.push([`💡 「換算時薪」= 小計 ÷ 工時。「達基本工資」欄：✓ = 達標；✗ = 需補差額（會計應留意）。`]);
+    pieceRows.push([]);
     const byEmp = {};
     pieceData.forEach(d => {
       const k = d.empId;
       if (!byEmp[k]) byEmp[k] = { empName: d.empName, empNo: d.empNo || '', list: [] };
       byEmp[k].list.push(d);
     });
-    let grandQty = 0, grandAmt = 0;
+    let grandQty = 0, grandAmt = 0, grandHrs = 0;
     Object.values(byEmp)
       .sort((a, b) => (a.empNo || '').localeCompare(b.empNo || ''))
       .forEach(grp => {
-        // 員工標題區塊
         pieceRows.push([`◆ 員工：${grp.empName}（編號 ${grp.empNo || '-'}）`]);
         pieceRows.push(pieceHead);
         grp.list.sort((a, b) => a.date.localeCompare(b.date));
-        let empQty = 0, empAmt = 0;
+        let empQty = 0, empAmt = 0, empHrs = 0;
         grp.list.forEach(d => {
           const hrs = d.workMinutes ? Math.round(d.workMinutes / 60 * 100) / 100 : '';
           const eff = (d.workMinutes && d.qty) ? Math.round((d.qty / (d.workMinutes / 60)) * 10) / 10 : '';
+          // 換算時薪 = 小計 ÷ 工時
+          const hrRate = (d.workMinutes && d.subtotal) ? Math.round((d.subtotal / (d.workMinutes / 60)) * 10) / 10 : '';
+          // 是否達基本工資
+          const meetMin = hrRate === '' ? '(無時段)' : (hrRate >= minWage ? '✓ 達' : `✗ 差 ${minWage - hrRate}/h`);
           pieceRows.push([
             d.date,
             d.name || '',
@@ -6161,23 +6176,31 @@ function exportToExcel() {
             d.subtotal || 0,
             d.startTime || '',
             d.endTime || '',
-            hrs, eff,
+            hrs, eff, hrRate,
+            meetMin,
             d.workContent || '',
             d.note || '',
             d.photo ? photoFileName(d) : ''
           ]);
           empQty += d.qty || 0;
           empAmt += d.subtotal || 0;
+          if (hrs) empHrs += hrs;
         });
-        pieceRows.push(['小計', '', empQty, '', empAmt]);
+        // 員工小計：含平均時薪
+        const avgRate = empHrs > 0 ? Math.round((empAmt / empHrs) * 10) / 10 : '';
+        const avgMeet = avgRate === '' ? '' : (avgRate >= minWage ? '✓ 達' : `✗ 差 ${minWage - avgRate}/h`);
+        pieceRows.push(['小計', '', empQty, '', empAmt, '', '', Math.round(empHrs * 100) / 100, '', avgRate, avgMeet]);
         pieceRows.push([]);
         grandQty += empQty;
         grandAmt += empAmt;
+        grandHrs += empHrs;
       });
-    pieceRows.push(['【全部合計】', '', grandQty, '', grandAmt]);
+    const grandAvgRate = grandHrs > 0 ? Math.round((grandAmt / grandHrs) * 10) / 10 : '';
+    const grandMeet = grandAvgRate === '' ? '' : (grandAvgRate >= minWage ? '✓ 達基本工資' : `✗ 差 ${minWage - grandAvgRate}/h`);
+    pieceRows.push(['【全部合計】', '', grandQty, '', grandAmt, '', '', Math.round(grandHrs * 100) / 100, '', grandAvgRate, grandMeet]);
 
     const wsP = XLSX.utils.aoa_to_sheet(pieceRows);
-    wsP['!cols'] = [{wch:12},{wch:16},{wch:8},{wch:10},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:16},{wch:20},{wch:30}];
+    wsP['!cols'] = [{wch:12},{wch:16},{wch:8},{wch:10},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:12},{wch:14},{wch:16},{wch:20},{wch:30}];
     XLSX.utils.book_append_sheet(wb, wsP, '論件計酬明細');
   }
 
@@ -6325,6 +6348,10 @@ function photoFileName(d) {
 
 // 匯出產品清單：Excel + 照片 ZIP 一鍵打包
 async function exportProducts() {
+  if (currentUser && currentUser.role === 'employee') {
+    alert('⚠ 員工無權匯出產品清單。');
+    return;
+  }
   if (products.length === 0) { alert('目前沒有產品可以匯出'); return; }
   if (typeof XLSX === 'undefined' || typeof JSZip === 'undefined') {
     alert('匯出套件未載入，請檢查網路'); return;
@@ -6468,6 +6495,10 @@ async function exportProducts() {
 
 // 🌴 特休稽核表：勞保局格式（每員工列出每筆特休、累計、剩餘）
 function exportAnnualLeaveAudit() {
+  if (currentUser && currentUser.role === 'employee') {
+    alert('⚠ 員工無權匯出特休稽核表。');
+    return;
+  }
   const visEmployees = getVisibleEmployees();
   if (visEmployees.length === 0) { alert('沒有員工資料'); return; }
   const wb = XLSX.utils.book_new();
@@ -6754,6 +6785,7 @@ function restoreData(e) {
 
 // 清理重複月薪記錄（同員工同月只保留最新一筆）
 function removeDuplicateRecords() {
+  if (!requireAdmin('清理重複月薪記錄')) return;
   // 依 empId + month 分組
   const groups = {};
   records.forEach(r => {
@@ -6794,6 +6826,7 @@ function removeDuplicateRecords() {
 
 // 🔄 修正所有加班記錄的 attendanceOnly 與 subtotal（解決舊版邏輯留下的 bug）
 function fixOvertimeEntries() {
+  if (!requireAdmin('修正加班記錄')) return;
   if (!confirm('將掃描所有 計時記錄，把「加班/時薪加班」類型的記錄重新計算：\n\n  - attendanceOnly 設為 false（讓它可被計薪）\n  - subtotal 依 hours × rate 重新計算\n  - 若員工時薪為 0 → 自動用員工時薪或月薪推算\n\n繼續？')) return;
   let count = 0;
   dailyEntries.forEach(d => {
@@ -6886,6 +6919,7 @@ async function deleteEntriesByEmployee() {
 // 🔧 依上下班時間重新計算所有計時記錄的 hours 與 subtotal
 //   解決：使用者改了時段但 hours 沒同步更新（舊版 bug 留下的）
 function fixStaleHours() {
+  if (!requireAdmin('修正時數記錄')) return;
   if (!confirm('將掃描所有計時記錄，依目前的上下班時間 + 休息 + 遲到 重新計算 hours 與 subtotal。\n\n受影響：時段不為空、且 hours 與計算結果不符的記錄。\n\n繼續？')) return;
   let count = 0;
   dailyEntries.forEach(d => {
@@ -6911,6 +6945,7 @@ function fixStaleHours() {
 
 // 清理重複的每日計時記錄（同員工同日同時段視為重複）
 function removeDuplicateDailyEntries() {
+  if (!requireAdmin('清理重複每日記錄')) return;
   // 只檢查 hour type；依 empId + date + start + end 分組
   const groups = {};
   dailyEntries.forEach(d => {
