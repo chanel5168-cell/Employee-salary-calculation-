@@ -4632,14 +4632,17 @@ function updateMonthlyDailyHint() {
   const isMonthlyEmp = emp && !emp.isHourly;
   let unpaidNote = '';
   if (unpaidDays > 0) {
-    const reason = isMonthlyEmp ? '月薪正常上班，底薪已含' : '請假/特休等不計薪類型';
-    unpaidNote = `<br><span style="color:#6b7280; font-size:11px;">📌 另有 ${unpaidDays} 筆計時記錄不列入計時收入（${reason}）</span>`;
+    const reasons = [];
+    if (isMonthlyEmp) reasons.push('月薪正常上班（底薪已含）');
+    reasons.push('加班走倍率計算（→ 平日加班/例假加班欄位）');
+    reasons.push('請假/特休等不計薪類型');
+    unpaidNote = `<br><span style="color:#6b7280; font-size:11px;">📌 另有 ${unpaidDays} 筆計時記錄不列入計時收入<br>　　原因：${reasons.join('、')}</span>`;
   }
 
   document.getElementById('monthlyDailyHintContent').innerHTML = `
     論件: ${qty} 個 · NT$ <strong>${formatMoney(pieceTotal)}</strong><br>
     計時: ${hrs.toFixed(2)} 小時 · NT$ <strong>${formatMoney(hourTotal)}</strong>
-    ${isMonthlyEmp ? '<span style="color:#6b7280; font-size:11px;">（僅加班）</span>' : ''}<br>
+    ${isMonthlyEmp ? '<span style="color:#6b7280; font-size:11px;">（時薪制才會有；月薪制正常上班含於底薪、加班另計倍率）</span>' : ''}<br>
     合計: NT$ <strong style="color:#1e40af;">${formatMoney(pieceTotal + hourTotal)}</strong>${unpaidNote}
   `;
   hint.style.display = 'block';
@@ -4668,8 +4671,8 @@ function importDailyIncomes() {
   calculateAndPreview();
   const empType = emp && !emp.isHourly ? '月薪制' : '時薪制';
   const note = emp && !emp.isHourly
-    ? '\n\n💡 月薪制：正常上班日已含於底薪，僅加班與論件會帶入。'
-    : '\n\n💡 時薪制：正常上班 + 加班 + 論件 都會帶入。';
+    ? '\n\n💡 月薪制：\n  • 正常上班日 → 底薪已含，不帶入\n  • 論件 → 帶入論件收入\n  • 加班 → 已加總到「平日加班/例假加班」欄位，用倍率計算'
+    : '\n\n💡 時薪制：\n  • 正常上班 → 帶入計時收入\n  • 論件 → 帶入論件收入\n  • 加班 → 已加總到「平日加班/例假加班」欄位，用倍率計算';
   alert(`✅ 已帶入並計算 [${empType}]：\n  論件 NT$ ${formatMoney(pieceTotal)}\n  計時 NT$ ${formatMoney(hourTotal)}${note}`);
 }
 
@@ -5848,17 +5851,20 @@ function requireAdmin(reason) {
 
 // ========= 計薪判斷統一函式 =========
 // 判斷某筆每日記錄（hour type）是否應計入「計時收入」
-// 規則：
-//   1. 請假/特休類型不計薪
-//   2. 明確 attendanceOnly=true 不計薪
-//   3. 月薪制員工：只有「加班」才計薪（正常上班含於底薪）
-//   4. 時薪制員工：正常上班 + 加班 都計薪
+// 規則（經勞基法與實務校正）：
+//   1. 請假/特休類型 → 不計薪
+//   2. attendanceOnly=true 的打卡紀錄 → 不計薪
+//   3. 「加班」類型 → 一律不計入「計時收入」
+//      加班費由「平日加班時數 × 1.34 倍」「例假日加班 × 1.67 倍」另外走 ot1/ot2 計算
+//      若也算進「計時收入」會雙重計薪
+//   4. 月薪制 + 正常上班 → 底薪已含，不計薪
+//   5. 時薪制 + 正常上班 → 計入（hours × hourlyRate）
 function isPaidHourEntry(d, emp) {
   if (!d || d.type !== 'hour') return false;
   if (d.attendanceOnly) return false;
   const attType = d.attType || 'normal';
-  if (attType !== 'normal' && attType !== '加班') return false; // 請假類型
-  if (emp && !emp.isHourly && attType === 'normal') return false; // 月薪制正常上班 → 底薪已含
+  if (attType !== 'normal') return false; // 請假 / 加班都不計入「計時收入」
+  if (emp && !emp.isHourly) return false; // 月薪制正常上班 → 底薪已含
   return true;
 }
 
