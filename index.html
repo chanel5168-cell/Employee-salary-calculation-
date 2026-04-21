@@ -1135,6 +1135,47 @@
         </div>
       </div>
 
+      <!-- 加班費倍率法規 -->
+      <div class="alert" style="background:#fee2e2; border-left:4px solid #dc2626; padding:12px; border-radius:6px; margin-top:10px;">
+        <div style="font-weight:700; color:#991b1b; margin-bottom:8px; font-size:15px;">⚖ 加班費倍率（勞基法 §24、§37、§39）</div>
+
+        <div style="background:#fff; padding:10px; border-radius:6px; margin-bottom:8px;">
+          <div style="font-weight:700; color:#1e40af; margin-bottom:6px;">A. 📅 平日加班（正常工作日延長工時）</div>
+          <table style="width:100%; font-size:13px; border-collapse:collapse;">
+            <tr style="background:#eff6ff;"><th style="padding:4px 8px; text-align:left; border:1px solid #dbeafe;">時段</th><th style="padding:4px 8px; text-align:right; border:1px solid #dbeafe;">倍率</th></tr>
+            <tr><td style="padding:4px 8px; border:1px solid #dbeafe;">前 2 小時</td><td style="padding:4px 8px; text-align:right; border:1px solid #dbeafe;"><strong>時薪 × 1⅓</strong>（約 1.34）</td></tr>
+            <tr><td style="padding:4px 8px; border:1px solid #dbeafe;">第 3-4 小時</td><td style="padding:4px 8px; text-align:right; border:1px solid #dbeafe;"><strong>時薪 × 1⅔</strong>（約 1.67）</td></tr>
+          </table>
+        </div>
+
+        <div style="background:#fff; padding:10px; border-radius:6px; margin-bottom:8px;">
+          <div style="font-weight:700; color:#c2410c; margin-bottom:6px;">B. 🟠 休息日加班（通常為週六）</div>
+          <div style="font-size:12px; color:#6b7280; margin-bottom:4px;">月薪已包含當天基本薪資，故需另外加給加班費：</div>
+          <table style="width:100%; font-size:13px; border-collapse:collapse;">
+            <tr style="background:#fff7ed;"><th style="padding:4px 8px; text-align:left; border:1px solid #fed7aa;">時段</th><th style="padding:4px 8px; text-align:right; border:1px solid #fed7aa;">倍率</th></tr>
+            <tr><td style="padding:4px 8px; border:1px solid #fed7aa;">前 2 小時</td><td style="padding:4px 8px; text-align:right; border:1px solid #fed7aa;"><strong>時薪 × 1⅓</strong></td></tr>
+            <tr><td style="padding:4px 8px; border:1px solid #fed7aa;">第 3-8 小時</td><td style="padding:4px 8px; text-align:right; border:1px solid #fed7aa;"><strong>時薪 × 1⅔</strong></td></tr>
+            <tr><td style="padding:4px 8px; border:1px solid #fed7aa;">第 9-12 小時</td><td style="padding:4px 8px; text-align:right; border:1px solid #fed7aa;"><strong>時薪 × 2⅔</strong>（約 2.67）</td></tr>
+          </table>
+        </div>
+
+        <div style="background:#fff; padding:10px; border-radius:6px;">
+          <div style="font-weight:700; color:#991b1b; margin-bottom:6px;">C. 🎌 國定假日 / 特休加班（§37、§39）</div>
+          <table style="width:100%; font-size:13px; border-collapse:collapse;">
+            <tr style="background:#fee2e2;"><th style="padding:4px 8px; text-align:left; border:1px solid #fecaca;">時段</th><th style="padding:4px 8px; text-align:right; border:1px solid #fecaca;">倍率</th></tr>
+            <tr><td style="padding:4px 8px; border:1px solid #fecaca;">8 小時以內</td><td style="padding:4px 8px; text-align:right; border:1px solid #fecaca;"><strong>加發 1 日工資</strong>（不論實際工時）</td></tr>
+            <tr><td style="padding:4px 8px; border:1px solid #fecaca;">第 9-10 小時</td><td style="padding:4px 8px; text-align:right; border:1px solid #fecaca;"><strong>時薪 × 1⅓</strong></td></tr>
+            <tr><td style="padding:4px 8px; border:1px solid #fecaca;">第 11-12 小時</td><td style="padding:4px 8px; text-align:right; border:1px solid #fecaca;"><strong>時薪 × 1⅔</strong></td></tr>
+          </table>
+        </div>
+
+        <div style="margin-top:10px; padding:8px 10px; background:#fff; border-left:3px solid #059669; border-radius:4px; font-size:12px; color:#065f46;">
+          💡 <strong>系統預設</strong>：月薪計算頁的「平日加班費」使用 <strong>1.34×</strong>、「假日加班費」使用 <strong>1.67×</strong>。<br>
+          若需精確到「前 2 小時 vs 3-4 小時」不同倍率，可在「時薪加班」類型輸入實際金額（系統會計入計時收入）。<br>
+          休息日超過 8 小時、國定假日加班等特殊情境，建議手動計算後填入「計時收入」。
+        </div>
+      </div>
+
       <div class="alert alert-info" style="background:#f0fdf4; border-left-color:#06C755; font-size:12px;">
         💡 <strong>範例</strong>：某時薪制員工到職 1 年 5 個月（全時應有 7 天），每週工時 20 小時 → 7 × (20 ÷ 40) = <strong>3.5 天</strong>
       </div>
@@ -3120,8 +3161,12 @@ function refreshMonthlyAttendance() {
   const dayStatus = {};
   const weekdayWorkDates = new Set();
   const weekendWorkDates = new Set();
+  // ★ 統計用：全部加班時數（不論是否有明確金額）
   let weekdayOtHours = 0;
   let weekendOtHours = 0;
+  // ★ 自動填入 ot1/ot2 用：只計算 subtotal=0（走倍率）的
+  let weekdayOtHoursForMultiplier = 0;
+  let weekendOtHoursForMultiplier = 0;
   let totalLateMinutes = 0;
   let lateDays = 0;
   // ★ 請假時數統計（支援小時制）
@@ -3143,21 +3188,23 @@ function refreshMonthlyAttendance() {
     // 「有明確金額」的加班 → 走計時收入，不再走 ot1/ot2 倍率
     const hasExplicitSubtotal = (type === '加班' || type === '時薪加班') && (d.subtotal || 0) > 0;
 
-    if (!isLeaveType && !hasExplicitSubtotal) {
-      // 上班或法定加班（subtotal=0 才走倍率）
+    if (!isLeaveType) {
+      // 上班或加班（不論是否有 subtotal）
       if (isWeekend) {
         weekendWorkDates.add(d.date);
-        // 例假日工作視為例假日加班時數（含 normal & 加班）
+        // 例假日上班/加班一律算例假日加班時數（含 normal & 加班）
         weekendOtHours += d.hours || 0;
+        // 沒有明確金額的才自動填入 ot2 走倍率
+        if (!hasExplicitSubtotal) weekendOtHoursForMultiplier += d.hours || 0;
       } else {
         weekdayWorkDates.add(d.date);
-        // 平日加班 = 明確選「加班」的時數（無 subtotal 的才走倍率）
-        if (type === '加班') weekdayOtHours += d.hours || 0;
+        // 平日加班統計：只要 attType='加班' 或 '時薪加班' 就計入
+        if (type === '加班' || type === '時薪加班') {
+          weekdayOtHours += d.hours || 0;
+          // 沒有明確金額的才自動填入 ot1 走倍率
+          if (!hasExplicitSubtotal && type === '加班') weekdayOtHoursForMultiplier += d.hours || 0;
+        }
       }
-    } else if (hasExplicitSubtotal) {
-      // 有明確金額的加班 → 工作天記入但不算 ot1/ot2
-      if (isWeekend) weekendWorkDates.add(d.date);
-      else weekdayWorkDates.add(d.date);
     } else if (isLeaveType) {
       // ★ 累計請假時數（小時制支援）
       const h = d.hours || 8; // 沒填時段就當全天 8 小時
@@ -3191,8 +3238,10 @@ function refreshMonthlyAttendance() {
   const o2 = document.getElementById('ot2');
   if (wd && !wd.dataset.userEdited) { wd.value = workDays || ''; }
   if (ld && !ld.dataset.userEdited) { ld.value = totalLeaveDays || ''; }
-  if (o1 && !o1.dataset.userEdited) { o1.value = weekdayOtHours || ''; }
-  if (o2 && !o2.dataset.userEdited) { o2.value = weekendOtHours || ''; }
+  // ★ ot1/ot2 只填入走倍率的加班（無明確金額者）
+  //   有明確金額的加班已被計入「計時收入」，不重複填入避免雙重計薪
+  if (o1 && !o1.dataset.userEdited) { o1.value = weekdayOtHoursForMultiplier || ''; }
+  if (o2 && !o2.dataset.userEdited) { o2.value = weekendOtHoursForMultiplier || ''; }
 
   // ★ 本月天數概覽：總天數、週六、週日、國定假日
   let monthSatDays = 0, monthSunDays = 0, monthHolidayDays = 0, monthWorkdays = 0;
