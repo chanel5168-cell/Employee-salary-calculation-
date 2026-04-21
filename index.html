@@ -4077,6 +4077,11 @@ function renderDeductItems() {
       const catOpts = '<option value="">自訂類別</option>' +
         deductCategories.map(c => `<option value="${escapeHtml(c.name)}" ${c.name === item.name ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('');
       const useSelect = deductCategories.some(c => c.name === item.name) || !item.name;
+      // ★ 每筆獨立確認標示
+      const isReady = item.name && (item.amount || 0) > 0;
+      const badgeHtml = isReady
+        ? `<span class="deduct-badge" id="deductBadge_${idx}" title="已記入" style="background:#10b981; color:white; padding:3px 8px; border-radius:4px; font-size:12px; font-weight:600;">✓</span>`
+        : `<span class="deduct-badge" id="deductBadge_${idx}" title="待填寫" style="background:#f3f4f6; color:#9ca3af; padding:3px 8px; border-radius:4px; font-size:12px;">⋯</span>`;
       return `
         <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
           <select onchange="onDeductCatChange(${idx}, this.value)" style="flex:1.2; padding:6px 8px; font-size:13px;">
@@ -4088,6 +4093,7 @@ function renderDeductItems() {
           <input type="number" value="${item.amount || ''}" placeholder="金額" min="0"
             oninput="updateDeductItem(${idx}, 'amount', this.value)"
             style="width:90px; padding:6px 8px; font-size:13px;">
+          ${badgeHtml}
           <button type="button" onclick="removeDeductItem(${idx})" style="border:none; background:#fee2e2; color:#991b1b; padding:4px 8px; border-radius:4px; cursor:pointer;">✕</button>
         </div>
       `;
@@ -4106,6 +4112,46 @@ function removeDeductItem(idx) {
   renderDeductItems();
 }
 
+// 即時更新單列徽章（不破壞輸入焦點）
+function updateDeductBadge(idx) {
+  const item = currentDeductItems[idx];
+  const el = document.getElementById('deductBadge_' + idx);
+  if (!item || !el) return;
+  const isReady = item.name && (item.amount || 0) > 0;
+  if (isReady) {
+    el.textContent = '✓';
+    el.title = '已記入';
+    el.style.background = '#10b981';
+    el.style.color = 'white';
+    el.style.fontWeight = '600';
+  } else {
+    el.textContent = '⋯';
+    el.title = '待填寫';
+    el.style.background = '#f3f4f6';
+    el.style.color = '#9ca3af';
+    el.style.fontWeight = 'normal';
+  }
+}
+function updateBonusBadge(idx) {
+  const item = currentBonusItems[idx];
+  const el = document.getElementById('bonusBadge_' + idx);
+  if (!item || !el) return;
+  const isReady = item.name && (item.amount || 0) > 0;
+  if (isReady) {
+    el.textContent = '✓';
+    el.title = '已記入';
+    el.style.background = '#10b981';
+    el.style.color = 'white';
+    el.style.fontWeight = '600';
+  } else {
+    el.textContent = '⋯';
+    el.title = '待填寫';
+    el.style.background = '#f3f4f6';
+    el.style.color = '#9ca3af';
+    el.style.fontWeight = 'normal';
+  }
+}
+
 function updateDeductItem(idx, field, value) {
   if (!currentDeductItems[idx]) return;
   if (field === 'amount') {
@@ -4113,6 +4159,8 @@ function updateDeductItem(idx, field, value) {
   } else {
     currentDeductItems[idx][field] = value;
   }
+  // ★ 即時更新該列徽章（不破壞輸入焦點）
+  updateDeductBadge(idx);
   updateDeductTotal();
 }
 
@@ -4215,6 +4263,11 @@ function renderBonusItems() {
       const catOpts = '<option value="">自訂類別</option>' +
         bonusCategories.map(c => `<option value="${escapeHtml(c.name)}" ${c.name === item.name ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('');
       const useSelect = bonusCategories.some(c => c.name === item.name) || !item.name;
+      // ★ 每筆獨立確認標示
+      const isReady = item.name && (item.amount || 0) > 0;
+      const badgeHtml = isReady
+        ? `<span class="bonus-badge" id="bonusBadge_${idx}" title="已記入" style="background:#10b981; color:white; padding:3px 8px; border-radius:4px; font-size:12px; font-weight:600;">✓</span>`
+        : `<span class="bonus-badge" id="bonusBadge_${idx}" title="待填寫" style="background:#f3f4f6; color:#9ca3af; padding:3px 8px; border-radius:4px; font-size:12px;">⋯</span>`;
       return `
         <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
           <select onchange="onBonusCatChange(${idx}, this.value)" style="flex:1.2; padding:6px 8px; font-size:13px;">
@@ -4226,6 +4279,7 @@ function renderBonusItems() {
           <input type="number" value="${item.amount || ''}" placeholder="金額" min="0"
             oninput="updateBonusItem(${idx}, 'amount', this.value)"
             style="width:90px; padding:6px 8px; font-size:13px;">
+          ${badgeHtml}
           <button type="button" onclick="removeBonusItem(${idx})" style="border:none; background:#fee2e2; color:#991b1b; padding:4px 8px; border-radius:4px; cursor:pointer;">✕</button>
         </div>
       `;
@@ -4251,6 +4305,7 @@ function updateBonusItem(idx, field, value) {
   } else {
     currentBonusItems[idx][field] = value;
   }
+  updateBonusBadge(idx);
   updateBonusTotal();
 }
 
