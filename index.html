@@ -269,6 +269,9 @@
     <div id="syncStatus" style="font-size:11px; margin-top:6px; opacity:0.9;">☁ 初始化中…</div>
   </header>
 
+  <!-- 🔔 Firestore 規則到期倒數提醒（只對管理者顯示） -->
+  <div id="firestoreExpiryBanner" style="display:none; margin-bottom:12px; padding:12px 14px; border-radius:10px; cursor:pointer; font-size:13px; line-height:1.5; box-shadow:0 2px 4px rgba(0,0,0,0.08);" onclick="showFirestoreRulesHowto()"></div>
+
   <div class="tabs">
     <div class="tab active" data-panel="employees">員工</div>
     <div class="tab" data-panel="daily">每日</div>
@@ -1099,12 +1102,14 @@
       <button class="btn btn-secondary btn-block" onclick="fixStaleHours()" style="margin-top:8px;">🔧 修正所有時數不一致的計時記錄（依時段重算）</button>
       <button class="btn btn-secondary btn-block" onclick="fixOvertimeEntries()" style="margin-top:8px;">🔧 修正所有加班記錄（重設計薪狀態與金額）</button>
       <button class="btn btn-secondary btn-block" onclick="deleteEntriesByEmployee()" style="margin-top:8px; background:#fef3c7; color:#92400e; border:1px solid #f59e0b;">🗑 依員工清除每日記錄（可選月份）</button>
+      <button class="btn btn-secondary btn-block" onclick="cleanupOldPhotos()" style="margin-top:8px; background:#e0f2fe; color:#075985; border:1px solid #0284c7;">📷 清理 30 天前舊照片（節省 Firebase 空間）</button>
       <button class="btn btn-danger btn-block" onclick="wipeCloudOnly()" style="margin-top:8px; background:#c92a2a;">🔐 ☁ 強制重設雲端資料（清除全部後仍殘留時使用）</button>
       <button class="btn btn-secondary btn-block" onclick="forcePullFromCloud()" style="margin-top:8px;">🔄 從雲端強制同步（清空本地以雲端為準）</button>
       <div style="padding:8px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; font-size:12px; color:#664d03; margin-top:6px;">
         💡 若按「清除全部」後，舊的每日記錄又自動跑回來，代表雲端還保留資料。<br>
         請按上方「☁ 強制重設雲端資料」把 Firestore 也一併清空。<br>
         🔄 <strong>從雲端強制同步</strong>：如果此裝置（尤其手機）發現資料跟其他人不同步，按這個會把本裝置清空，重新從雲端下載最新版。<br>
+        📷 <strong>30 天前舊照片</strong>：系統每天自動清理一次，會移除 30 天以前的計時照片（保留時數、金額等記錄），以節省 Firebase 免費空間。<span style="color:#dc2626; font-weight:600;">重要照片請定期從「匯出」頁下載 ZIP 備份。</span><br>
         🔐 標示的按鈕需要管理者密碼（驗證後 10 分鐘內不再重問）。
       </div>
       <input type="file" id="restoreFile" style="display:none" accept=".json" onchange="restoreData(event)">
@@ -1878,6 +1883,94 @@ async function cloudSaveRates() {
   if (!cloudReady) return;
   try { await ws().collection('config').doc('rates').set(rates); }
   catch (e) { console.error('cloudSaveRates error:', e); }
+}
+
+// ========= 📷 30 天前舊照片自動清理（節省 Firestore 免費空間）=========
+// 邏輯：dailyEntries 日期 > 30 天 且 含 photo 的條目 → 把 photo 清掉，保留其餘資料
+// 用途：Firestore 免費方案 1 GB 空間，base64 照片會快速佔滿，定期清理可解
+const PHOTO_RETENTION_DAYS = 30;
+const PHOTO_CLEANUP_KEY = 'salary_photo_cleanup_last';
+const PHOTO_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // 每 24 小時最多自動跑一次
+
+function _daysAgoDateStr(days) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// 估算 base64 照片大小（bytes）
+function _photoBytes(base64) {
+  if (!base64) return 0;
+  const raw = base64.split(',')[1] || base64;
+  return Math.floor(raw.length * 3 / 4);
+}
+
+async function cleanupOldPhotos(options) {
+  options = options || {};
+  const silent = !!options.silent;
+  const days = options.days || PHOTO_RETENTION_DAYS;
+  const cutoff = _daysAgoDateStr(days);
+
+  // 找出超過保留天數且有照片的記錄
+  const targets = dailyEntries.filter(d => d.photo && d.date < cutoff);
+  if (targets.length === 0) {
+    if (!silent) alert(`✅ 沒有超過 ${days} 天的照片需要清理`);
+    localStorage.setItem(PHOTO_CLEANUP_KEY, String(Date.now()));
+    return { cleaned: 0, bytesSaved: 0 };
+  }
+
+  // 估算釋放空間
+  const bytesSaved = targets.reduce((s, d) => s + _photoBytes(d.photo), 0);
+  const mbSaved = (bytesSaved / 1024 / 1024).toFixed(2);
+
+  if (!silent) {
+    const ok = confirm(
+      `🧹 將清理 ${targets.length} 張 ${days} 天前的照片\n` +
+      `預估釋放空間：約 ${mbSaved} MB\n\n` +
+      `說明：\n` +
+      `• 會保留原本的時數、金額、項目、備註等資料\n` +
+      `• 只會移除照片本身\n` +
+      `• 建議先到「匯出」頁下載「照片 ZIP」備份\n\n` +
+      `確定要清理嗎？`
+    );
+    if (!ok) return { cleaned: 0, bytesSaved: 0 };
+  }
+
+  // 一個一個更新，避免一次太多寫入打到 Firestore 限制
+  let done = 0;
+  for (const d of targets) {
+    delete d.photo;
+    try {
+      if (cloudReady) await cloudSave('daily', d);
+    } catch (e) {
+      console.error('清理照片寫回雲端失敗:', d._id, e);
+    }
+    done++;
+    if (!silent && done % 20 === 0) setSyncStatus(`清理中 ${done}/${targets.length}…`, 'syncing');
+  }
+  save(STORE.daily, dailyEntries);
+  localStorage.setItem(PHOTO_CLEANUP_KEY, String(Date.now()));
+  if (typeof refreshDailyEntries === 'function') refreshDailyEntries();
+  if (typeof refreshMonthlyDaily === 'function') refreshMonthlyDaily();
+  setSyncStatus('☁ 已同步', 'ok');
+
+  if (!silent) {
+    alert(`✅ 完成清理\n已移除 ${done} 張照片\n約釋放 ${mbSaved} MB 空間`);
+  } else {
+    console.log(`[photo-cleanup] removed ${done} photos older than ${days} days (~${mbSaved} MB)`);
+  }
+  return { cleaned: done, bytesSaved };
+}
+
+// 自動清理：app 啟動時若距離上次清理超過 24 小時且是管理者，靜默執行
+function maybeAutoCleanupPhotos() {
+  try {
+    if (!currentUser || isEmployeeRole()) return; // 員工不執行
+    const last = parseInt(localStorage.getItem(PHOTO_CLEANUP_KEY) || '0', 10);
+    if (Date.now() - last < PHOTO_CLEANUP_INTERVAL_MS) return;
+    // 略延遲以免搶資源
+    setTimeout(() => cleanupOldPhotos({ silent: true }), 5000);
+  } catch (e) { console.warn('auto cleanup skip:', e); }
 }
 
 // ========= 雲端清除廣播：確保多裝置狀態一致 =========
@@ -7367,6 +7460,8 @@ function applyPermissionUI() {
   // LINE LIFF 設定：總管理者登入後自動展開；其他管理者維持需點按鈕才展開
   const liffCard = document.getElementById('liffSettingsCard');
   if (liffCard) liffCard.style.display = isSuperAdmin() ? 'block' : 'none';
+  // Firestore 到期橫幅（登入/角色變動時重新判斷）
+  if (typeof refreshFirestoreExpiryBanner === 'function') refreshFirestoreExpiryBanner();
 }
 
 // ========= 使用者管理（admin 專用）=========
@@ -7786,6 +7881,8 @@ function init() {
   }
   refreshUserList();
   onUserRoleChange();
+  // 自動清理 30 天前舊照片（管理者角色、每 24 小時最多跑一次）
+  maybeAutoCleanupPhotos();
 }
 
 init();
@@ -8100,6 +8197,143 @@ function exportAccountingExcel() {
   const fname = `會計做帳表_${mon || '全部'}_${new Date().toISOString().slice(0, 10)}.xlsx`;
   XLSX.writeFile(wb, fname);
 }
+
+// ========= 🔔 Firestore 規則到期提醒 =========
+// 測試模式到期日 — 若您已經更新規則，可以按橫幅上的「已完成更新」按鈕永久隱藏
+const FIRESTORE_RULES_EXPIRY = '2026-05-20';
+const FIRESTORE_RULES_DONE_KEY = 'firestore_rules_updated_at';
+
+function _daysUntil(dateStr) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(dateStr + 'T00:00:00');
+  return Math.ceil((target.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
+}
+
+function refreshFirestoreExpiryBanner() {
+  const banner = document.getElementById('firestoreExpiryBanner');
+  if (!banner) return;
+  // 只有管理者 (admin/super) 看得到這個提醒
+  if (!currentUser || !isAdmin()) { banner.style.display = 'none'; return; }
+  // 已標記完成 → 隱藏
+  if (localStorage.getItem(FIRESTORE_RULES_DONE_KEY)) { banner.style.display = 'none'; return; }
+
+  const days = _daysUntil(FIRESTORE_RULES_EXPIRY);
+  if (days < -7) { banner.style.display = 'none'; return; } // 過期超過一週就收起（假設已修好）
+
+  let bg, color, icon, title, detail;
+  if (days < 0) {
+    bg = '#fee2e2'; color = '#991b1b'; icon = '🔴';
+    title = `Firestore 測試規則已於 ${FIRESTORE_RULES_EXPIRY} 到期（已過 ${-days} 天）`;
+    detail = '若系統出現無法同步 / 儲存錯誤，請立刻按此查看設定步驟！';
+  } else if (days <= 7) {
+    bg = '#fee2e2'; color = '#991b1b'; icon = '🚨';
+    title = `Firestore 測試規則將於 ${FIRESTORE_RULES_EXPIRY} 到期（只剩 ${days} 天）`;
+    detail = '逾期後所有使用者將無法讀寫資料！點我查看 2 分鐘設定步驟';
+  } else if (days <= 14) {
+    bg = '#fef3c7'; color = '#92400e'; icon = '⚠';
+    title = `Firestore 測試規則剩 ${days} 天到期（${FIRESTORE_RULES_EXPIRY}）`;
+    detail = '建議本週內處理，點我查看設定步驟';
+  } else {
+    bg = '#e0f2fe'; color = '#075985'; icon = 'ℹ️';
+    title = `Firestore 規則將於 ${FIRESTORE_RULES_EXPIRY} 到期（還有 ${days} 天）`;
+    detail = '點我查看永久規則設定步驟';
+  }
+
+  banner.style.background = bg;
+  banner.style.color = color;
+  banner.style.border = '1px solid ' + color + '33';
+  banner.innerHTML = `
+    <div style="display:flex; align-items:center; gap:8px;">
+      <div style="font-size:20px;">${icon}</div>
+      <div style="flex:1;">
+        <div style="font-weight:700;">${title}</div>
+        <div style="font-size:12px; margin-top:2px; opacity:0.85;">${detail}</div>
+      </div>
+      <div style="font-size:11px; opacity:0.7;">點此 ▶</div>
+    </div>
+  `;
+  banner.style.display = 'block';
+
+  // ≤7 天且是這次登入第一次看到 → 彈窗提醒
+  if (days <= 7) {
+    const alertedKey = 'firestore_rules_alerted_' + new Date().toISOString().slice(0, 10);
+    if (!sessionStorage.getItem(alertedKey)) {
+      sessionStorage.setItem(alertedKey, '1');
+      setTimeout(() => {
+        if (confirm(`🚨 ${title}\n\n${detail}\n\n是否立即查看設定步驟？`)) {
+          showFirestoreRulesHowto();
+        }
+      }, 1500);
+    }
+  }
+}
+
+function showFirestoreRulesHowto() {
+  // 建立全螢幕的說明彈窗
+  const existing = document.getElementById('firestoreHowtoModal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'firestoreHowtoModal';
+  modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:9998; display:flex; align-items:center; justify-content:center; padding:16px; overflow-y:auto;';
+  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+  const ruleText = `rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /workspaces/default/{document=**} {
+      allow read, write: if true;
+    }
+  }
+}`;
+
+  modal.innerHTML = `
+    <div style="background:white; border-radius:12px; max-width:560px; width:100%; max-height:92vh; overflow-y:auto; padding:20px; box-shadow:0 8px 24px rgba(0,0,0,0.3);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding-bottom:10px; border-bottom:2px solid #06C755;">
+        <h2 style="font-size:18px; color:#111827;">🔐 Firestore 永久規則設定</h2>
+        <button onclick="document.getElementById('firestoreHowtoModal').remove()" style="background:#f3f4f6; border:none; width:32px; height:32px; border-radius:50%; font-size:20px; cursor:pointer;">×</button>
+      </div>
+      <div style="background:#fef3c7; padding:10px 12px; border-radius:6px; font-size:13px; color:#92400e; margin-bottom:14px; line-height:1.6;">
+        <strong>⚠ 為什麼要做？</strong><br>
+        Firebase 測試模式 30 天後會自動鎖死，所有人將無法讀寫資料。請在 ${FIRESTORE_RULES_EXPIRY} 前完成以下步驟。
+      </div>
+      <div style="font-size:14px; line-height:1.7; color:#374151;">
+        <p style="margin-bottom:10px;"><strong>1.</strong> 打開 <a href="https://console.firebase.google.com/" target="_blank" style="color:#06C755;">Firebase 主控台</a> → 選擇您的專案</p>
+        <p style="margin-bottom:10px;"><strong>2.</strong> 左側選單 → <strong>Firestore Database</strong> → 上方切到 <strong>「規則」(Rules)</strong> 分頁</p>
+        <p style="margin-bottom:10px;"><strong>3.</strong> 全選目前的規則內容，<strong>整段刪除</strong></p>
+        <p style="margin-bottom:10px;"><strong>4.</strong> 貼上以下規則（點旁邊 📋 複製）：</p>
+        <div style="position:relative; background:#1f2937; color:#e5e7eb; padding:12px; border-radius:8px; font-family:monospace; font-size:12px; line-height:1.5; margin-bottom:10px;">
+          <button onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent).then(()=>{this.textContent='✓ 已複製';setTimeout(()=>this.textContent='📋 複製',2000);})" style="position:absolute; top:6px; right:6px; background:#06C755; color:white; border:none; padding:4px 10px; border-radius:4px; font-size:11px; cursor:pointer;">📋 複製</button>
+          <pre style="white-space:pre-wrap; margin:0; padding-right:60px;">${ruleText.replace(/</g, '&lt;')}</pre>
+        </div>
+        <p style="margin-bottom:10px;"><strong>5.</strong> 按右上角 <strong>「發布」(Publish)</strong> 按鈕 → 完成！</p>
+        <div style="background:#f0fdf4; padding:10px 12px; border-radius:6px; font-size:12px; color:#166534; line-height:1.6; margin-bottom:14px;">
+          💡 這段規則的意思是：<code>workspaces/default</code> 底下的資料開放存取，其他路徑拒絕。因為只有拿到 LIFF URL 的人才會連進來，適合內部使用。
+        </div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button onclick="markFirestoreRulesDone()" style="flex:1; background:#06C755; color:white; border:none; padding:10px; border-radius:8px; font-weight:600; cursor:pointer; font-size:14px;">✅ 我已完成更新（隱藏提醒）</button>
+        <button onclick="document.getElementById('firestoreHowtoModal').remove()" style="background:#e5e7eb; color:#374151; border:none; padding:10px 16px; border-radius:8px; cursor:pointer; font-size:14px;">稍後處理</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function markFirestoreRulesDone() {
+  if (!confirm('確認已到 Firebase 主控台完成規則發布？\n\n按「確定」後將永久隱藏此提醒。\n若未來重新開啟測試模式，可在 Console 執行：\nlocalStorage.removeItem("' + FIRESTORE_RULES_DONE_KEY + '")')) return;
+  localStorage.setItem(FIRESTORE_RULES_DONE_KEY, new Date().toISOString());
+  const m = document.getElementById('firestoreHowtoModal');
+  if (m) m.remove();
+  refreshFirestoreExpiryBanner();
+  alert('✅ 已標記完成，橫幅將不再顯示。\n感謝您保護系統安全！');
+}
+
+// 登入後 / 切換角色時觸發
+setTimeout(() => refreshFirestoreExpiryBanner(), 2000);
+// 小時更新一次倒數（跨日時日數會變）
+setInterval(() => refreshFirestoreExpiryBanner(), 60 * 60 * 1000);
 
 </script>
 </body>
