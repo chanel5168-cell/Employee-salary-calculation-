@@ -6449,27 +6449,29 @@ function refreshAllDailyViews() {
 
 // ========= 計薪判斷統一函式 =========
 // 判斷某筆每日記錄（hour type）是否應計入「計時收入」
-// 統一規則（以 subtotal 為準）：
-//   1. 請假類型 → 不計薪
-//   2. attendanceOnly=true 的打卡紀錄 → 不計薪
-//   3. 月薪制 + 正常上班 → 底薪已含，不計薪
-//   4. 「加班」或「時薪加班」 → 若 subtotal > 0（有明確金額）→ 計入計時收入
-//      若 subtotal = 0 → 走法定倍率（ot1/ot2 自動填入）
-//   5. 時薪制 + 正常上班 → 計入計時收入
+// 最終規則（以 subtotal 為實際標準）：
+//   1. 請假類型（特休/病假/事假...） → 一律不計薪（走請假明細扣款）
+//   2. attendanceOnly=true 的純打卡紀錄 → 不計薪
+//   3. 「subtotal > 0」→ 計入計時收入（不論 attType）
+//      - 適用：月薪制員工的額外工作（例如正常下班後另做 2 小時按 300/時）
+//      - 適用：時薪制員工的所有工作
+//      - 適用：加班/時薪加班有明確金額時
+//   4. 「subtotal = 0」→ 不計入
+//      - 月薪制正常上班：底薪已含
+//      - 加班（無金額）：走 ot1/ot2 倍率
 function isPaidHourEntry(d, emp) {
   if (!d || d.type !== 'hour') return false;
   if (d.attendanceOnly) return false;
   const attType = d.attType || 'normal';
   // 請假類型 → 不計薪
   if (attType !== 'normal' && attType !== '加班' && attType !== '時薪加班') return false;
-  // 月薪正常上班 → 底薪已含
-  if (emp && !emp.isHourly && attType === 'normal') return false;
-  // 加班（含時薪加班）→ 只要有 subtotal > 0 就計入
-  if (attType === '加班' || attType === '時薪加班') {
-    return (d.subtotal || 0) > 0;
-  }
-  // 正常上班（時薪制）→ 計入
-  return true;
+  // ★ 核心規則：subtotal > 0 就計入（不論員工類型或 attType）
+  if ((d.subtotal || 0) > 0) return true;
+  // subtotal = 0 的情況：
+  //   月薪正常上班 → 底薪含，不計
+  //   加班無金額 → 走 ot1/ot2 倍率，不在此計
+  //   時薪制無 subtotal → 異常（應該要有 rate × hours）
+  return false;
 }
 
 // 判斷論件記錄是否計薪（所有 piece 都算，不論員工型態）
