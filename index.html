@@ -1036,6 +1036,7 @@
         <button class="btn btn-primary btn-block" id="recordPrimaryBtn" onclick="saveSalaryRecord()" style="background:#d63384; border-color:#d63384; font-size:17px; font-weight:bold;">💾 儲存記錄（必按！）</button>
       </div>
       <button class="btn btn-secondary btn-block" id="recordCancelBtn" onclick="cancelRecordEdit()" style="display:none; margin-top:6px;">取消編輯</button>
+      <button type="button" class="btn btn-secondary btn-block" onclick="printSalarySlip()" style="margin-top:6px;">🖨 列印本月薪資單給員工</button>
     </div>
 
     <!-- 本月薪資記錄列表 -->
@@ -4984,15 +4985,36 @@ function computeSalary(emp, input) {
     dailyRate = Math.round(base / 30);
   }
   // 依請假項目給薪類型計算扣款；若沒 leaveItems 則退回舊邏輯
-  let dailyDeduct = 0;
+  // ★ 請假計算（月薪制 vs 時薪制邏輯不同）
+  //   月薪制：底薪已含所有天，應扣「不該給的部分」
+  //     full（特休/公假/婚喪假/產假）→ 不扣
+  //     half（病假）→ 扣 0.5 × dailyRate × days
+  //     none（事假/曠職）→ 扣 1 × dailyRate × days
+  //   時薪制：計時收入只含實際上班，應加「請假該給的部分」
+  //     full → 加 dailyRate × days（有薪假）
+  //     half → 加 0.5 × dailyRate × days
+  //     none → 不加（自然沒上班沒錢）
+  let dailyDeduct = 0;    // 扣款（月薪制用）
+  let dailyAddback = 0;   // 加薪（時薪制用）
   if (input.leaveItems && input.leaveItems.length > 0) {
     input.leaveItems.forEach(it => {
       const cat = leaveCategories.find(c => c._id === it.categoryId);
       if (!cat) return;
-      if (cat.payType === 'none') dailyDeduct += (it.days || 0) * dailyRate;
-      else if (cat.payType === 'half') dailyDeduct += (it.days || 0) * dailyRate / 2;
+      const totalDays = (it.days || 0) + (it.hours || 0) / 8;
+      if (emp.isHourly) {
+        // 時薪制：加錢
+        if (cat.payType === 'full') dailyAddback += totalDays * dailyRate;
+        else if (cat.payType === 'half') dailyAddback += totalDays * dailyRate / 2;
+        // none: 不加不扣
+      } else {
+        // 月薪制：扣錢
+        if (cat.payType === 'none') dailyDeduct += totalDays * dailyRate;
+        else if (cat.payType === 'half') dailyDeduct += totalDays * dailyRate / 2;
+        // full: 不扣
+      }
     });
     dailyDeduct = Math.round(dailyDeduct);
+    dailyAddback = Math.round(dailyAddback);
   } else {
     dailyDeduct = Math.round(dailyRate * (input.leaveDays || 0));
   }
@@ -5018,7 +5040,7 @@ function computeSalary(emp, input) {
   const pensionSelfRate = Math.min(6, parseFloat(emp.pensionSelf) || 0);
   const pensionSelf = Math.round(insBase * pensionSelfRate / 100);
 
-  const gross = base + otPay1 + otPay2 + pieceIncome + hourIncome + leavePayAmount + (input.bonus || 0) - dailyDeduct;
+  const gross = base + otPay1 + otPay2 + pieceIncome + hourIncome + leavePayAmount + dailyAddback + (input.bonus || 0) - dailyDeduct;
   const deductions = laborIns + healthIns + pensionSelf + (input.otherDeduct || 0);
   const net = gross - deductions;
 
@@ -5028,6 +5050,7 @@ function computeSalary(emp, input) {
     leavePayDays, leavePayAmount,
     bonus: input.bonus || 0,
     leaveDeduct: dailyDeduct,
+    leaveAddback: dailyAddback,  // ★ 時薪制的請假加薪
     laborIns, healthIns, dependents,
     pensionSelf, pensionSelfRate,
     otherDeduct: input.otherDeduct || 0,
@@ -5056,6 +5079,64 @@ function gatherCalcInput() {
   };
 }
 
+// 🖨 列印薪資單給員工（用乾淨排版、新視窗）
+function printSalarySlip() {
+  const empId = document.getElementById('calcEmp').value;
+  const month = document.getElementById('calcMonth').value;
+  if (!empId || !month) { alert('請先選員工與月份'); return; }
+  const emp = employees.find(e => e._id === empId);
+  if (!emp) return;
+  // 先執行預覽確保有最新結果
+  calculateAndPreview();
+  const resultHtml = document.getElementById('calcResult').innerHTML;
+  if (!resultHtml || resultHtml.trim() === '') { alert('請先按「預覽計算」產生結果'); return; }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const companyName = '員工薪資單'; // 可改為公司名稱
+  const printHtml = `
+    <!DOCTYPE html>
+    <html lang="zh-TW"><head>
+      <meta charset="UTF-8">
+      <title>薪資單 - ${escapeHtml(emp.name)} - ${month}</title>
+      <style>
+        body { font-family: "Microsoft JhengHei", "PingFang TC", sans-serif; padding: 24px; color: #111; }
+        h1 { text-align: center; color: #059669; border-bottom: 3px double #059669; padding-bottom: 10px; margin: 0 0 16px; }
+        .info-box { background:#f9fafb; padding:12px 16px; border-radius:8px; margin-bottom:16px; font-size:14px; line-height:1.8; }
+        .info-box div { display:flex; justify-content:space-between; }
+        .info-box strong { color:#065f46; }
+        .result-row { display:flex; justify-content:space-between; padding: 6px 4px; border-bottom: 1px dashed #d1d5db; font-size:14px; }
+        .result-row.total { background:#ecfdf5; font-weight:bold; font-size:17px; color:#059669; padding:10px; border-radius:6px; margin-top:8px; border-bottom:none; }
+        .footer { margin-top:24px; padding-top:12px; border-top:1px solid #e5e7eb; font-size:11px; color:#6b7280; display:flex; justify-content:space-between; }
+        .sign-box { margin-top:36px; display:flex; justify-content:space-between; font-size:13px; }
+        .sign-box > div { width:45%; border-top:1px solid #111; padding-top:4px; text-align:center; }
+        @media print { body { padding: 0; } }
+      </style>
+    </head>
+    <body>
+      <h1>${companyName}</h1>
+      <div class="info-box">
+        <div><span>員工姓名：<strong>${escapeHtml(emp.name)}</strong></span><span>員工編號：${escapeHtml(emp.id || '-')}</span></div>
+        <div><span>薪資月份：<strong>${month}</strong></span><span>列印日期：${today}</span></div>
+        ${emp.workplace ? `<div><span>工作地點：${escapeHtml(emp.workplace)}</span><span>${emp.isHourly ? '時薪制' : '月薪制'}${emp.isShift ? '（排班制）' : ''}</span></div>` : ''}
+      </div>
+      ${resultHtml}
+      <div class="sign-box">
+        <div>發薪人簽章</div>
+        <div>員工簽收</div>
+      </div>
+      <div class="footer">
+        <span>本薪資單由薪資計算系統自動產生</span>
+        <span>${today}</span>
+      </div>
+      <script>window.onload = () => { window.print(); };</script>
+    </body></html>
+  `;
+  const w = window.open('', '_blank');
+  if (!w) { alert('瀏覽器擋下新視窗，請允許彈出視窗後再試'); return; }
+  w.document.write(printHtml);
+  w.document.close();
+}
+
 function calculateAndPreview() {
   const empId = document.getElementById('calcEmp').value;
   if (!empId) { alert('請選擇員工'); return; }
@@ -5063,7 +5144,7 @@ function calculateAndPreview() {
   const input = gatherCalcInput();
   const r = computeSalary(emp, input);
 
-  // ★ 請假扣款明細：按請假類別分別列出（事假 X 天扣 Y、病假 X 天扣 Y 等）
+  // ★ 請假扣款明細：按請假類別分別列出
   let leaveDeductDetail = '';
   if (input.leaveItems && input.leaveItems.length > 0) {
     const hourly = input.monthHourly > 0
@@ -5078,20 +5159,26 @@ function calculateAndPreview() {
       if (!cat) return;
       const totalDays = (it.days || 0) + (it.hours || 0) / 8;
       if (totalDays <= 0) return;
-      let deduct = 0;
+      let amount = 0;
       let payLabel = '';
-      if (cat.payType === 'none') {
-        deduct = Math.round(totalDays * dailyRate);
-        payLabel = '不給薪';
-      } else if (cat.payType === 'half') {
-        deduct = Math.round(totalDays * dailyRate / 2);
-        payLabel = '半薪（扣 1/2）';
+      let sign = '-'; // 月薪制是扣，時薪制全薪/半薪是加
+      if (emp.isHourly) {
+        // 時薪制
+        if (cat.payType === 'full') { amount = Math.round(totalDays * dailyRate); payLabel = '全薪（加薪）'; sign = '+'; }
+        else if (cat.payType === 'half') { amount = Math.round(totalDays * dailyRate / 2); payLabel = '半薪（加薪 1/2）'; sign = '+'; }
+        else { payLabel = '不給薪（不加不扣）'; }
       } else {
-        payLabel = '全薪（不扣）';
+        // 月薪制
+        if (cat.payType === 'none') { amount = Math.round(totalDays * dailyRate); payLabel = '不給薪（扣薪）'; }
+        else if (cat.payType === 'half') { amount = Math.round(totalDays * dailyRate / 2); payLabel = '半薪（扣 1/2）'; }
+        else { payLabel = '全薪（不扣）'; }
       }
-      if (deduct > 0) {
-        const dh = it.hours > 0 ? `${it.days || 0}天${it.hours}小時` : `${it.days || 0}天`;
-        details.push(`<div class="result-row" style="padding-left:16px; font-size:12px; color:#6b7280;"><span>├ ${cat.name} ${dh}（${payLabel}）</span><span>-NT$ ${formatMoney(deduct)}</span></div>`);
+      const dh = it.hours > 0 ? `${it.days || 0}天${it.hours}小時` : `${it.days || 0}天`;
+      if (amount > 0) {
+        const color = sign === '+' ? '#059669' : '#6b7280';
+        details.push(`<div class="result-row" style="padding-left:16px; font-size:12px; color:${color};"><span>├ ${cat.name} ${dh}（${payLabel}）</span><span>${sign}NT$ ${formatMoney(amount)}</span></div>`);
+      } else {
+        details.push(`<div class="result-row" style="padding-left:16px; font-size:12px; color:#9ca3af;"><span>├ ${cat.name} ${dh}（${payLabel}）</span><span>NT$ 0</span></div>`);
       }
     });
     leaveDeductDetail = details.join('');
@@ -5117,6 +5204,36 @@ function calculateAndPreview() {
     deductDetail = details;
   }
 
+  // ★ 本月請假使用摘要（從 dailyEntries 計算）
+  const calcMonth = document.getElementById('calcMonth').value;
+  const monthLeaveEntries = dailyEntries.filter(d =>
+    d.empId === emp._id && d.type === 'hour' && d.date.startsWith(calcMonth) &&
+    d.attType && d.attType !== 'normal' && d.attType !== '加班' && d.attType !== '時薪加班'
+  );
+  const leaveUsageByType = {};
+  monthLeaveEntries.forEach(d => {
+    const h = (d.hours && d.hours > 0) ? d.hours : 8;
+    if (!leaveUsageByType[d.attType]) leaveUsageByType[d.attType] = 0;
+    leaveUsageByType[d.attType] += h;
+  });
+  let leaveUsageHtml = '';
+  const leaveTypes = Object.keys(leaveUsageByType);
+  if (leaveTypes.length > 0) {
+    const items = leaveTypes.map(t => {
+      const h = leaveUsageByType[t];
+      const days = Math.floor(h / 8);
+      const hrs = h - days * 8;
+      const dh = hrs > 0 ? `${days}天${hrs}小時` : `${days}天`;
+      return `${t} ${dh}`;
+    }).join('、');
+    leaveUsageHtml = `
+      <div class="result-row" style="background:#fef3c7; border-radius:6px; padding:8px 12px; margin:6px 0;">
+        <span style="font-weight:600; color:#92400e;">🌴 本月請假</span>
+        <span style="color:#92400e; font-weight:600;">${items}</span>
+      </div>
+    `;
+  }
+
   const box = document.getElementById('calcResult');
   box.style.display = 'block';
   box.innerHTML = `
@@ -5133,6 +5250,7 @@ function calculateAndPreview() {
       <div class="result-row" style="padding-left:16px; font-size:12px; color:#6b7280;"><span>├ ${input.ot2 || 0} 小時 × ${formatMoney(r.otHourly || 0)} × 1.67</span><span>NT$ ${formatMoney(r.otPay2)}</span></div>
     ` : ''}
     ${r.bonus ? `<div class="result-row"><span>獎金/津貼</span><span>NT$ ${formatMoney(r.bonus)}</span></div>${bonusDetail}` : ''}
+    ${r.leaveAddback ? `<div class="result-row"><span>請假加薪（有薪假）</span><span>NT$ ${formatMoney(r.leaveAddback)}</span></div>` : ''}
     ${r.leaveDeduct ? `<div class="result-row"><span>請假扣款</span><span>-NT$ ${formatMoney(r.leaveDeduct)}</span></div>${leaveDeductDetail}` : ''}
     <div class="result-row"><span>應發合計</span><span>NT$ ${formatMoney(r.gross)}</span></div>
     <div class="result-row"><span>勞保</span><span>-NT$ ${formatMoney(r.laborIns)}</span></div>
@@ -5140,6 +5258,7 @@ function calculateAndPreview() {
     ${r.pensionSelf ? `<div class="result-row"><span>自提勞退 (${r.pensionSelfRate}%)</span><span>-NT$ ${formatMoney(r.pensionSelf)}</span></div>` : ''}
     ${r.otherDeduct ? `<div class="result-row"><span>其他扣款</span><span>-NT$ ${formatMoney(r.otherDeduct)}</span></div>${deductDetail}` : ''}
     <div class="result-row total"><span>實發金額</span><span>NT$ ${formatMoney(r.net)}</span></div>
+    ${leaveUsageHtml}
   `;
 }
 
