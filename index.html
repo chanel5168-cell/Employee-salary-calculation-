@@ -1603,8 +1603,8 @@ function subscribeAll() {
     if (suppressSubscription) return;
     dailyEntries = snap.docs.map(d => d.data());
     save(STORE.daily, dailyEntries);
-    refreshDailyEntries();
-    refreshMonthlyDaily();
+    // ★ 用統一 helper 刷新所有相關畫面（含九宮格統計）
+    refreshAllDailyViews();
   });
 
   col('products').onSnapshot(snap => {
@@ -2262,8 +2262,7 @@ function addPieceEntry() {
   document.getElementById('pieceNote').value = '';
   clearPhoto('piece');
   resetDailyButtons();
-  refreshDailyEntries();
-  refreshMonthlyDaily();
+  refreshAllDailyViews();
   if (wasEditing) alert('修改已儲存');
 }
 
@@ -2369,8 +2368,7 @@ function addHourEntry() {
   document.getElementById('hourBreakdown').style.display = 'none';
   clearPhoto('hour');
   resetDailyButtons();
-  refreshDailyEntries();
-  refreshMonthlyDaily();
+  refreshAllDailyViews();
   if (wasEditing) alert('修改已儲存');
 }
 
@@ -2593,10 +2591,7 @@ function saveAttendanceFromModal(id) {
   save(STORE.daily, dailyEntries);
   cloudSave('daily', entry);
   closeAttEditModal();
-  refreshMonthlyAttendance();
-  refreshDailyEntries();
-  refreshMonthlyDaily();
-  updateMonthlyDailyHint();
+  refreshAllDailyViews();
   alert('✅ 已更新該筆出勤記錄');
 }
 
@@ -2604,11 +2599,7 @@ async function deleteAttendanceFromMonth(id) {
   if (!confirm('確定刪除此筆出勤記錄？')) return;
   dailyEntries = dailyEntries.filter(d => d._id !== id);
   save(STORE.daily, dailyEntries);
-  refreshMonthlyAttendance();
-  updateLateHint();
-  refreshDailyEntries();
-  refreshMonthlyDaily();
-  updateMonthlyDailyHint();
+  refreshAllDailyViews();
   try {
     await cloudDelete('daily', id);
   } catch (e) {
@@ -2619,15 +2610,9 @@ async function deleteAttendanceFromMonth(id) {
 
 async function deleteDailyEntry(id) {
   if (!confirm('確定刪除此筆記錄？')) return;
-  // 1. 先從本地移除
   dailyEntries = dailyEntries.filter(d => d._id !== id);
   save(STORE.daily, dailyEntries);
-  // 2. 刷新 UI 讓使用者看到立即消失
-  refreshDailyEntries();
-  refreshMonthlyDaily();
-  if (typeof refreshMonthlyAttendance === 'function') refreshMonthlyAttendance();
-  if (typeof updateMonthlyDailyHint === 'function') updateMonthlyDailyHint();
-  // 3. 再確保雲端也刪除（即使本地已刪，雲端也要同步）
+  refreshAllDailyViews();
   try {
     await cloudDelete('daily', id);
   } catch (e) {
@@ -4470,11 +4455,7 @@ function batchSaveAttendance() {
   try { save(STORE.daily, dailyEntries); }
   catch (e) { alert('儲存失敗：' + e.message); }
   alert(`✅ 已批次新增 ${count} 天出勤`);
-  renderBatchAttendance();
-  refreshMonthlyAttendance();
-  updateMonthlyDailyHint();
-  refreshDailyEntries();
-  refreshMonthlyDaily();
+  refreshAllDailyViews();
 }
 
 // 月薪頁快速新增出勤
@@ -4583,11 +4564,7 @@ function quickAddAttendance() {
   if (typeof onQuickAttTypeChange === 'function') onQuickAttTypeChange();
 
   // 刷新相關畫面
-  refreshMonthlyAttendance();
-  updateLateHint();
-  updateMonthlyDailyHint();
-  refreshDailyEntries();
-  refreshMonthlyDaily();
+  refreshAllDailyViews();
 }
 
 function addLateDeduction(amount) {
@@ -5847,6 +5824,17 @@ function requireAdmin(reason) {
   }
   adminAuthUntil = now + 10 * 60 * 1000;
   return true;
+}
+
+// ========= 統一刷新所有每日記錄相關畫面 =========
+// 每日記錄有變化（新增/編輯/刪除/雲端同步）時呼叫此函式，確保所有畫面一致
+function refreshAllDailyViews() {
+  if (typeof refreshDailyEntries === 'function') refreshDailyEntries();
+  if (typeof refreshMonthlyDaily === 'function') refreshMonthlyDaily();
+  if (typeof refreshMonthlyAttendance === 'function') refreshMonthlyAttendance();
+  if (typeof updateMonthlyDailyHint === 'function') updateMonthlyDailyHint();
+  if (typeof updateLateHint === 'function') updateLateHint();
+  if (typeof renderBatchAttendance === 'function') renderBatchAttendance();
 }
 
 // ========= 計薪判斷統一函式 =========
