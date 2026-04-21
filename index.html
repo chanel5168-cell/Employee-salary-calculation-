@@ -9,6 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -272,6 +273,7 @@
     <div class="tab active" data-panel="employees">員工</div>
     <div class="tab" data-panel="daily">每日</div>
     <div class="tab" data-panel="calc">月薪</div>
+    <div class="tab hide-for-employee" data-panel="analytics">分析</div>
     <div class="tab hide-for-employee" data-panel="export">匯出</div>
     <div class="tab" data-panel="leave">特休</div>
     <div class="tab hide-for-employee hide-for-factory" data-panel="setup">設定</div>
@@ -1109,6 +1111,72 @@
     </div>
   </div>
 
+  <!-- 分析（管理者 / 廠別主管專用，員工不可見） -->
+  <div class="panel" id="panel-analytics">
+    <div class="card">
+      <h3>📊 管理分析報表</h3>
+      <div id="analyticsScopeBar" style="padding:10px; background:#f0fdf4; border:1px solid #06C755; border-radius:8px; font-size:12px; color:#166534; margin-bottom:10px; line-height:1.6;">
+        分析資料會依您的「可管理廠別」自動過濾，會計人員可直接匯出範圍內的報表做帳。
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>月份篩選 <span style="font-size:11px; color:#6b7280;">(空白 = 近 6 個月)</span></label>
+          <input type="month" id="analyticsMonth">
+        </div>
+        <div class="form-group">
+          <label>廠別篩選</label>
+          <select id="analyticsWorkplace"><option value="">全部可見廠別</option></select>
+        </div>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="refreshAnalytics()">🔄 重新計算</button>
+        <button class="btn btn-secondary" onclick="exportAnalyticsExcel()">📥 匯出分析 Excel</button>
+        <button class="btn btn-secondary" onclick="exportAccountingExcel()">💼 匯出會計做帳表</button>
+      </div>
+    </div>
+
+    <!-- 摘要卡 -->
+    <div class="card">
+      <h3>摘要</h3>
+      <div id="analyticsSummary" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px;"></div>
+    </div>
+
+    <!-- 圖表：月度薪資趨勢 -->
+    <div class="card">
+      <h3>近 6 個月總薪資趨勢</h3>
+      <div style="position:relative; height:240px;"><canvas id="chartMonthly"></canvas></div>
+    </div>
+
+    <!-- 圖表：廠別占比 -->
+    <div class="card">
+      <h3>廠別薪資占比（所選月份）</h3>
+      <div style="position:relative; height:260px;"><canvas id="chartByWorkplace"></canvas></div>
+    </div>
+
+    <!-- 圖表：加班時數與人員分布 -->
+    <div class="card">
+      <h3>加班時數 TOP 10（所選月份）</h3>
+      <div style="position:relative; height:280px;"><canvas id="chartOvertime"></canvas></div>
+    </div>
+
+    <!-- 明細表 -->
+    <div class="card">
+      <h3>月薪明細（範圍內）</h3>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>月份</th><th>姓名</th><th>廠別</th>
+              <th class="currency">應發</th><th class="currency">勞健保</th>
+              <th class="currency">其他扣款</th><th class="currency">實發</th>
+            </tr>
+          </thead>
+          <tbody id="analyticsTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- 特休管理 -->
   <div class="panel" id="panel-leave">
     <div class="card">
@@ -1207,9 +1275,10 @@
         💡 為總管理者、管理者、廠別主管或員工建立帳號，控制可看到的資料範圍：<br>
         • 👑 <strong>總管理者</strong>：最高權限，可管理所有帳號包含其他管理者<br>
         • 🔧 <strong>管理者</strong>：可看所有資料、編輯員工/薪資，但不能修改總管理者<br>
-        • 🏭 <strong>廠別主管</strong>：只看指定廠別的員工與薪資（可編輯）<br>
-        • 👤 <strong>員工</strong>：只看自己的薪資與出勤（唯讀）<br>
-        <span style="color:#dc2626;">⚠ 只有較高權限者才能建立、編輯、刪除較低權限帳號。</span>
+        • 🏭 <strong>廠別主管 / 會計人員</strong>：只看指定廠別的員工、薪資、<strong>分析圖表與報表匯出</strong>（可做帳用）<br>
+        • 👤 <strong>員工</strong>：只看自己的薪資與出勤（唯讀，無匯出）<br>
+        <span style="color:#dc2626;">⚠ 只有較高權限者才能建立、編輯、刪除較低權限帳號。</span><br>
+        <span style="color:#065f46;">📊 勾選的廠別同時決定該帳號在「分析」頁可看到的圖表與可匯出的報表範圍。</span>
       </div>
 
       <div class="form-row">
@@ -1974,6 +2043,7 @@ document.querySelectorAll('.tab').forEach(t => {
     if (t.dataset.panel === 'calc') refreshEmpDropdown();
     if (t.dataset.panel === 'leave') refreshLeaveList();
     if (t.dataset.panel === 'setup') refreshHolidayList();
+    if (t.dataset.panel === 'analytics') initAnalyticsPanel();
     if (t.dataset.panel === 'daily') {
       refreshEmpDropdown();
       refreshDailyEntries();
@@ -7236,12 +7306,13 @@ function updateUserInfoBar() {
   if (!bar) return;
   if (!currentUser) { bar.style.display = 'none'; return; }
   let roleLabel;
-  if (isAdmin()) roleLabel = '管理者';
+  if (isSuperAdmin()) roleLabel = '👑 總管理者';
+  else if (isAdmin()) roleLabel = '🔧 管理者';
   else if (isFactoryRole()) {
     const wps = getUserWorkplaces(currentUser);
-    roleLabel = `廠別主管 (${wps.length > 0 ? wps.join('、') : '未設定'})`;
+    roleLabel = `🏭 廠別主管 (${wps.length > 0 ? wps.join('、') : '未設定'})`;
   } else {
-    roleLabel = '員工 (僅看自己)';
+    roleLabel = '👤 員工 (僅看自己)';
   }
   bar.innerHTML = `
     👤 <strong>${escapeHtml(currentUser.displayName || currentUser.username)}</strong>
@@ -7297,8 +7368,16 @@ function refreshUserList() {
         scope = u.empName || u.empId || '-';
       }
       const isEditing = editingUserId === u._id;
-      // 只有「角色權重 <= 當前使用者」才能編輯/刪除（admin 不能改 super）
-      const canModify = (roleWeight[u.role] || 0) < currentWeight || (roleWeight[u.role] || 0) === currentWeight && u._id === currentUser._id;
+      // 權限規則：
+      // 1) 總管理者 (super) 可修改所有人（包含其他總管理者）
+      // 2) 其他角色只能修改比自己權重低的帳號，或自己這筆
+      // 3) admin 不能改 super（受規則 2 保護）
+      const targetWeight = roleWeight[u.role] || 0;
+      const canModify = currentUser && (
+        currentUser.role === 'super' ||
+        targetWeight < currentWeight ||
+        u._id === currentUser._id
+      );
       const actionBtns = canModify
         ? `<button class="btn btn-secondary btn-sm" onclick="editUser('${u._id}')" style="padding:2px 8px; font-size:11px;">✏️ 變更</button>
            <button class="btn btn-danger btn-sm" onclick="deleteUser('${u._id}')" style="padding:2px 8px; font-size:11px;">刪除</button>`
@@ -7395,7 +7474,8 @@ function saveUser() {
   const currentWeight = currentUser ? (roleWeight[currentUser.role] || 0) : 0;
   const targetWeight = roleWeight[role] || 0;
   if (targetWeight > currentWeight) {
-    alert(`⚠ 權限不足：您目前是「${currentUser.role === 'admin' ? '管理者' : currentUser.role}」，無法建立 / 編輯角色「${role === 'super' ? '總管理者' : role}」的帳號。\n\n請由「總管理者」建立。`);
+    const roleLabelMap = { super: '總管理者', admin: '管理者', factory: '廠別主管', employee: '員工' };
+    alert(`⚠ 權限不足：您目前是「${roleLabelMap[currentUser.role] || currentUser.role}」，無法建立 / 編輯角色「${roleLabelMap[role] || role}」的帳號。\n\n請由「總管理者」建立。`);
     return;
   }
   // 若在編輯既有使用者，也要檢查對方權限
@@ -7654,6 +7734,284 @@ function init() {
 }
 
 init();
+
+// ========= 📊 管理分析（圖表 + 匯出）=========
+let _chartMonthly = null, _chartByWp = null, _chartOt = null;
+
+function getAnalyticsScope() {
+  // 依目前登入者角色過濾可管理的廠別
+  if (!currentUser) return { wps: [], label: '未登入' };
+  if (isEmployeeRole()) return { wps: [], label: '員工角色無分析權限' };
+  if (isFactoryRole()) {
+    const wps = (currentUser.workplaces || []);
+    return { wps, label: wps.length ? wps.join('、') : '未設定任何廠別' };
+  }
+  // admin / super: 全部
+  const all = workplaces.map(w => w.name);
+  return { wps: all, label: '全部廠別' };
+}
+
+function initAnalyticsPanel() {
+  if (isEmployeeRole()) {
+    alert('員工身份無分析頁權限');
+    return;
+  }
+  // 預設月份：當月
+  const mon = document.getElementById('analyticsMonth');
+  if (!mon.value) {
+    const d = new Date();
+    mon.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  }
+
+  // 廠別下拉（只顯示可管理廠別）
+  const scope = getAnalyticsScope();
+  const sel = document.getElementById('analyticsWorkplace');
+  sel.innerHTML = '<option value="">全部可見廠別</option>' +
+    scope.wps.map(w => `<option value="${escapeHtml(w)}">${escapeHtml(w)}</option>`).join('');
+  document.getElementById('analyticsScopeBar').innerHTML =
+    `您目前可分析的廠別：<strong>${escapeHtml(scope.label)}</strong>（角色：${isFactoryRole() ? '廠別主管' : '管理者/總管理者'}）`;
+
+  refreshAnalytics();
+}
+
+function getAnalyticsRecords() {
+  // 範圍內的薪資記錄
+  const scope = getAnalyticsScope();
+  const filterWp = document.getElementById('analyticsWorkplace').value;
+  const filterMon = document.getElementById('analyticsMonth').value;
+
+  return records.filter(r => {
+    const emp = employees.find(e => e._id === r.empId);
+    const wp = emp ? emp.workplace : '';
+    if (!scope.wps.includes(wp)) return false;
+    if (filterWp && wp !== filterWp) return false;
+    if (filterMon && r.month !== filterMon) return false;
+    return true;
+  }).map(r => {
+    const emp = employees.find(e => e._id === r.empId) || {};
+    return { ...r, workplace: emp.workplace || '-', _emp: emp };
+  });
+}
+
+function refreshAnalytics() {
+  const all = getAnalyticsRecords();
+  const filterMon = document.getElementById('analyticsMonth').value;
+
+  // ---- 摘要卡 ----
+  const totalGross = all.reduce((s, r) => s + (r.gross || 0), 0);
+  const totalNet = all.reduce((s, r) => s + (r.net || 0), 0);
+  const totalIns = all.reduce((s, r) => s + (r.laborIns || 0) + (r.healthIns || 0), 0);
+  const totalOt = all.reduce((s, r) => s + ((r.ot1 || 0) + (r.ot2 || 0)), 0);
+  const empCount = new Set(all.map(r => r.empId)).size;
+
+  const cards = [
+    { label: '員工人次', value: empCount, color: '#06C755' },
+    { label: '應發合計', value: 'NT$ ' + totalGross.toLocaleString(), color: '#1e40af' },
+    { label: '勞健保合計', value: 'NT$ ' + totalIns.toLocaleString(), color: '#9333ea' },
+    { label: '實發合計', value: 'NT$ ' + totalNet.toLocaleString(), color: '#dc2626' },
+    { label: '加班總時數', value: totalOt.toFixed(1) + ' 時', color: '#ea580c' }
+  ];
+  document.getElementById('analyticsSummary').innerHTML = cards.map(c => `
+    <div style="padding:14px; border-radius:10px; background:#fff; border:1px solid #e5e7eb;">
+      <div style="font-size:12px; color:#6b7280; margin-bottom:4px;">${c.label}</div>
+      <div style="font-size:18px; font-weight:700; color:${c.color};">${c.value}</div>
+    </div>`).join('');
+
+  // ---- 圖表 1：近 6 個月總薪資趨勢 ----
+  const months = [];
+  const base = filterMon ? new Date(filterMon + '-01') : new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
+    months.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+  }
+  const scope = getAnalyticsScope();
+  const monthlyData = months.map(m => {
+    const rs = records.filter(r => {
+      const emp = employees.find(e => e._id === r.empId);
+      return emp && scope.wps.includes(emp.workplace) && r.month === m;
+    });
+    return {
+      gross: rs.reduce((s, r) => s + (r.gross || 0), 0),
+      net: rs.reduce((s, r) => s + (r.net || 0), 0)
+    };
+  });
+  if (_chartMonthly) _chartMonthly.destroy();
+  _chartMonthly = new Chart(document.getElementById('chartMonthly'), {
+    type: 'line',
+    data: {
+      labels: months,
+      datasets: [
+        { label: '應發合計', data: monthlyData.map(x => x.gross), borderColor: '#06C755', backgroundColor: '#06C75533', tension: 0.3, fill: true },
+        { label: '實發合計', data: monthlyData.map(x => x.net), borderColor: '#3b82f6', backgroundColor: '#3b82f633', tension: 0.3, fill: false }
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+  });
+
+  // ---- 圖表 2：廠別占比（所選月份）----
+  const wpMap = {};
+  all.forEach(r => { wpMap[r.workplace] = (wpMap[r.workplace] || 0) + (r.gross || 0); });
+  const wpLabels = Object.keys(wpMap);
+  const wpValues = Object.values(wpMap);
+  const wpColors = ['#06C755', '#3b82f6', '#f59e0b', '#ef4444', '#9333ea', '#14b8a6', '#ec4899', '#64748b'];
+  if (_chartByWp) _chartByWp.destroy();
+  _chartByWp = new Chart(document.getElementById('chartByWorkplace'), {
+    type: 'doughnut',
+    data: { labels: wpLabels.length ? wpLabels : ['無資料'], datasets: [{ data: wpValues.length ? wpValues : [1], backgroundColor: wpColors }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } }
+  });
+
+  // ---- 圖表 3：加班時數 TOP 10 ----
+  const otList = all.map(r => ({ name: r.empName, wp: r.workplace, hours: (r.ot1 || 0) + (r.ot2 || 0) }))
+    .filter(x => x.hours > 0)
+    .sort((a, b) => b.hours - a.hours).slice(0, 10);
+  if (_chartOt) _chartOt.destroy();
+  _chartOt = new Chart(document.getElementById('chartOvertime'), {
+    type: 'bar',
+    data: {
+      labels: otList.length ? otList.map(x => `${x.name}（${x.wp}）`) : ['無資料'],
+      datasets: [{ label: '加班時數', data: otList.length ? otList.map(x => x.hours) : [0], backgroundColor: '#f59e0b' }]
+    },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+  });
+
+  // ---- 明細表 ----
+  const tb = document.getElementById('analyticsTbody');
+  if (!all.length) {
+    tb.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:16px; color:#9ca3af;">範圍內暫無資料</td></tr>';
+    return;
+  }
+  tb.innerHTML = all.sort((a, b) => (b.month || '').localeCompare(a.month || '')).slice(0, 100).map(r => `
+    <tr>
+      <td>${escapeHtml(r.month || '')}</td>
+      <td>${escapeHtml(r.empName || '')}</td>
+      <td>${escapeHtml(r.workplace || '')}</td>
+      <td class="currency">${(r.gross || 0).toLocaleString()}</td>
+      <td class="currency">${((r.laborIns || 0) + (r.healthIns || 0)).toLocaleString()}</td>
+      <td class="currency">${(r.otherDeduct || 0).toLocaleString()}</td>
+      <td class="currency" style="color:#06C755; font-weight:600;">${(r.net || 0).toLocaleString()}</td>
+    </tr>`).join('');
+}
+
+// 監聽篩選變動
+document.addEventListener('change', e => {
+  if (e.target && (e.target.id === 'analyticsMonth' || e.target.id === 'analyticsWorkplace')) {
+    refreshAnalytics();
+  }
+});
+
+// ========= 💾 分析 Excel 匯出（權限：非員工）=========
+function exportAnalyticsExcel() {
+  if (isEmployeeRole()) { alert('員工角色無匯出權限'); return; }
+  const all = getAnalyticsRecords();
+  if (!all.length) { alert('範圍內無資料可匯出'); return; }
+
+  const scope = getAnalyticsScope();
+  const mon = document.getElementById('analyticsMonth').value || '全部';
+
+  const wb = XLSX.utils.book_new();
+
+  // 1) 摘要
+  const totalGross = all.reduce((s, r) => s + (r.gross || 0), 0);
+  const totalNet = all.reduce((s, r) => s + (r.net || 0), 0);
+  const totalIns = all.reduce((s, r) => s + (r.laborIns || 0) + (r.healthIns || 0), 0);
+  const totalOt = all.reduce((s, r) => s + ((r.ot1 || 0) + (r.ot2 || 0)), 0);
+  const summary = [
+    ['📊 管理分析報表'],
+    ['匯出時間', new Date().toLocaleString('zh-TW')],
+    ['月份', mon],
+    ['可管理廠別範圍', scope.label],
+    ['使用者', (currentUser && currentUser.displayName) || (currentUser && currentUser.username) || '-'],
+    [],
+    ['項目', '數值'],
+    ['員工人次', new Set(all.map(r => r.empId)).size],
+    ['應發合計', totalGross],
+    ['勞健保合計', totalIns],
+    ['實發合計', totalNet],
+    ['加班總時數', totalOt]
+  ];
+  const ws1 = XLSX.utils.aoa_to_sheet(summary);
+  ws1['!cols'] = [{ wch: 18 }, { wch: 20 }];
+  XLSX.utils.book_append_sheet(wb, ws1, '摘要');
+
+  // 2) 廠別小計
+  const wpMap = {};
+  all.forEach(r => {
+    if (!wpMap[r.workplace]) wpMap[r.workplace] = { gross: 0, net: 0, ins: 0, count: 0 };
+    wpMap[r.workplace].gross += (r.gross || 0);
+    wpMap[r.workplace].net += (r.net || 0);
+    wpMap[r.workplace].ins += (r.laborIns || 0) + (r.healthIns || 0);
+    wpMap[r.workplace].count++;
+  });
+  const wpRows = [['廠別', '筆數', '應發合計', '勞健保', '實發合計']];
+  Object.keys(wpMap).forEach(k => {
+    const v = wpMap[k];
+    wpRows.push([k, v.count, v.gross, v.ins, v.net]);
+  });
+  const ws2 = XLSX.utils.aoa_to_sheet(wpRows);
+  ws2['!cols'] = [{ wch: 16 }, { wch: 8 }, { wch: 14 }, { wch: 12 }, { wch: 14 }];
+  XLSX.utils.book_append_sheet(wb, ws2, '廠別小計');
+
+  // 3) 月薪明細
+  const detailRows = [['月份', '員工編號', '姓名', '廠別', '應發', '勞保', '健保', '其他扣款', '實發']];
+  all.forEach(r => detailRows.push([
+    r.month, r.empNo || '', r.empName, r.workplace,
+    r.gross || 0, r.laborIns || 0, r.healthIns || 0, r.otherDeduct || 0, r.net || 0
+  ]));
+  const ws3 = XLSX.utils.aoa_to_sheet(detailRows);
+  ws3['!cols'] = [{ wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }];
+  XLSX.utils.book_append_sheet(wb, ws3, '月薪明細');
+
+  const fname = `分析報表_${mon}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  XLSX.writeFile(wb, fname);
+}
+
+// ========= 💼 會計做帳表 =========
+function exportAccountingExcel() {
+  if (isEmployeeRole()) { alert('員工角色無匯出權限'); return; }
+  const all = getAnalyticsRecords();
+  if (!all.length) { alert('範圍內無資料可匯出'); return; }
+
+  const scope = getAnalyticsScope();
+  const mon = document.getElementById('analyticsMonth').value || '';
+  const wb = XLSX.utils.book_new();
+
+  // 會計做帳標準表（傳票用）
+  const head = [['🧾 會計做帳表 - 薪資支出傳票輔助'],
+    ['月份', mon || '全部'],
+    ['廠別範圍', scope.label],
+    ['列印時間', new Date().toLocaleString('zh-TW')],
+    []];
+  const dataHead = ['員工編號', '姓名', '廠別', '薪資費用(借)', '應付薪資(貸)', '代扣勞保', '代扣健保', '代扣其他', '實發金額'];
+  const rows = [...head, dataHead];
+  let sumGross = 0, sumLabor = 0, sumHealth = 0, sumOther = 0, sumNet = 0;
+  all.forEach(r => {
+    const gross = r.gross || 0;
+    const labor = r.laborIns || 0;
+    const health = r.healthIns || 0;
+    const other = r.otherDeduct || 0;
+    const net = r.net || 0;
+    sumGross += gross; sumLabor += labor; sumHealth += health; sumOther += other; sumNet += net;
+    rows.push([r.empNo || '', r.empName, r.workplace, gross, gross, labor, health, other, net]);
+  });
+  rows.push([]);
+  rows.push(['', '', '合計', sumGross, sumGross, sumLabor, sumHealth, sumOther, sumNet]);
+  rows.push([]);
+  rows.push(['分錄說明（僅供會計參考）']);
+  rows.push(['借：薪資費用', sumGross]);
+  rows.push(['　　貸：應付薪資—勞保代扣', sumLabor]);
+  rows.push(['　　　　應付薪資—健保代扣', sumHealth]);
+  rows.push(['　　　　應付薪資—其他代扣', sumOther]);
+  rows.push(['　　　　銀行存款（實發）', sumNet]);
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
+  XLSX.utils.book_append_sheet(wb, ws, '做帳表');
+
+  const fname = `會計做帳表_${mon || '全部'}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  XLSX.writeFile(wb, fname);
+}
+
 </script>
 </body>
 </html>
