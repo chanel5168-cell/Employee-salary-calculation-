@@ -1091,6 +1091,8 @@
       <button class="btn btn-secondary btn-block" onclick="removeDuplicateRecords()" style="margin-top:8px;">🧹 清理重複的月薪記錄（同員工同月）</button>
       <button class="btn btn-secondary btn-block" onclick="removeDuplicateDailyEntries()" style="margin-top:8px;">🧹 清理重複的每日計時記錄（同員工同日同時段）</button>
       <button class="btn btn-secondary btn-block" onclick="fixStaleHours()" style="margin-top:8px;">🔧 修正所有時數不一致的計時記錄（依時段重算）</button>
+      <button class="btn btn-secondary btn-block" onclick="fixOvertimeEntries()" style="margin-top:8px;">🔧 修正所有加班記錄（重設計薪狀態與金額）</button>
+      <button class="btn btn-secondary btn-block" onclick="deleteEntriesByEmployee()" style="margin-top:8px; background:#fef3c7; color:#92400e; border:1px solid #f59e0b;">🗑 依員工清除每日記錄（可選月份）</button>
       <button class="btn btn-danger btn-block" onclick="wipeCloudOnly()" style="margin-top:8px; background:#c92a2a;">🔐 ☁ 強制重設雲端資料（清除全部後仍殘留時使用）</button>
       <button class="btn btn-secondary btn-block" onclick="forcePullFromCloud()" style="margin-top:8px;">🔄 從雲端強制同步（清空本地以雲端為準）</button>
       <div style="padding:8px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; font-size:12px; color:#664d03; margin-top:6px;">
@@ -3544,45 +3546,38 @@ function addLeaveItem() {
   renderLeaveItems();
 }
 
-// 從本月出勤明細的請假類型記錄自動帶入「請假明細」
-function autoFillLeaveFromAttendance() {
-  const empId = document.getElementById('calcEmp').value;
-  const month = document.getElementById('calcMonth').value;
-  if (!empId || !month) { alert('請先選員工與月份'); return; }
-  // 抓出所有該員工該月的請假類型出勤
+// 計算某員工某月份的請假項目（從 dailyEntries 推出 leaveItems 陣列）
+function computeLeaveItemsFromAttendance(empId, month) {
+  if (!empId || !month) return [];
   const list = dailyEntries.filter(d =>
     d.empId === empId && d.date.startsWith(month) && d.type === 'hour' &&
     d.attType && d.attType !== 'normal' && d.attType !== '加班' && d.attType !== '時薪加班'
   );
-  if (list.length === 0) {
-    alert('本月出勤明細中沒有任何請假類型記錄');
-    return;
-  }
-  // 依 attType 分類加總時數
+  if (list.length === 0) return [];
   const byType = {};
   list.forEach(d => {
     const h = d.hours || 0;
     if (!byType[d.attType]) byType[d.attType] = 0;
     byType[d.attType] += h;
   });
-  // 換算為「天 + 小時」（8h = 1天）並寫入 currentLeaveItems
   const newItems = [];
   Object.entries(byType).forEach(([attType, totalHr]) => {
-    // 對應到 leaveCategories
     const cat = leaveCategories.find(c => c.name === attType);
-    if (!cat) {
-      console.warn('找不到請假類別:', attType);
-      return;
-    }
+    if (!cat) return;
     const days = Math.floor(totalHr / 8);
     const hours = totalHr - days * 8;
     newItems.push({ categoryId: cat._id, days, hours: Math.round(hours * 100) / 100 });
   });
-  if (newItems.length === 0) {
-    alert('沒有可對應的請假類別（請先到設定頁建立對應類別）');
-    return;
-  }
-  // 顯示確認，告知會覆蓋現有請假明細
+  return newItems;
+}
+
+// 從出勤明細自動帶入請假（手動按鈕）
+function autoFillLeaveFromAttendance() {
+  const empId = document.getElementById('calcEmp').value;
+  const month = document.getElementById('calcMonth').value;
+  if (!empId || !month) { alert('請先選員工與月份'); return; }
+  const newItems = computeLeaveItemsFromAttendance(empId, month);
+  if (newItems.length === 0) { alert('本月出勤明細中沒有任何請假類型記錄'); return; }
   const summary = newItems.map(it => {
     const cat = leaveCategories.find(c => c._id === it.categoryId);
     return `  ${cat.name} ${it.days}天${it.hours > 0 ? it.hours + '小時' : ''}`;
@@ -3590,9 +3585,24 @@ function autoFillLeaveFromAttendance() {
   if (!confirm(`將從本月出勤明細自動帶入請假：\n\n${summary}\n\n注意：會覆蓋目前請假明細區塊的內容。\n\n繼續？`)) return;
   currentLeaveItems = newItems;
   renderLeaveItems();
-  // 連動更新隱藏的 leaveDays
   updateLeaveTotal();
   alert(`✅ 已帶入 ${newItems.length} 筆請假項目，記得按下方「💾 儲存記錄」存檔！`);
+}
+
+// 自動（無提示）帶入請假：若尚未在編輯某筆月薪記錄且 currentLeaveItems 為空時觸發
+function autoFillLeaveSilent() {
+  // 若正在編輯既有月薪記錄 → 不覆蓋
+  if (editingRecordId) return;
+  // 若使用者已手動新增過請假項目 → 不覆蓋
+  if (currentLeaveItems.length > 0) return;
+  const empId = document.getElementById('calcEmp').value;
+  const month = document.getElementById('calcMonth').value;
+  if (!empId || !month) return;
+  const newItems = computeLeaveItemsFromAttendance(empId, month);
+  if (newItems.length === 0) return;
+  currentLeaveItems = newItems;
+  renderLeaveItems();
+  updateLeaveTotal();
 }
 
 function removeLeaveItem(idx) {
@@ -4412,9 +4422,20 @@ function updateAnnualLeaveHint() {
   let entitled = info.entitled;
   if (isHourly && weekly > 0) entitled = Math.round(info.entitled * weekly / 40 * 10) / 10;
   else if (!isNaN(override)) entitled = override;
-  const used = parseFloat(emp.leaveUsed) || 0;
+  // ★ 已休：從 dailyEntries 累計當年度（年曆年）所有特休 hours / 8
+  //   若 dailyEntries 無資料則用 emp.leaveUsed 當備援
+  const yearStart = `${y}-01-01`;
+  const yearEnd = `${y}-12-31`;
+  const usedHours = dailyEntries
+    .filter(d => d.empId === empId && d.type === 'hour' && d.attType === '特休'
+      && d.date >= yearStart && d.date <= yearEnd)
+    .reduce((a, b) => a + (b.hours || 0), 0);
+  const usedFromEntries = Math.round((usedHours / 8) * 10) / 10;
+  const manualUsed = parseFloat(emp.leaveUsed) || 0;
+  const used = usedFromEntries > 0 ? usedFromEntries : manualUsed;
   const remain = Math.round((entitled - used) * 10) / 10;
-  hint.innerHTML = `🌴 <strong>特休狀態</strong>（到 ${monthEnd}）：應有 <strong>${entitled}</strong> 天｜已休 <strong>${used}</strong> 天｜剩餘 <strong style="color:${remain > 0 ? '#059669' : '#dc2626'};">${remain}</strong> 天 ${remain > 0 ? '（可填入下方折算）' : '（已用完）'}`;
+  const usedSource = usedFromEntries > 0 ? '（依出勤明細累計）' : (manualUsed > 0 ? '（手動輸入）' : '');
+  hint.innerHTML = `🌴 <strong>特休狀態</strong>（到 ${monthEnd}）：應有 <strong>${entitled}</strong> 天｜已休 <strong>${used}</strong> 天 ${usedSource}｜剩餘 <strong style="color:${remain > 0 ? '#059669' : '#dc2626'};">${remain}</strong> 天 ${remain > 0 ? '（可填入下方折算）' : '（已用完）'}`;
   hint.style.display = 'block';
 }
 
@@ -4780,11 +4801,12 @@ function quickAddAttendance() {
   const attType = document.getElementById('quickAttType').value || 'normal';
   // 請假類型：不含 加班、時薪加班
   const isLeave = attType !== 'normal' && attType !== '加班' && attType !== '時薪加班';
-  // ★ 月薪制員工「正常上班」→ 僅打卡不計薪（底薪已含）
-  //   月薪制「加班」→ 走 ot1/ot2 倍率，也不在這裡計薪（subtotal=0）
-  //   月薪制「時薪加班」→ 按獨立時薪平額計薪
+  // ★ 月薪制「正常上班」→ 僅打卡不計薪（底薪已含）
+  //   月薪制/時薪制「加班」或「時薪加班」→ rate × 時數 寫入 subtotal
+  //   - 若想用 1.34 倍率 → 手動把 subtotal 改為 0（只記錄時數）→ 系統自動帶到 ot1/ot2
+  //   - 若想用平額時薪 → 保留 subtotal → 計入「計時收入」
   const isMonthly = !emp.isHourly;
-  const attendanceOnly = isMonthly && (attType === 'normal' || attType === '加班');
+  const attendanceOnly = isMonthly && attType === 'normal';
   const entry = {
     _id: 'd_' + Date.now(),
     date, empId, empName: emp.name, empNo: emp.id,
@@ -4851,6 +4873,8 @@ function updateMonthlyDailyHint() {
   updateLateHint();
   refreshMonthlyAttendance();
   renderBatchAttendance();
+  // ★ 自動從出勤明細帶入請假（若尚未手動填）
+  if (typeof autoFillLeaveSilent === 'function') autoFillLeaveSilent();
   const empId = document.getElementById('calcEmp').value;
   const month = document.getElementById('calcMonth').value;
   const hint = document.getElementById('monthlyDailyHint');
@@ -6136,6 +6160,97 @@ function removeDuplicateRecords() {
   refreshRecords();
   updateSummary();
   alert(`✅ 清理完成：\n  保留 ${keepers.length} 筆\n  刪除 ${toDelete.length} 筆重複`);
+}
+
+// 🔄 修正所有加班記錄的 attendanceOnly 與 subtotal（解決舊版邏輯留下的 bug）
+function fixOvertimeEntries() {
+  if (!confirm('將掃描所有 計時記錄，把「加班/時薪加班」類型的記錄重新計算：\n\n  - attendanceOnly 設為 false（讓它可被計薪）\n  - subtotal 依 hours × rate 重新計算\n  - 若員工時薪為 0 → 自動用員工時薪或月薪推算\n\n繼續？')) return;
+  let count = 0;
+  dailyEntries.forEach(d => {
+    if (d.type !== 'hour') return;
+    if (d.attType !== '加班' && d.attType !== '時薪加班') return;
+    // 找員工 → 取時薪
+    const emp = employees.find(e => e._id === d.empId);
+    if (!emp) return;
+    const fallbackRate = emp.hourlyRate || (emp.baseSalary ? Math.round(emp.baseSalary / 30 / 8) : 0);
+    const rate = d.rate || fallbackRate;
+    const oldAttOnly = d.attendanceOnly;
+    const oldSub = d.subtotal || 0;
+    const newSub = Math.round((d.hours || 0) * rate * 100) / 100;
+    if (oldAttOnly || oldSub !== newSub || !d.rate) {
+      d.attendanceOnly = false;
+      d.rate = rate;
+      d.subtotal = newSub;
+      d.updatedAt = new Date().toISOString();
+      cloudSave('daily', d);
+      count++;
+    }
+  });
+  if (count === 0) { alert('✅ 所有加班記錄都正確'); return; }
+  save(STORE.daily, dailyEntries);
+  refreshAllDailyViews();
+  alert(`✅ 已修正 ${count} 筆加班記錄\n\n請回月薪計算頁按「一鍵帶入」重新計算`);
+}
+
+// 🗑 依員工（可選月份）批次刪除每日記錄 — 同時刪本地 + 雲端
+async function deleteEntriesByEmployee() {
+  if (!requireAdmin('依員工清除每日記錄')) return;
+  if (employees.length === 0) { alert('沒有員工資料'); return; }
+  // 1. 選員工
+  const empList = employees.map(e => `${e.id || '-'} ${e.name}`).join('\n');
+  const empPick = prompt(`請輸入要清除記錄的員工編號或姓名（區分大小寫）：\n\n目前員工清單：\n${empList}\n\n範例：10001 或 測試員A`);
+  if (!empPick) return;
+  const keyword = empPick.trim();
+  const emp = employees.find(e =>
+    e.id === keyword || e.name === keyword ||
+    (e.id && e.id.includes(keyword)) || (e.name && e.name.includes(keyword))
+  );
+  if (!emp) { alert('找不到符合的員工'); return; }
+
+  // 2. 選月份（空白 = 全部）
+  const month = prompt(`要清除 ${emp.name}（${emp.id || '-'}）哪個月的記錄？\n\n格式：2026-04\n留空 = 清除所有月份的每日記錄`);
+  if (month === null) return;
+
+  // 3. 找出要刪的記錄
+  let toDelete = dailyEntries.filter(d => d.empId === emp._id);
+  if (month && month.trim()) toDelete = toDelete.filter(d => d.date.startsWith(month.trim()));
+  if (toDelete.length === 0) {
+    alert(`${emp.name} 在${month ? ' ' + month + ' ' : ''}沒有任何每日記錄`);
+    return;
+  }
+
+  // 4. 統計一下讓使用者知道
+  const pieceCount = toDelete.filter(d => d.type === 'piece').length;
+  const hourCount = toDelete.filter(d => d.type === 'hour').length;
+  if (!confirm(
+    `⚠ 將刪除 ${emp.name}（${emp.id || '-'}）的以下記錄：\n\n` +
+    `${month ? '月份：' + month : '全部月份'}\n` +
+    `論件記錄：${pieceCount} 筆\n` +
+    `計時記錄：${hourCount} 筆\n` +
+    `總計 ${toDelete.length} 筆\n\n` +
+    `此動作會同步刪除雲端 Firestore，無法復原！\n\n` +
+    `繼續？`
+  )) return;
+
+  // 5. 刪本地
+  const delIds = new Set(toDelete.map(d => d._id));
+  dailyEntries = dailyEntries.filter(d => !delIds.has(d._id));
+  save(STORE.daily, dailyEntries);
+  refreshAllDailyViews();
+
+  // 6. 刪雲端
+  suppressSubscription = true;
+  let cloudOk = 0, cloudFail = 0;
+  for (const d of toDelete) {
+    try {
+      await cloudDelete('daily', d._id);
+      cloudOk++;
+    } catch (e) {
+      cloudFail++;
+    }
+  }
+  suppressSubscription = false;
+  alert(`✅ 已刪除 ${toDelete.length} 筆記錄\n  本地：${toDelete.length} 筆\n  雲端：${cloudOk} 成功, ${cloudFail} 失敗`);
 }
 
 // 🔧 依上下班時間重新計算所有計時記錄的 hours 與 subtotal
