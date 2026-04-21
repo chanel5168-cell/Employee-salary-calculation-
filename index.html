@@ -731,13 +731,14 @@
           <option value="">-- 請選擇 --</option>
         </select>
       </div>
+      <div id="quickAttTimeHint" style="display:none; padding:6px 10px; background:#fef3c7; border-left:3px solid #f59e0b; border-radius:4px; font-size:11px; color:#92400e; margin-bottom:8px;"></div>
       <div class="form-row" id="quickAttTimeRow">
         <div class="form-group">
-          <label>上班時間</label>
+          <label id="quickAttStartLabel">上班時間</label>
           <input type="text" id="quickAttStart" placeholder="HH:MM (例 08:00)" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this); autoFillLate('quick')">
         </div>
         <div class="form-group">
-          <label>下班時間</label>
+          <label id="quickAttEndLabel">下班時間</label>
           <input type="text" id="quickAttEnd" placeholder="HH:MM (例 17:00)" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this)">
         </div>
       </div>
@@ -937,6 +938,7 @@
         <div style="text-align:right; margin-top:8px; padding:6px 10px; background:#f0fdf4; border-radius:6px; font-size:13px;">
           獎金合計: <strong style="color:#06C755;">NT$ <span id="bonusTotal">0</span></strong>
         </div>
+        <div id="bonusConfirmBox" style="display:none; margin-top:6px; padding:8px 10px; background:#d1fae5; border:2px solid #10b981; border-radius:6px; font-size:12px; color:#065f46; font-weight:600;"></div>
       </div>
 
       <!-- 獎金類別管理子面板 -->
@@ -969,6 +971,7 @@
         <div style="text-align:right; margin-top:8px; padding:6px 10px; background:#fef2f2; border-radius:6px; font-size:13px;">
           扣款合計: <strong style="color:#ef4444;">NT$ <span id="otherDeductTotal">0</span></strong>
         </div>
+        <div id="deductConfirmBox" style="display:none; margin-top:6px; padding:8px 10px; background:#fee2e2; border:2px solid #dc2626; border-radius:6px; font-size:12px; color:#7f1d1d; font-weight:600;"></div>
       </div>
 
       <!-- 扣款類別管理子面板 -->
@@ -2206,7 +2209,10 @@ function addPieceEntry() {
   if (!date) { alert('請選擇日期'); return; }
   if (!empId) { alert('請選擇員工'); return; }
   if (!name) { alert('請輸入品名'); return; }
-  if (qty <= 0 || price <= 0) { alert('數量與單價必須大於 0'); return; }
+  if (qty <= 0 || price <= 0) {
+    const ok = confirm('⚠ 數量或單價為 0，此筆不會產生金額。\n\n按「確定」→ 仍要儲存（例如只想記錄有做過）\n按「取消」→ 放棄（若要刪除請到記錄列表按 🗑）');
+    if (!ok) return;
+  }
 
   const emp = employees.find(e => e._id === empId);
   const original = editingDailyId ? dailyEntries.find(x => x._id === editingDailyId) : null;
@@ -2594,24 +2600,40 @@ function saveAttendanceFromModal(id) {
   alert('✅ 已更新該筆出勤記錄');
 }
 
-function deleteAttendanceFromMonth(id) {
+async function deleteAttendanceFromMonth(id) {
   if (!confirm('確定刪除此筆出勤記錄？')) return;
   dailyEntries = dailyEntries.filter(d => d._id !== id);
   save(STORE.daily, dailyEntries);
-  cloudDelete('daily', id);
   refreshMonthlyAttendance();
   updateLateHint();
   refreshDailyEntries();
   refreshMonthlyDaily();
+  updateMonthlyDailyHint();
+  try {
+    await cloudDelete('daily', id);
+  } catch (e) {
+    console.error('cloudDelete 失敗:', e);
+    alert('⚠ 雲端刪除失敗：' + e.message + '\n\n本地已刪除，請檢查網路。');
+  }
 }
 
-function deleteDailyEntry(id) {
+async function deleteDailyEntry(id) {
   if (!confirm('確定刪除此筆記錄？')) return;
+  // 1. 先從本地移除
   dailyEntries = dailyEntries.filter(d => d._id !== id);
   save(STORE.daily, dailyEntries);
-  cloudDelete('daily', id);
+  // 2. 刷新 UI 讓使用者看到立即消失
   refreshDailyEntries();
   refreshMonthlyDaily();
+  if (typeof refreshMonthlyAttendance === 'function') refreshMonthlyAttendance();
+  if (typeof updateMonthlyDailyHint === 'function') updateMonthlyDailyHint();
+  // 3. 再確保雲端也刪除（即使本地已刪，雲端也要同步）
+  try {
+    await cloudDelete('daily', id);
+  } catch (e) {
+    console.error('cloudDelete 失敗:', e);
+    alert('⚠ 雲端刪除失敗：' + e.message + '\n\n本地已刪除，下次上線時可手動再試。');
+  }
 }
 
 function showPhotoPreview(kind, base64) {
@@ -3052,6 +3074,10 @@ function refreshMonthlyAttendance() {
   let weekendOtHours = 0;
   let totalLateMinutes = 0;
   let lateDays = 0;
+  // ★ 請假時數統計（支援小時制）
+  //   8 小時 = 1 天
+  let annualLeaveHours = 0;  // 特休
+  let otherLeaveHours = 0;   // 其他假別
   // 若為排班制員工，例假日/國定假日視同平日（照班表不加倍）
   const empObj = employees.find(x => x._id === empId);
   const isShiftEmp = !!(empObj && empObj.isShift);
@@ -3075,6 +3101,11 @@ function refreshMonthlyAttendance() {
         // 平日加班 = 明確選「加班」的時數
         if (type === '加班') weekdayOtHours += d.hours || 0;
       }
+    } else {
+      // ★ 累計請假時數（小時制支援）
+      const h = d.hours || 8; // 沒填時段就當全天 8 小時
+      if (type === '特休') annualLeaveHours += h;
+      else otherLeaveHours += h;
     }
     // 日狀態：以請假/特休為主
     if (!dayStatus[d.date] || dayStatus[d.date] === 'normal') {
@@ -3087,13 +3118,12 @@ function refreshMonthlyAttendance() {
       lateDays++;
     }
   });
-  let annualLeave = 0, otherLeave = 0;
-  Object.values(dayStatus).forEach(s => {
-    if (s === '特休') annualLeave++;
-    else if (s !== 'normal' && s !== '加班') otherLeave++;
-  });
+  // ★ 時數換算為天數（8h=1 天）
+  const annualLeave = Math.round((annualLeaveHours / 8) * 10) / 10;
+  const otherLeave = Math.round((otherLeaveHours / 8) * 10) / 10;
   const workDays = weekdayWorkDates.size; // 平日上班天數（會連動到「出勤天數」）
-  const totalLeaveDays = annualLeave + otherLeave;
+  const totalLeaveDays = Math.round((annualLeave + otherLeave) * 10) / 10;
+  const totalLeaveHours = annualLeaveHours + otherLeaveHours;
 
   // 自動帶入月薪表單（若使用者未手動填過才填）
   const wd = document.getElementById('workDays');
@@ -3105,11 +3135,47 @@ function refreshMonthlyAttendance() {
   if (o1 && !o1.dataset.userEdited) { o1.value = weekdayOtHours || ''; }
   if (o2 && !o2.dataset.userEdited) { o2.value = weekendOtHours || ''; }
 
+  // ★ 本月天數概覽：總天數、週六、週日、國定假日
+  let monthSatDays = 0, monthSunDays = 0, monthHolidayDays = 0, monthWorkdays = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const ds = `${month}-${String(d).padStart(2,'0')}`;
+    const dow = new Date(y, m - 1, d).getDay();
+    const isHol = holidays.includes(ds);
+    if (isHol) monthHolidayDays++;
+    else if (dow === 6) monthSatDays++;
+    else if (dow === 0) monthSunDays++;
+    else monthWorkdays++;
+  }
+
   let html = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
       <div style="font-weight:700; color:#059669; font-size:15px;">📅 本月出勤明細</div>
       <button type="button" onclick="forceRefillFromAttendance(${workDays}, ${totalLeaveDays}, ${weekdayOtHours}, ${weekendOtHours})" class="btn btn-primary btn-sm" style="padding:4px 10px; font-size:11px;">🔄 依出勤重算月薪欄位</button>
     </div>
     <div style="font-size:11px; color:#6b7280; margin-bottom:8px;">（點每列「✏️」可編輯，或按上方按鈕強制刷新上方出勤天數/加班時數）</div>
+
+    <!-- 本月天數概覽 -->
+    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-bottom:8px;">
+      <div style="background:#f0f9ff; padding:8px; border-radius:6px; text-align:center;">
+        <div style="font-size:11px; color:#6b7280;">📆 本月總日數</div>
+        <div style="font-weight:700; color:#0369a1; font-size:19px;">${daysInMonth}</div>
+        <div style="font-size:10px; color:#6b7280;">天</div>
+      </div>
+      <div style="background:#fef3c7; padding:8px; border-radius:6px; text-align:center;">
+        <div style="font-size:11px; color:#6b7280;">💼 工作日</div>
+        <div style="font-weight:700; color:#92400e; font-size:19px;">${monthWorkdays}</div>
+        <div style="font-size:10px; color:#6b7280;">天</div>
+      </div>
+      <div style="background:#fed7aa; padding:8px; border-radius:6px; text-align:center;">
+        <div style="font-size:11px; color:#6b7280;">🗓 休息日 (六)</div>
+        <div style="font-weight:700; color:#9a3412; font-size:19px;">${monthSatDays}</div>
+        <div style="font-size:10px; color:#6b7280;">天</div>
+      </div>
+      <div style="background:#fee2e2; padding:8px; border-radius:6px; text-align:center;">
+        <div style="font-size:11px; color:#6b7280;">🎌 例假/國假</div>
+        <div style="font-weight:700; color:#991b1b; font-size:19px;">${monthSunDays + monthHolidayDays}</div>
+        <div style="font-size:10px; color:#6b7280;">天 (含國定 ${monthHolidayDays})</div>
+      </div>
+    </div>
     <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-bottom:8px;">
       <div style="background:#ecfdf5; padding:8px; border-radius:6px; text-align:center;">
         <div style="font-size:11px; color:#6b7280;">📆 平日上班</div>
@@ -3136,17 +3202,17 @@ function refreshMonthlyAttendance() {
       <div style="background:#fef3c7; padding:8px; border-radius:6px; text-align:center;">
         <div style="font-size:11px; color:#6b7280;">🌴 特休</div>
         <div style="font-weight:700; color:#92400e; font-size:19px;">${annualLeave}</div>
-        <div style="font-size:10px; color:#6b7280;">天</div>
+        <div style="font-size:10px; color:#6b7280;">天 (${annualLeaveHours}h)</div>
       </div>
       <div style="background:#fee2e2; padding:8px; border-radius:6px; text-align:center;">
         <div style="font-size:11px; color:#6b7280;">📋 其他休假</div>
         <div style="font-weight:700; color:#991b1b; font-size:19px;">${otherLeave}</div>
-        <div style="font-size:10px; color:#6b7280;">天</div>
+        <div style="font-size:10px; color:#6b7280;">天 (${otherLeaveHours}h)</div>
       </div>
       <div style="background:#e0e7ff; padding:8px; border-radius:6px; text-align:center;">
         <div style="font-size:11px; color:#6b7280;">休假合計</div>
         <div style="font-weight:700; color:#3730a3; font-size:19px;">${totalLeaveDays}</div>
-        <div style="font-size:10px; color:#6b7280;">天</div>
+        <div style="font-size:10px; color:#6b7280;">天 (${totalLeaveHours}h)</div>
       </div>
       <div style="background:${totalLateMinutes > 30 ? '#fef2f2' : '#fff7ed'}; padding:8px; border-radius:6px; text-align:center;">
         <div style="font-size:11px; color:#6b7280;">⏰ 遲到</div>
@@ -3186,20 +3252,27 @@ function refreshMonthlyAttendance() {
       allEntries.forEach((e, i) => {
         if (e.type === 'hour') {
           const brkHr = (e.breakMin || 0) / 60;
-          const attBadge = e.attType && e.attType !== 'normal'
-            ? ` <span style="background:#dbeafe; color:#1e40af; padding:1px 5px; border-radius:8px; font-size:10px;">${e.attType}</span>`
+          const attTypeNow = e.attType || 'normal';
+          const isLeaveRow = attTypeNow !== 'normal' && attTypeNow !== '加班';
+          const attBadge = attTypeNow !== 'normal'
+            ? ` <span style="background:${isLeaveRow ? '#fee2e2' : '#dbeafe'}; color:${isLeaveRow ? '#991b1b' : '#1e40af'}; padding:1px 5px; border-radius:8px; font-size:10px;">${attTypeNow}</span>`
             : '';
           const lateBadge = e.lateMinutes > 0
             ? ` <span style="background:#fee2e2; color:#991b1b; padding:1px 5px; border-radius:8px; font-size:10px;">遲${e.lateMinutes}分</span>`
             : '';
+          // ★ 請假列：時數以紅字標示「請假 Xh」，非工時
+          const hoursCell = isLeaveRow
+            ? `<strong style="color:#dc2626;">請假 ${e.hours}h</strong>`
+            : `<strong>${e.hours}h</strong>`;
+          const workIcon = isLeaveRow ? '🏖' : '⏱';
           html += `<tr style="${rowStyle}">
             <td>${i === 0 ? d : ''}</td>
             <td style="text-align:center; font-weight:700;">${i === 0 ? weekdayNames[dayOfWeek] : ''}</td>
             <td>${e.start || ''}</td>
             <td>${e.end || ''}</td>
             <td>${brkHr ? brkHr + 'h' : '—'}</td>
-            <td><strong>${e.hours}h</strong></td>
-            <td>⏱ ${escapeHtml(e.workContent || '')}${attBadge}${lateBadge}</td>
+            <td>${hoursCell}</td>
+            <td>${workIcon} ${escapeHtml(e.workContent || '')}${attBadge}${lateBadge}</td>
             <td style="white-space:nowrap;">
               <button type="button" onclick="editAttendanceFromMonth('${e._id}')" style="padding:2px 6px; border:none; background:#e5e7eb; color:#374151; border-radius:4px; cursor:pointer; font-size:11px;">✏️</button>
               <button type="button" onclick="deleteAttendanceFromMonth('${e._id}')" style="padding:2px 6px; border:none; background:#fee2e2; color:#991b1b; border-radius:4px; cursor:pointer; font-size:11px;">🗑</button>
@@ -3222,8 +3295,15 @@ function refreshMonthlyAttendance() {
       });
     }
   }
+  // ★ 月合計工時：只計算真正上班 + 加班的時數（排除請假時段）
   const totalHours = empEntries
     .filter(e => e.type === 'hour')
+    .filter(e => !e.attType || e.attType === 'normal' || e.attType === '加班')
+    .reduce((a,b) => a + (b.hours || 0), 0);
+  // ★ 請假時數：所有非 normal/加班 的時段
+  const totalLeaveHr = empEntries
+    .filter(e => e.type === 'hour')
+    .filter(e => e.attType && e.attType !== 'normal' && e.attType !== '加班')
     .reduce((a,b) => a + (b.hours || 0), 0);
   const totalPieceQty = empEntries
     .filter(e => e.type === 'piece')
@@ -3234,11 +3314,15 @@ function refreshMonthlyAttendance() {
   const pieceFootCol = totalPieceQty > 0
     ? `<tr style="background:#faf5ff; font-weight:700;"><td colspan="5">月合計論件</td><td colspan="3" style="color:#7c3aed;">${totalPieceQty} 件 · NT$ ${formatMoney(totalPieceAmount)}</td></tr>`
     : '';
+  const leaveHrFootCol = totalLeaveHr > 0
+    ? `<tr style="background:#fef2f2; font-weight:700;"><td colspan="5">月合計請假時數</td><td colspan="3" style="color:#dc2626;">${totalLeaveHr.toFixed(2)} 小時 ≈ ${(totalLeaveHr/8).toFixed(2)} 天</td></tr>`
+    : '';
   html += `</tbody>
     <tfoot>
       <tr style="background:#f0fdf4; font-weight:700;">
-        <td colspan="5">月合計工時</td><td colspan="3" style="color:#059669;">${totalHours.toFixed(2)} 小時</td>
+        <td colspan="5">月合計工時（僅上班+加班）</td><td colspan="3" style="color:#059669;">${totalHours.toFixed(2)} 小時</td>
       </tr>
+      ${leaveHrFootCol}
       ${pieceFootCol}
     </tfoot></table>
     <div style="font-size:11px; color:#6b7280; margin-top:6px;">
@@ -3942,6 +4026,17 @@ function updateDeductTotal() {
   const hidden = document.getElementById('otherDeduct');
   if (el) el.textContent = formatMoney(total);
   if (hidden) hidden.value = total;
+  // ★ 即時顯示確認訊息
+  const confBox = document.getElementById('deductConfirmBox');
+  if (confBox) {
+    if (total > 0 && currentDeductItems.length > 0) {
+      const items = currentDeductItems.filter(x => x.amount > 0).map(x => `${x.name || '(未命名)'} NT$ ${formatMoney(x.amount)}`).join('、');
+      confBox.innerHTML = `✅ 已記入本月扣款：${items}（合計 NT$ ${formatMoney(total)}）`;
+      confBox.style.display = 'block';
+    } else {
+      confBox.style.display = 'none';
+    }
+  }
 }
 
 // ========= 獎金類別與項目 =========
@@ -4069,6 +4164,17 @@ function updateBonusTotal() {
   const hidden = document.getElementById('bonus');
   if (el) el.textContent = formatMoney(total);
   if (hidden) hidden.value = total;
+  // ★ 即時顯示確認訊息
+  const confBox = document.getElementById('bonusConfirmBox');
+  if (confBox) {
+    if (total > 0 && currentBonusItems.length > 0) {
+      const items = currentBonusItems.filter(x => x.amount > 0).map(x => `${x.name || '(未命名)'} NT$ ${formatMoney(x.amount)}`).join('、');
+      confBox.innerHTML = `✅ 已記入本月獎金/津貼：${items}（合計 NT$ ${formatMoney(total)}）`;
+      confBox.style.display = 'block';
+    } else {
+      confBox.style.display = 'none';
+    }
+  }
 }
 
 // 顯示員工日薪計算方式（時薪制 vs 月薪制）
@@ -4151,22 +4257,28 @@ function onHourAttTypeChange() {
 
 function onQuickAttTypeChange() {
   const type = document.getElementById('quickAttType').value;
-  // 請假類型（非 normal / 加班）→ 隱藏時間欄位，簡化為純「日期 + 類型」
   const isLeaveType = type && type !== 'normal' && type !== '加班';
+
+  // 時間欄位 → 所有類型都顯示（請假也要填時段）
   const timeRow = document.getElementById('quickAttTimeRow');
   const breakLateRow = document.getElementById('quickAttBreakLateRow');
   const workRow = document.getElementById('quickAttWorkRow');
-  if (timeRow) timeRow.style.display = isLeaveType ? 'none' : '';
-  if (breakLateRow) breakLateRow.style.display = isLeaveType ? 'none' : '';
-  if (workRow) workRow.style.display = isLeaveType ? 'none' : '';
+  if (timeRow) timeRow.style.display = '';
+  if (breakLateRow) breakLateRow.style.display = '';
+  if (workRow) workRow.style.display = '';
 
+  // 根據類型更新時間欄位的 label 提示
+  const startLbl = document.getElementById('quickAttStartLabel');
+  const endLbl = document.getElementById('quickAttEndLabel');
+  const timeHint = document.getElementById('quickAttTimeHint');
   if (isLeaveType) {
-    // 請假類型 → 自動填入預設全天時間，避免「時間必填」報錯
-    document.getElementById('quickAttStart').value = '09:00';
-    document.getElementById('quickAttEnd').value = '17:00';
-    document.getElementById('quickAttBreak').value = '0';
-    document.getElementById('quickAttLate').value = '';
-    // 工作內容欄也同步
+    if (startLbl) startLbl.textContent = '請假開始時間';
+    if (endLbl) endLbl.textContent = '請假結束時間';
+    if (timeHint) {
+      timeHint.style.display = 'block';
+      timeHint.innerHTML = `💡 <strong>${type}</strong>：填寫請假時段（8 小時 = 1 天）。若全天請假可填 08:00~17:00 (扣休息 60 分) = 8 小時 = 1 天。`;
+    }
+    // 工作內容自動帶入請假類型
     const workSel = document.getElementById('quickAttWork');
     if (workSel) {
       if (!Array.from(workSel.options).some(o => o.value === type)) {
@@ -4177,6 +4289,10 @@ function onQuickAttTypeChange() {
       }
       workSel.value = type;
     }
+  } else {
+    if (startLbl) startLbl.textContent = '上班時間';
+    if (endLbl) endLbl.textContent = '下班時間';
+    if (timeHint) timeHint.style.display = 'none';
   }
 }
 
