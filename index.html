@@ -674,18 +674,158 @@
 
   <!-- 薪資計算 -->
   <div class="panel" id="panel-calc">
-    <div class="card">
-      <h3>新增本月薪資記錄</h3>
+    <!-- 頂部：員工/月份選擇 -->
+    <div class="card" style="border:2px solid #06C755; background:#f0fdf4;">
+      <h3 style="margin-top:0;">📌 選擇員工與月份</h3>
       <div class="month-selector">
         <label style="margin-bottom:0; white-space:nowrap;">月份：</label>
         <input type="month" id="calcMonth">
       </div>
-      <div class="form-group">
+      <div class="form-group" style="margin-bottom:0;">
         <label>選擇員工 *</label>
         <select id="calcEmp">
           <option value="">-- 請先新增員工 --</option>
         </select>
       </div>
+      <div style="margin-top:8px; font-size:12px; color:#065f46;">
+        👉 選好員工/月份後，下方依序：①本月出勤明細 → ②快速/批次新增出勤 → ③月薪計算
+      </div>
+    </div>
+
+    <!-- ① 本月出勤明細（提前顯示）-->
+    <div class="card">
+      <div id="monthlyAttendance"></div>
+    </div>
+
+    <!-- ② 快速新增本月出勤 -->
+    <div class="card">
+      <h3>⚡ 快速新增本月出勤</h3>
+      <div style="padding:8px; background:#eff6ff; border-radius:6px; font-size:12px; color:#1e40af; margin-bottom:10px;">
+        直接在月薪頁輸入今日或某日上下班時間，會自動儲存為「每日計時記錄」，並即時更新下方月曆與遲到提示。
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>日期 *</label>
+          <input type="date" id="quickAttDate">
+        </div>
+        <div class="form-group">
+          <label>出勤類型</label>
+          <select id="quickAttType" onchange="onQuickAttTypeChange()">
+            <option value="normal">✅ 正常上班</option>
+            <option value="加班">💪 加班</option>
+            <option value="特休">🌴 特休</option>
+            <option value="事假">📋 事假（不給薪）</option>
+            <option value="病假">🤒 病假（半薪）</option>
+            <option value="公假">🏛 公假</option>
+            <option value="婚假">💒 婚假</option>
+            <option value="喪假">🕊 喪假</option>
+            <option value="產假">👶 產假</option>
+            <option value="陪產假">👨 陪產假</option>
+            <option value="颱風假">🌀 颱風假</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" id="quickAttWorkRow">
+        <label>工作內容</label>
+        <select id="quickAttWork">
+          <option value="">-- 請選擇 --</option>
+        </select>
+      </div>
+      <div class="form-row" id="quickAttTimeRow">
+        <div class="form-group">
+          <label>上班時間</label>
+          <input type="text" id="quickAttStart" placeholder="HH:MM (例 08:00)" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this); autoFillLate('quick')">
+        </div>
+        <div class="form-group">
+          <label>下班時間</label>
+          <input type="text" id="quickAttEnd" placeholder="HH:MM (例 17:00)" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this)">
+        </div>
+      </div>
+      <div class="form-row" id="quickAttBreakLateRow">
+        <div class="form-group">
+          <label>休息 (分鐘)</label>
+          <div style="display:flex; gap:4px;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('quickAttBreak').value=0" style="padding:4px 8px; font-size:11px;">無</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('quickAttBreak').value=30" style="padding:4px 8px; font-size:11px;">30分</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('quickAttBreak').value=60" style="padding:4px 8px; font-size:11px;">1小時</button>
+            <input type="number" id="quickAttBreak" placeholder="分" value="0" min="0" step="5" style="flex:1;">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>遲到 (分鐘)</label>
+          <input type="number" id="quickAttLate" placeholder="0" min="0" step="1" oninput="onLateInput('quick')">
+        </div>
+      </div>
+      <div class="btn-group" style="gap:6px;">
+        <button type="button" class="btn btn-secondary" onclick="resetQuickAttForm()" style="flex:0 0 auto; padding:10px 14px;">🔄 重置</button>
+        <button type="button" class="btn btn-primary" onclick="quickAddAttendance()" style="flex:1;">✅ 新增出勤記錄</button>
+      </div>
+      <div style="font-size:11px; color:#666; margin-top:6px;">提示：輸入新紀錄前可先按「重置」，避免遲到分鐘等欄位殘留上一筆的數值。</div>
+      <div id="quickAttResult" style="display:none; margin-top:8px; padding:10px; background:#d1fae5; border:2px solid #10b981; border-radius:6px; font-size:13px; color:#065f46; font-weight:600;"></div>
+    </div>
+
+    <!-- ③ 批次新增整月出勤 -->
+    <div class="card">
+      <h3>📋 批次新增整月出勤</h3>
+      <div style="padding:8px; background:#fef3c7; border-radius:6px; font-size:12px; color:#92400e; margin-bottom:10px; line-height:1.6;">
+        適合固定上下班時間的員工 — 設定預設時間後勾選日期一次建立。<br>
+        • <strong>月薪制</strong>：批次記錄會標為「僅打卡」，不會與底薪重複計算。<br>
+        • <strong>時薪制</strong>：批次記錄會用員工的時薪自動算出當日工資，可直接帶入計時收入。<br>
+        已有記錄的日期會自動停用勾選。
+      </div>
+
+      <!-- 常用時段快速預設 -->
+      <div style="margin-bottom:8px; font-size:12px; color:#374151;">
+        快速套用：
+        <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('full')" style="padding:3px 8px; font-size:11px;">全天 08-17</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('morning')" style="padding:3px 8px; font-size:11px;">上午 08-12</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('afternoon')" style="padding:3px 8px; font-size:11px;">下午 13-17</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('3h_morning')" style="padding:3px 8px; font-size:11px;">3 小時 09-12</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('3h_afternoon')" style="padding:3px 8px; font-size:11px;">3 小時 14-17</button>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>上班時間</label>
+          <input type="text" id="batchStart" value="08:00" placeholder="HH:MM" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this); updateBatchPreview()">
+        </div>
+        <div class="form-group">
+          <label>下班時間</label>
+          <input type="text" id="batchEnd" value="17:00" placeholder="HH:MM" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this); updateBatchPreview()">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>休息 (分鐘)</label>
+          <div style="display:flex; gap:4px;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('batchBreak').value=0; updateBatchPreview()" style="padding:4px 8px; font-size:11px;">無</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('batchBreak').value=60; updateBatchPreview()" style="padding:4px 8px; font-size:11px;">1小時</button>
+            <input type="number" id="batchBreak" placeholder="分" value="60" min="0" step="5" style="flex:1;" oninput="updateBatchPreview()">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>工作內容</label>
+          <select id="batchWork">
+            <option value="">-- 選填 --</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 預覽：每天工時與金額 -->
+      <div id="batchPreviewBox" style="padding:8px 10px; background:#eff6ff; border-left:3px solid #3b82f6; border-radius:4px; font-size:12px; color:#1e40af; margin-bottom:10px; display:none;"></div>
+
+      <div style="display:flex; gap:6px; margin-bottom:8px;">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="batchCheckAll('weekday')" style="flex:1; font-size:12px;">☑ 全選平日</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="batchCheckAll('all')" style="flex:1; font-size:12px;">☑ 全選</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="batchCheckAll('none')" style="flex:1; font-size:12px;">☐ 全不選</button>
+      </div>
+      <div id="batchAttList"></div>
+      <button type="button" class="btn btn-primary btn-block" onclick="batchSaveAttendance()" style="margin-top:8px;">✅ 批次儲存勾選日期</button>
+    </div>
+
+    <!-- ④ 月薪計算明細（主表單）-->
+    <div class="card">
+      <h3>💰 月薪計算明細</h3>
       <div class="form-group">
         <label>出勤天數 <span style="font-size:10px; color:#6b7280;">(自動從出勤明細帶入，可手動改)</span></label>
         <input type="number" id="workDays" placeholder="22" min="0" max="31" oninput="this.dataset.userEdited='1'">
@@ -880,136 +1020,7 @@
       <button class="btn btn-secondary btn-block" id="recordCancelBtn" onclick="cancelRecordEdit()" style="display:none; margin-top:6px;">取消編輯</button>
     </div>
 
-    <!-- 月薪頁快速新增當月出勤 -->
-    <div class="card">
-      <h3>⚡ 快速新增本月出勤</h3>
-      <div style="padding:8px; background:#eff6ff; border-radius:6px; font-size:12px; color:#1e40af; margin-bottom:10px;">
-        直接在月薪頁輸入今日或某日上下班時間，會自動儲存為「每日計時記錄」，並即時更新下方月曆與遲到提示。
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>日期 *</label>
-          <input type="date" id="quickAttDate">
-        </div>
-        <div class="form-group">
-          <label>出勤類型</label>
-          <select id="quickAttType" onchange="onQuickAttTypeChange()">
-            <option value="normal">✅ 正常上班</option>
-            <option value="加班">💪 加班</option>
-            <option value="特休">🌴 特休</option>
-            <option value="事假">📋 事假（不給薪）</option>
-            <option value="病假">🤒 病假（半薪）</option>
-            <option value="公假">🏛 公假</option>
-            <option value="婚假">💒 婚假</option>
-            <option value="喪假">🕊 喪假</option>
-            <option value="產假">👶 產假</option>
-            <option value="陪產假">👨 陪產假</option>
-            <option value="颱風假">🌀 颱風假</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-group">
-        <label>工作內容</label>
-        <select id="quickAttWork">
-          <option value="">-- 請選擇 --</option>
-        </select>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>上班時間</label>
-          <input type="text" id="quickAttStart" placeholder="HH:MM (例 08:00)" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this); autoFillLate('quick')">
-        </div>
-        <div class="form-group">
-          <label>下班時間</label>
-          <input type="text" id="quickAttEnd" placeholder="HH:MM (例 17:00)" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this)">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>休息 (分鐘)</label>
-          <div style="display:flex; gap:4px;">
-            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('quickAttBreak').value=0" style="padding:4px 8px; font-size:11px;">無</button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('quickAttBreak').value=30" style="padding:4px 8px; font-size:11px;">30分</button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('quickAttBreak').value=60" style="padding:4px 8px; font-size:11px;">1小時</button>
-            <input type="number" id="quickAttBreak" placeholder="分" value="0" min="0" step="5" style="flex:1;">
-          </div>
-        </div>
-        <div class="form-group">
-          <label>遲到 (分鐘)</label>
-          <input type="number" id="quickAttLate" placeholder="0" min="0" step="1" oninput="onLateInput('quick')">
-        </div>
-      </div>
-      <div class="btn-group" style="gap:6px;">
-        <button type="button" class="btn btn-secondary" onclick="resetQuickAttForm()" style="flex:0 0 auto; padding:10px 14px;">🔄 重置</button>
-        <button type="button" class="btn btn-primary" onclick="quickAddAttendance()" style="flex:1;">新增出勤記錄</button>
-      </div>
-      <div style="font-size:11px; color:#666; margin-top:6px;">提示：輸入新紀錄前可先按「重置」，避免遲到分鐘等欄位殘留上一筆的數值。</div>
-      <div id="quickAttResult" style="display:none; margin-top:8px; padding:8px; background:#f0fdf4; border-radius:6px; font-size:12px;"></div>
-    </div>
-
-    <!-- 批次新增整月出勤 (月薪/時薪皆可) -->
-    <div class="card">
-      <h3>📋 批次新增整月出勤</h3>
-      <div style="padding:8px; background:#fef3c7; border-radius:6px; font-size:12px; color:#92400e; margin-bottom:10px; line-height:1.6;">
-        適合固定上下班時間的員工 — 設定預設時間後勾選日期一次建立。<br>
-        • <strong>月薪制</strong>：批次記錄會標為「僅打卡」，不會與底薪重複計算。<br>
-        • <strong>時薪制</strong>：批次記錄會用員工的時薪自動算出當日工資，可直接帶入計時收入。<br>
-        已有記錄的日期會自動停用勾選。
-      </div>
-
-      <!-- 常用時段快速預設 -->
-      <div style="margin-bottom:8px; font-size:12px; color:#374151;">
-        快速套用：
-        <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('full')" style="padding:3px 8px; font-size:11px;">全天 08-17</button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('morning')" style="padding:3px 8px; font-size:11px;">上午 08-12</button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('afternoon')" style="padding:3px 8px; font-size:11px;">下午 13-17</button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('3h_morning')" style="padding:3px 8px; font-size:11px;">3 小時 09-12</button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('3h_afternoon')" style="padding:3px 8px; font-size:11px;">3 小時 14-17</button>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label>上班時間</label>
-          <input type="text" id="batchStart" value="08:00" placeholder="HH:MM" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this); updateBatchPreview()">
-        </div>
-        <div class="form-group">
-          <label>下班時間</label>
-          <input type="text" id="batchEnd" value="17:00" placeholder="HH:MM" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this); updateBatchPreview()">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>休息 (分鐘)</label>
-          <div style="display:flex; gap:4px;">
-            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('batchBreak').value=0; updateBatchPreview()" style="padding:4px 8px; font-size:11px;">無</button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('batchBreak').value=60; updateBatchPreview()" style="padding:4px 8px; font-size:11px;">1小時</button>
-            <input type="number" id="batchBreak" placeholder="分" value="60" min="0" step="5" style="flex:1;" oninput="updateBatchPreview()">
-          </div>
-        </div>
-        <div class="form-group">
-          <label>工作內容</label>
-          <select id="batchWork">
-            <option value="">-- 選填 --</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- 預覽：每天工時與金額 -->
-      <div id="batchPreviewBox" style="padding:8px 10px; background:#eff6ff; border-left:3px solid #3b82f6; border-radius:4px; font-size:12px; color:#1e40af; margin-bottom:10px; display:none;"></div>
-
-      <div style="display:flex; gap:6px; margin-bottom:8px;">
-        <button type="button" class="btn btn-secondary btn-sm" onclick="batchCheckAll('weekday')" style="flex:1; font-size:12px;">☑ 全選平日</button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="batchCheckAll('all')" style="flex:1; font-size:12px;">☑ 全選</button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="batchCheckAll('none')" style="flex:1; font-size:12px;">☐ 全不選</button>
-      </div>
-      <div id="batchAttList"></div>
-      <button type="button" class="btn btn-primary btn-block" onclick="batchSaveAttendance()" style="margin-top:8px;">批次儲存勾選日期</button>
-    </div>
-
-    <div class="card">
-      <div id="monthlyAttendance"></div>
-    </div>
-
+    <!-- 本月薪資記錄列表 -->
     <div class="card">
       <h3>本月薪資記錄 <span class="badge" id="recCount">0</span></h3>
       <div id="recordList"></div>
@@ -2011,9 +2022,9 @@ function autoFillLate(kind) {
   if (lateMins > 0) lateEl.value = lateMins;
 }
 
-// 使用者手動編輯遲到欄位（保留為 placeholder，無特殊處理）
+// 使用者手動編輯遲到欄位 → 重算工時預覽（把遲到加回去，避免雙重扣）
 function onLateInput(kind) {
-  // 純粹保留給 HTML 用，不做任何事 — 讓使用者自由編輯
+  if (kind === 'hour') updateHourPreview();
 }
 
 // 重置「快速新增本月出勤」表單（保留日期為今日）
@@ -2032,9 +2043,13 @@ function resetQuickAttForm() {
   if (result) { result.style.display = 'none'; result.innerHTML = ''; }
 }
 
-function calcHours(start, end, breakMin) {
+// 計算實際工作時數（分→小時）
+// lateMin：遲到分鐘。有填時會被加回工時，避免遲到在「扣薪」與「少工時」被雙重扣
+function calcHours(start, end, breakMin, lateMin) {
   const spanMins = calcSpanMins(start, end);
-  const workMins = Math.max(0, spanMins - (breakMin || 0));
+  // 若已另計遲到分鐘，把它加回來（因為遲到會另外扣薪/扣款）
+  const adjusted = spanMins + (parseFloat(lateMin) || 0);
+  const workMins = Math.max(0, adjusted - (breakMin || 0));
   const rounded = roundWorkMinutes(workMins);
   return rounded / 60;
 }
@@ -2049,10 +2064,13 @@ function updateHourPreview() {
   const end = document.getElementById('hourEnd').value;
   const brk = parseFloat(document.getElementById('hourBreak').value) || 0;
   const rate = parseFloat(document.getElementById('hourRate').value) || 0;
+  const lateMin = parseFloat(document.getElementById('hourLate').value) || 0;
 
   const spanMins = calcSpanMins(start, end);
   const spanHours = spanMins / 60;
-  const rawWorkMins = Math.max(0, spanMins - brk);
+  // 加回遲到分鐘（避免雙重扣）
+  const adjustedSpan = spanMins + lateMin;
+  const rawWorkMins = Math.max(0, adjustedSpan - brk);
   const roundedMins = roundWorkMinutes(rawWorkMins);
   const workHours = roundedMins / 60;
   const sub = workHours * rate;
@@ -2063,7 +2081,8 @@ function updateHourPreview() {
   const breakdown = document.getElementById('hourBreakdown');
   if (start && end) {
     breakdown.style.display = 'block';
-    document.getElementById('hourSpan').textContent = spanHours.toFixed(2) + ' 小時';
+    const lateShow = lateMin > 0 ? ` <span style="color:#059669; font-size:11px;">+ ${lateMin} 分（遲到另計，已加回工時）</span>` : '';
+    document.getElementById('hourSpan').innerHTML = spanHours.toFixed(2) + ' 小時' + lateShow;
     document.getElementById('hourBreakShow').textContent = '− ' + (brk / 60).toFixed(2) + ' 小時 (' + brk + '分)';
     const rounding = rawWorkMins !== roundedMins
       ? ` <span style="color:#ef4444; font-size:11px;">(原 ${rawWorkMins} 分 → 依規定捨去為 ${roundedMins} 分${roundedMins === 0 ? '，當日不足 30 分不計' : ''})</span>`
@@ -2175,7 +2194,8 @@ function addHourEntry() {
     }
   }
 
-  const hours = calcHours(start, end, brk);
+  const lateMinHere = parseFloat(document.getElementById('hourLate').value) || 0;
+  const hours = calcHours(start, end, brk, lateMinHere);
   if (hours <= 0) { alert('時數必須大於 0'); return; }
   if (hours > 16) {
     const ok2 = confirm(`⚠ 計算出 ${hours} 小時工時，這超出常規工作日範圍。\n\n上班：${start}\n下班：${end}\n\n是否確認儲存？`);
@@ -2487,7 +2507,13 @@ function refreshMonthlyDaily() {
   let list = getVisibleDailyEntries().filter(d => d.date.startsWith(month));
   if (empId) list = list.filter(d => d.empId === empId);
 
-  if (list.length === 0) {
+  // 選了特定員工 → 若為月薪制，自動算日薪帶入當日合計
+  const selectedEmp = empId ? employees.find(e => e._id === empId) : null;
+  const isMonthlyEmp = selectedEmp && !selectedEmp.isHourly && selectedEmp.baseSalary > 0;
+  const dailyWage = isMonthlyEmp ? Math.round(selectedEmp.baseSalary / 30) : 0;
+  const colspan = isMonthlyEmp ? 6 : 5;
+
+  if (list.length === 0 && !isMonthlyEmp) {
     box.innerHTML = '<div class="empty">此月份沒有記錄</div>';
     return;
   }
@@ -2499,29 +2525,43 @@ function refreshMonthlyDaily() {
     byDate[d.date].push(d);
   });
 
-  // 選了特定員工 → 若為月薪制，自動算日薪帶入當日合計
-  const selectedEmp = empId ? employees.find(e => e._id === empId) : null;
-  const isMonthlyEmp = selectedEmp && !selectedEmp.isHourly && selectedEmp.baseSalary > 0;
-  const dailyWage = isMonthlyEmp ? Math.round(selectedEmp.baseSalary / 30) : 0;
-  const colspan = isMonthlyEmp ? 6 : 5;
+  // ★ 月薪制：顯示整月每一天（含休假日），以正確反映月薪總額
+  //   其他：僅顯示有記錄的日期
+  let dates;
+  if (isMonthlyEmp) {
+    const [y, mm] = month.split('-').map(Number);
+    const daysInMonth = new Date(y, mm, 0).getDate();
+    dates = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      dates.push(`${month}-${String(d).padStart(2, '0')}`);
+    }
+  } else {
+    dates = Object.keys(byDate).sort();
+  }
 
-  const dates = Object.keys(byDate).sort();
   let pieceTotal = 0, hourTotal = 0, wageTotal = 0, hoursSum = 0, qtySum = 0;
   const rows = dates.map(date => {
-    const items = byDate[date];
+    const items = byDate[date] || [];
     // ★ 使用統一規則：月薪制正常上班不計入計時合計
     const dayPiece = items.filter(x => isPaidPieceEntry(x)).reduce((a,b) => a + (b.subtotal || 0), 0);
     const dayHour = items.filter(x => isPaidHourEntry(x, selectedEmp)).reduce((a,b) => a + (b.subtotal || 0), 0);
-    // 月薪制日薪：該日有正常上班/加班記錄才加（視為當日有出勤）
-    const hasWorkEntry = items.some(x => x.type === 'hour' && (!x.attType || x.attType === 'normal' || x.attType === '加班'));
-    const dayWage = (isMonthlyEmp && hasWorkEntry) ? dailyWage : 0;
+    // 月薪制：每一天（含休假日）都給日薪，才能反映月薪本俸總額
+    const dayWage = isMonthlyEmp ? dailyWage : 0;
     const dayTotal = dayPiece + dayHour + dayWage;
     pieceTotal += dayPiece;
     hourTotal += dayHour;
     wageTotal += dayWage;
     hoursSum += items.filter(x => x.type === 'hour').reduce((a,b) => a + (b.hours || 0), 0);
     qtySum += items.filter(x => x.type === 'piece').reduce((a,b) => a + (b.qty || 0), 0);
+
+    // 判斷該日是平日 / 例假 / 國定假，決定列底色與標示
+    const dow = new Date(date).getDay();
+    const isHol = holidays.includes(date);
+    const isWeekend = dow === 0 || dow === 6;
+    const dayBgStyle = isHol ? 'background:#fef2f2;' : isWeekend ? 'background:#fff7ed;' : '';
+    const dayLabel = isHol ? ' 🎌' : (dow === 0 ? ' (日)' : dow === 6 ? ' (六)' : '');
     const wageCol = isMonthlyEmp ? `<td class="currency">${dayWage ? formatMoney(dayWage) : '—'}</td>` : '';
+    const hasAnyEntry = items.length > 0;
 
     // 展開狀態 → 列出該日所有明細
     const isOpen = !!monthlyDailyExpanded[date];
@@ -2566,8 +2606,11 @@ function refreshMonthlyDaily() {
       detail = detailRows;
     }
 
-    return `<tr style="cursor:pointer;" onclick="toggleMonthlyDailyDate('${date}')">
-      <td><strong>${arrow} ${date.slice(5)}</strong></td>
+    // 若無任何記錄（月薪制顯示空日），就不提供展開
+    const clickHandler = hasAnyEntry ? `onclick="toggleMonthlyDailyDate('${date}')" style="cursor:pointer; ${dayBgStyle}"` : `style="${dayBgStyle} color:#9ca3af;"`;
+    const dateArrow = hasAnyEntry ? arrow : '·';
+    return `<tr ${clickHandler}>
+      <td><strong>${dateArrow} ${date.slice(5)}${dayLabel}</strong></td>
       <td>${items.length}</td>
       <td class="currency">${formatMoney(dayPiece)}</td>
       <td class="currency">${formatMoney(dayHour)}</td>
@@ -2580,7 +2623,7 @@ function refreshMonthlyDaily() {
   const wageHead = isMonthlyEmp ? `<th class="currency">月薪日薪</th>` : '';
   const wageFoot = isMonthlyEmp ? `<td class="currency">${formatMoney(wageTotal)}</td>` : '';
   const wageHint = isMonthlyEmp
-    ? `<div style="margin-top:4px; font-size:11px; color:#6b7280;">💡 此員工為月薪制 (月薪 NT$ ${formatMoney(selectedEmp.baseSalary)})，每有上班記錄的一天自動加入日薪 NT$ ${formatMoney(dailyWage)}</div>`
+    ? `<div style="margin-top:4px; font-size:11px; color:#6b7280;">💡 此員工為月薪制（月薪 NT$ ${formatMoney(selectedEmp.baseSalary)}），每一天（含例假、國定假日）都分配日薪 NT$ ${formatMoney(dailyWage)}，月合計日薪 ≈ 月薪本俸。🎌 = 國定假日、淺橘底 = 週六日。</div>`
     : '';
 
   box.innerHTML = `
@@ -2895,41 +2938,80 @@ function refreshMonthlyAttendance() {
         ? 'background:#fed7aa; color:#9a3412;'
         : '';
     const dayEntries = byDate[dateStr] || [];
-    const hourEntries = dayEntries.filter(e => e.type === 'hour');
+    // ★ 計時 + 論件 都列出
+    const allEntries = dayEntries.filter(e => e.type === 'hour' || e.type === 'piece');
 
-    if (hourEntries.length === 0) {
+    if (allEntries.length === 0) {
       const marker = isNationalHoliday ? '🎌 國定假日' : isSunday ? '例假' : isSaturday ? '休息日' : '';
       html += `<tr style="${rowStyle}"><td>${d}</td><td style="text-align:center; font-weight:700;">${weekdayNames[dayOfWeek]}</td><td colspan="6" style="color:${isNationalHoliday ? '#991b1b' : '#9ca3af'}; font-style:italic; font-weight:${isNationalHoliday ? '700' : '400'};">${marker || '—'}</td></tr>`;
     } else {
-      hourEntries.forEach((e, i) => {
-        const brkHr = (e.breakMin || 0) / 60;
-        html += `<tr style="${rowStyle}">
-          <td>${i === 0 ? d : ''}</td>
-          <td style="text-align:center; font-weight:700;">${i === 0 ? weekdayNames[dayOfWeek] : ''}</td>
-          <td>${e.start}</td>
-          <td>${e.end}</td>
-          <td>${brkHr ? brkHr + 'h' : '—'}</td>
-          <td><strong>${e.hours}h</strong></td>
-          <td>${escapeHtml(e.workContent || '')}</td>
-          <td style="white-space:nowrap;">
-            <button type="button" onclick="editAttendanceFromMonth('${e._id}')" style="padding:2px 6px; border:none; background:#e5e7eb; color:#374151; border-radius:4px; cursor:pointer; font-size:11px;">✏️</button>
-            <button type="button" onclick="deleteAttendanceFromMonth('${e._id}')" style="padding:2px 6px; border:none; background:#fee2e2; color:#991b1b; border-radius:4px; cursor:pointer; font-size:11px;">🗑</button>
-          </td>
-        </tr>`;
+      // 排序：計時在前，論件在後
+      allEntries.sort((a, b) => {
+        if (a.type !== b.type) return a.type === 'hour' ? -1 : 1;
+        return (a.start || '').localeCompare(b.start || '');
+      });
+      allEntries.forEach((e, i) => {
+        if (e.type === 'hour') {
+          const brkHr = (e.breakMin || 0) / 60;
+          const attBadge = e.attType && e.attType !== 'normal'
+            ? ` <span style="background:#dbeafe; color:#1e40af; padding:1px 5px; border-radius:8px; font-size:10px;">${e.attType}</span>`
+            : '';
+          const lateBadge = e.lateMinutes > 0
+            ? ` <span style="background:#fee2e2; color:#991b1b; padding:1px 5px; border-radius:8px; font-size:10px;">遲${e.lateMinutes}分</span>`
+            : '';
+          html += `<tr style="${rowStyle}">
+            <td>${i === 0 ? d : ''}</td>
+            <td style="text-align:center; font-weight:700;">${i === 0 ? weekdayNames[dayOfWeek] : ''}</td>
+            <td>${e.start || ''}</td>
+            <td>${e.end || ''}</td>
+            <td>${brkHr ? brkHr + 'h' : '—'}</td>
+            <td><strong>${e.hours}h</strong></td>
+            <td>⏱ ${escapeHtml(e.workContent || '')}${attBadge}${lateBadge}</td>
+            <td style="white-space:nowrap;">
+              <button type="button" onclick="editAttendanceFromMonth('${e._id}')" style="padding:2px 6px; border:none; background:#e5e7eb; color:#374151; border-radius:4px; cursor:pointer; font-size:11px;">✏️</button>
+              <button type="button" onclick="deleteAttendanceFromMonth('${e._id}')" style="padding:2px 6px; border:none; background:#fee2e2; color:#991b1b; border-radius:4px; cursor:pointer; font-size:11px;">🗑</button>
+            </td>
+          </tr>`;
+        } else {
+          // piece 論件記錄
+          const pieceInfo = `📦 ${escapeHtml(e.name || '')} × ${e.qty || 0} = NT$ ${formatMoney(e.subtotal || 0)}`;
+          html += `<tr style="${rowStyle}">
+            <td>${i === 0 ? d : ''}</td>
+            <td style="text-align:center; font-weight:700;">${i === 0 ? weekdayNames[dayOfWeek] : ''}</td>
+            <td colspan="4" style="color:#7c3aed;">${pieceInfo}</td>
+            <td>${escapeHtml(e.workContent || '論件')}</td>
+            <td style="white-space:nowrap;">
+              <button type="button" onclick="editAttendanceFromMonth('${e._id}')" style="padding:2px 6px; border:none; background:#e5e7eb; color:#374151; border-radius:4px; cursor:pointer; font-size:11px;">✏️</button>
+              <button type="button" onclick="deleteAttendanceFromMonth('${e._id}')" style="padding:2px 6px; border:none; background:#fee2e2; color:#991b1b; border-radius:4px; cursor:pointer; font-size:11px;">🗑</button>
+            </td>
+          </tr>`;
+        }
       });
     }
   }
   const totalHours = empEntries
     .filter(e => e.type === 'hour')
     .reduce((a,b) => a + (b.hours || 0), 0);
+  const totalPieceQty = empEntries
+    .filter(e => e.type === 'piece')
+    .reduce((a,b) => a + (b.qty || 0), 0);
+  const totalPieceAmount = empEntries
+    .filter(e => e.type === 'piece')
+    .reduce((a,b) => a + (b.subtotal || 0), 0);
+  const pieceFootCol = totalPieceQty > 0
+    ? `<tr style="background:#faf5ff; font-weight:700;"><td colspan="5">月合計論件</td><td colspan="3" style="color:#7c3aed;">${totalPieceQty} 件 · NT$ ${formatMoney(totalPieceAmount)}</td></tr>`
+    : '';
   html += `</tbody>
-    <tfoot><tr style="background:#f0fdf4; font-weight:700;">
-      <td colspan="5">月合計工時</td><td colspan="3" style="color:#059669;">${totalHours.toFixed(2)} 小時</td>
-    </tr></tfoot></table>
+    <tfoot>
+      <tr style="background:#f0fdf4; font-weight:700;">
+        <td colspan="5">月合計工時</td><td colspan="3" style="color:#059669;">${totalHours.toFixed(2)} 小時</td>
+      </tr>
+      ${pieceFootCol}
+    </tfoot></table>
     <div style="font-size:11px; color:#6b7280; margin-top:6px;">
       <span style="background:#fee2e2; padding:2px 6px; border-radius:3px;">週日（例假）</span>
       <span style="background:#fed7aa; padding:2px 6px; border-radius:3px; margin-left:4px;">週六（休息日）</span>
-      <span style="margin-left:4px;">資料來源：每日頁籤計時記錄</span>
+      <span style="margin-left:4px;">⏱ 計時 / 📦 論件 · 資料來源：每日頁籤</span>
     </div>`;
   box.innerHTML = html;
 }
@@ -3836,7 +3918,22 @@ function onHourAttTypeChange() {
 
 function onQuickAttTypeChange() {
   const type = document.getElementById('quickAttType').value;
-  if (type && type !== 'normal') {
+  // 請假類型（非 normal / 加班）→ 隱藏時間欄位，簡化為純「日期 + 類型」
+  const isLeaveType = type && type !== 'normal' && type !== '加班';
+  const timeRow = document.getElementById('quickAttTimeRow');
+  const breakLateRow = document.getElementById('quickAttBreakLateRow');
+  const workRow = document.getElementById('quickAttWorkRow');
+  if (timeRow) timeRow.style.display = isLeaveType ? 'none' : '';
+  if (breakLateRow) breakLateRow.style.display = isLeaveType ? 'none' : '';
+  if (workRow) workRow.style.display = isLeaveType ? 'none' : '';
+
+  if (isLeaveType) {
+    // 請假類型 → 自動填入預設全天時間，避免「時間必填」報錯
+    document.getElementById('quickAttStart').value = '09:00';
+    document.getElementById('quickAttEnd').value = '17:00';
+    document.getElementById('quickAttBreak').value = '0';
+    document.getElementById('quickAttLate').value = '';
+    // 工作內容欄也同步
     const workSel = document.getElementById('quickAttWork');
     if (workSel) {
       if (!Array.from(workSel.options).some(o => o.value === type)) {
@@ -4067,7 +4164,8 @@ function quickAddAttendance() {
     }
   }
 
-  const hours = calcHours(start, end, brk);
+  // 把遲到分鐘加回工時，避免遲到雙重扣（已另計遲到扣款）
+  const hours = calcHours(start, end, brk, late);
   if (hours <= 0) { alert('時數必須大於 0'); return; }
   // ★ 第二道防線：時數仍超過 16 小時，再提醒一次
   if (hours > 16) {
