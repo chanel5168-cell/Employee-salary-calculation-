@@ -1036,7 +1036,10 @@
         <button class="btn btn-primary btn-block" id="recordPrimaryBtn" onclick="saveSalaryRecord()" style="background:#d63384; border-color:#d63384; font-size:17px; font-weight:bold;">💾 儲存記錄（必按！）</button>
       </div>
       <button class="btn btn-secondary btn-block" id="recordCancelBtn" onclick="cancelRecordEdit()" style="display:none; margin-top:6px;">取消編輯</button>
-      <button type="button" class="btn btn-secondary btn-block" onclick="printSalarySlip()" style="margin-top:6px;">🖨 列印本月薪資單給員工</button>
+      <div class="btn-group" style="margin-top:6px;">
+        <button type="button" class="btn btn-secondary" onclick="printSalarySlip()">🖨 列印/存 PDF</button>
+        <button type="button" class="btn btn-secondary" onclick="exportSalarySlipExcel()">📊 匯出 Excel</button>
+      </div>
     </div>
 
     <!-- 本月薪資記錄列表 -->
@@ -3267,6 +3270,38 @@ function refreshMonthlyAttendance() {
     </div>
     <div style="font-size:11px; color:#6b7280; margin-bottom:8px;">（點每列「✏️」可編輯，或按上方按鈕強制刷新上方出勤天數/加班時數）</div>
 
+    <!-- ★ 工時稽核摘要 -->
+    ${(() => {
+      const expectedHours = monthWorkdays * 8;
+      let actualWorkHours = 0;
+      let leaveHours = 0;
+      empEntries.forEach(d => {
+        if (d.type !== 'hour') return;
+        const type = d.attType || 'normal';
+        const isLeave = type !== 'normal' && type !== '加班' && type !== '時薪加班';
+        const h = isLeave ? ((d.hours && d.hours > 0) ? d.hours : 8) : (d.hours || 0);
+        // 只計工作日的實際工時（含加班）
+        const dow = new Date(d.date).getDay();
+        const isHol = holidays.includes(d.date);
+        const isWorkDay = dow !== 0 && dow !== 6 && !isHol;
+        if (isLeave) {
+          if (isWorkDay) leaveHours += h;
+        } else {
+          if (isWorkDay) actualWorkHours += h;
+        }
+      });
+      const shortage = expectedHours - actualWorkHours - leaveHours;
+      const color = shortage > 0 ? '#dc2626' : shortage < 0 ? '#059669' : '#6b7280';
+      const label = shortage > 0 ? `⚠ 工時缺漏 ${shortage.toFixed(1)}h（未請假）`
+                  : shortage < 0 ? `✓ 加班 ${(-shortage).toFixed(1)}h`
+                  : `✓ 工時足額`;
+      return `
+      <div style="padding:10px 12px; background:${shortage > 0 ? '#fef2f2' : '#f0fdf4'}; border-left:4px solid ${color}; border-radius:6px; margin-bottom:8px; font-size:13px; line-height:1.6;">
+        <strong style="color:${color};">📏 工時稽核</strong>（工作日 ${monthWorkdays} 天 × 8h）<br>
+        應上班 <strong>${expectedHours}h</strong>｜實際上班 <strong>${actualWorkHours.toFixed(1)}h</strong>｜請假 <strong>${leaveHours.toFixed(1)}h</strong>｜<span style="color:${color}; font-weight:700;">${label}</span>
+      </div>`;
+    })()}
+
     <!-- 本月天數概覽 -->
     <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-bottom:8px;">
       <div style="background:#f0f9ff; padding:8px; border-radius:6px; text-align:center;">
@@ -3354,9 +3389,26 @@ function refreshMonthlyAttendance() {
     // ★ 計時 + 論件 都列出
     const allEntries = dayEntries.filter(e => e.type === 'hour' || e.type === 'piece');
 
+    // ★ 工時缺漏檢查：當日若為平日工作日但沒記錄或時數 < 8，標示警告
+    const isWorkday = !isSunday && !isSaturday && !isNationalHoliday;
+    const hourEntries = dayEntries.filter(e => e.type === 'hour');
+    let dayTotalHours = 0;
+    hourEntries.forEach(e => {
+      const isLeave = e.attType && e.attType !== 'normal' && e.attType !== '加班' && e.attType !== '時薪加班';
+      const h = isLeave ? ((e.hours && e.hours > 0) ? e.hours : 8) : (e.hours || 0);
+      dayTotalHours += h;
+    });
+    const isUnderHours = isWorkday && dayTotalHours > 0 && dayTotalHours < 8;
+    const warningBadge = isUnderHours
+      ? ` <span style="background:#fef3c7; color:#92400e; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:700;">⚠ 少 ${(8 - dayTotalHours).toFixed(1)}h 未請假</span>`
+      : '';
+    const missingBadge = isWorkday && dayEntries.length === 0
+      ? ` <span style="background:#fee2e2; color:#991b1b; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:700;">⚠ 未出勤</span>`
+      : '';
+
     if (allEntries.length === 0) {
       const marker = isNationalHoliday ? '🎌 國定假日' : isSunday ? '例假' : isSaturday ? '休息日' : '';
-      html += `<tr style="${rowStyle}"><td>${d}</td><td style="text-align:center; font-weight:700;">${weekdayNames[dayOfWeek]}</td><td colspan="6" style="color:${isNationalHoliday ? '#991b1b' : '#9ca3af'}; font-style:italic; font-weight:${isNationalHoliday ? '700' : '400'};">${marker || '—'}</td></tr>`;
+      html += `<tr style="${rowStyle}"><td>${d}</td><td style="text-align:center; font-weight:700;">${weekdayNames[dayOfWeek]}</td><td colspan="6" style="color:${isNationalHoliday ? '#991b1b' : '#9ca3af'}; font-style:italic; font-weight:${isNationalHoliday ? '700' : '400'};">${marker || '—'}${missingBadge}</td></tr>`;
     } else {
       // 排序：計時在前，論件在後
       allEntries.sort((a, b) => {
@@ -3381,6 +3433,8 @@ function refreshMonthlyAttendance() {
             ? `<strong style="color:#dc2626;">請假 ${displayHours}h</strong>`
             : `<strong>${displayHours}h</strong>`;
           const workIcon = isLeaveRow ? '🏖' : '⏱';
+          // 只在每日第一列顯示工時缺漏警告
+          const rowWarn = (i === 0) ? warningBadge : '';
           html += `<tr style="${rowStyle}">
             <td>${i === 0 ? d : ''}</td>
             <td style="text-align:center; font-weight:700;">${i === 0 ? weekdayNames[dayOfWeek] : ''}</td>
@@ -3388,7 +3442,7 @@ function refreshMonthlyAttendance() {
             <td>${e.end || ''}</td>
             <td>${brkHr ? brkHr + 'h' : '—'}</td>
             <td>${hoursCell}</td>
-            <td>${workIcon} ${escapeHtml(e.workContent || '')}${attBadge}${lateBadge}</td>
+            <td>${workIcon} ${escapeHtml(e.workContent || '')}${attBadge}${lateBadge}${rowWarn}</td>
             <td style="white-space:nowrap;">
               <button type="button" onclick="editAttendanceFromMonth('${e._id}')" style="padding:2px 6px; border:none; background:#e5e7eb; color:#374151; border-radius:4px; cursor:pointer; font-size:11px;">✏️</button>
               <button type="button" onclick="deleteAttendanceFromMonth('${e._id}')" style="padding:2px 6px; border:none; background:#fee2e2; color:#991b1b; border-radius:4px; cursor:pointer; font-size:11px;">🗑</button>
@@ -5082,6 +5136,98 @@ function gatherCalcInput() {
     healthIns: document.getElementById('healthIns').value,
     note: document.getElementById('calcNote').value.trim()
   };
+}
+
+// 📊 匯出單一員工本月薪資單 Excel
+function exportSalarySlipExcel() {
+  const empId = document.getElementById('calcEmp').value;
+  const month = document.getElementById('calcMonth').value;
+  if (!empId || !month) { alert('請先選員工與月份'); return; }
+  const emp = employees.find(e => e._id === empId);
+  if (!emp) return;
+  const input = gatherCalcInput();
+  const r = computeSalary(emp, input);
+  const today = new Date().toISOString().slice(0, 10);
+
+  const rows = [
+    ['員工薪資單'],
+    [],
+    ['員工姓名', emp.name, '', '員工編號', emp.id || '-'],
+    ['薪資月份', month, '', '列印日期', today],
+    ['工作地點', emp.workplace || '-', '', '薪資制度', (emp.isHourly ? '時薪制' : '月薪制') + (emp.isShift ? '（排班制）' : '')],
+    [],
+    ['【薪資明細】', ''],
+  ];
+  if (r.base > 0) rows.push(['底薪', r.base]);
+  if (r.pieceIncome) rows.push(['論件收入', r.pieceIncome]);
+  if (r.hourIncome) rows.push(['計時收入', r.hourIncome]);
+  if (r.leavePayAmount) rows.push([`特休未休折算（${r.leavePayDays}天）`, r.leavePayAmount]);
+  if (r.otPay1) rows.push([`平日加班費（${input.ot1 || 0}h × ${r.otHourly} × 1.34）`, r.otPay1]);
+  if (r.otPay2) rows.push([`假日加班費（${input.ot2 || 0}h × ${r.otHourly} × 1.67）`, r.otPay2]);
+  if (r.bonus) {
+    rows.push(['獎金/津貼', r.bonus]);
+    (currentBonusItems || []).filter(x => x.amount > 0).forEach(x => rows.push([`  ├ ${x.name}`, x.amount]));
+  }
+  if (r.leaveAddback) rows.push(['請假加薪（有薪假）', r.leaveAddback]);
+  if (r.leaveDeduct) {
+    rows.push(['請假扣款', -r.leaveDeduct]);
+    // leaveItems 明細
+    (input.leaveItems || []).forEach(it => {
+      const cat = leaveCategories.find(c => c._id === it.categoryId);
+      if (!cat) return;
+      const totalDays = (it.days || 0) + (it.hours || 0) / 8;
+      if (totalDays <= 0) return;
+      let deduct = 0;
+      if (!emp.isHourly) {
+        if (cat.payType === 'none') deduct = Math.round(totalDays * (emp.baseSalary / 30));
+        else if (cat.payType === 'half') deduct = Math.round(totalDays * (emp.baseSalary / 30) / 2);
+      }
+      const dh = it.hours > 0 ? `${it.days || 0}天${it.hours}小時` : `${it.days || 0}天`;
+      rows.push([`  ├ ${cat.name} ${dh}`, deduct > 0 ? -deduct : 0]);
+    });
+  }
+  rows.push(['應發合計', r.gross]);
+  rows.push(['勞保', -r.laborIns]);
+  rows.push([`健保${r.dependents ? ' (含 ' + r.dependents + ' 眷口)' : ''}`, -r.healthIns]);
+  if (r.pensionSelf) rows.push([`自提勞退 (${r.pensionSelfRate}%)`, -r.pensionSelf]);
+  if (r.otherDeduct) {
+    rows.push(['其他扣款', -r.otherDeduct]);
+    (currentDeductItems || []).filter(x => x.amount > 0).forEach(x => rows.push([`  ├ ${x.name}`, -x.amount]));
+  }
+  rows.push([]);
+  rows.push(['實發金額', r.net]);
+  rows.push([]);
+
+  // 本月請假摘要
+  const monthLeaveEntries = dailyEntries.filter(d =>
+    d.empId === emp._id && d.type === 'hour' && d.date.startsWith(month) &&
+    d.attType && d.attType !== 'normal' && d.attType !== '加班' && d.attType !== '時薪加班'
+  );
+  const leaveUsage = {};
+  monthLeaveEntries.forEach(d => {
+    const h = (d.hours && d.hours > 0) ? d.hours : 8;
+    leaveUsage[d.attType] = (leaveUsage[d.attType] || 0) + h;
+  });
+  if (Object.keys(leaveUsage).length > 0) {
+    rows.push(['【本月請假】']);
+    Object.entries(leaveUsage).forEach(([t, h]) => {
+      const days = Math.floor(h / 8);
+      const hrs = h - days * 8;
+      const dh = hrs > 0 ? `${days}天${hrs}小時` : `${days}天`;
+      rows.push([`  ${t}`, `${dh}（${h}h）`]);
+    });
+    rows.push([]);
+  }
+
+  rows.push(['發薪人簽章', '', '', '員工簽收']);
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 4 }, { wch: 12 }, { wch: 15 }];
+  // 合併 A1 標題
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, `${emp.name}_${month}`);
+  XLSX.writeFile(wb, `薪資單_${emp.name}_${month}.xlsx`);
 }
 
 // 🖨 列印薪資單給員工（用乾淨排版、新視窗）
