@@ -447,11 +447,11 @@
       <div class="form-row">
         <div class="form-group">
           <label>開始時間 (選填)</label>
-          <input type="time" id="pieceStart" oninput="updatePieceTime()">
+          <input type="text" id="pieceStart" placeholder="HH:MM (24 小時制)" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" oninput="updatePieceTime()" onblur="formatTime24(this); updatePieceTime()">
         </div>
         <div class="form-group">
           <label>結束時間 (選填)</label>
-          <input type="time" id="pieceEnd" oninput="updatePieceTime()">
+          <input type="text" id="pieceEnd" placeholder="HH:MM (24 小時制)" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" oninput="updatePieceTime()" onblur="formatTime24(this); updatePieceTime()">
         </div>
       </div>
       <div id="pieceTimeInfo" style="display:none; background:#fffbeb; padding:10px; border-radius:8px; margin-bottom:10px; border:1px solid #f59e0b; font-size:13px;">
@@ -496,11 +496,11 @@
       <div class="form-row">
         <div class="form-group">
           <label>開始時間 *</label>
-          <input type="time" id="hourStart" oninput="updateHourPreview(); autoFillLate('hour')">
+          <input type="text" id="hourStart" placeholder="HH:MM (例 08:00)" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" oninput="updateHourPreview()" onblur="formatTime24(this); updateHourPreview(); autoFillLate('hour')">
         </div>
         <div class="form-group">
           <label>結束時間 *</label>
-          <input type="time" id="hourEnd" oninput="updateHourPreview()">
+          <input type="text" id="hourEnd" placeholder="HH:MM (例 17:00)" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" oninput="updateHourPreview()" onblur="formatTime24(this); updateHourPreview()">
         </div>
       </div>
       <div class="form-group">
@@ -880,11 +880,11 @@
       <div class="form-row">
         <div class="form-group">
           <label>上班時間</label>
-          <input type="time" id="quickAttStart" oninput="autoFillLate('quick')">
+          <input type="text" id="quickAttStart" placeholder="HH:MM (例 08:00)" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this); autoFillLate('quick')">
         </div>
         <div class="form-group">
           <label>下班時間</label>
-          <input type="time" id="quickAttEnd">
+          <input type="text" id="quickAttEnd" placeholder="HH:MM (例 17:00)" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this)">
         </div>
       </div>
       <div class="form-row">
@@ -902,7 +902,11 @@
           <input type="number" id="quickAttLate" placeholder="0" min="0" step="1" oninput="onLateInput('quick')">
         </div>
       </div>
-      <button type="button" class="btn btn-primary btn-block" onclick="quickAddAttendance()">新增出勤記錄</button>
+      <div class="btn-group" style="gap:6px;">
+        <button type="button" class="btn btn-secondary" onclick="resetQuickAttForm()" style="flex:0 0 auto; padding:10px 14px;">🔄 重置</button>
+        <button type="button" class="btn btn-primary" onclick="quickAddAttendance()" style="flex:1;">新增出勤記錄</button>
+      </div>
+      <div style="font-size:11px; color:#666; margin-top:6px;">提示：輸入新紀錄前可先按「重置」，避免遲到分鐘等欄位殘留上一筆的數值。</div>
       <div id="quickAttResult" style="display:none; margin-top:8px; padding:8px; background:#f0fdf4; border-radius:6px; font-size:12px;"></div>
     </div>
 
@@ -915,11 +919,11 @@
       <div class="form-row">
         <div class="form-group">
           <label>上班時間</label>
-          <input type="time" id="batchStart" value="08:00">
+          <input type="text" id="batchStart" value="08:00" placeholder="HH:MM" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this)">
         </div>
         <div class="form-group">
           <label>下班時間</label>
-          <input type="time" id="batchEnd" value="17:00">
+          <input type="text" id="batchEnd" value="17:00" placeholder="HH:MM" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this)">
         </div>
       </div>
       <div class="form-row">
@@ -997,6 +1001,11 @@
         <button class="btn btn-danger" onclick="clearAllData()">清除全部</button>
       </div>
       <button class="btn btn-secondary btn-block" onclick="removeDuplicateRecords()" style="margin-top:8px;">🧹 清理重複的月薪記錄（同員工同月）</button>
+      <button class="btn btn-danger btn-block" onclick="wipeCloudOnly()" style="margin-top:8px; background:#c92a2a;">☁ 強制重設雲端資料（清除全部後仍殘留時使用）</button>
+      <div style="padding:8px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; font-size:12px; color:#664d03; margin-top:6px;">
+        💡 若按「清除全部」後，舊的每日記錄又自動跑回來，代表雲端還保留資料。<br>
+        請按上方「☁ 強制重設雲端資料」把 Firestore 也一併清空。
+      </div>
       <input type="file" id="restoreFile" style="display:none" accept=".json" onchange="restoreData(event)">
     </div>
   </div>
@@ -1419,6 +1428,7 @@ async function migrateAndSubscribe() {
 
 function subscribeAll() {
   col('employees').onSnapshot(snap => {
+    if (suppressSubscription) return;
     employees = snap.docs.map(d => d.data());
     save(STORE.employees, employees);
     refreshEmployeeList();
@@ -1427,6 +1437,7 @@ function subscribeAll() {
   }, err => setSyncStatus('讀取錯誤: ' + err.message, 'error'));
 
   col('records').onSnapshot(snap => {
+    if (suppressSubscription) return;
     records = snap.docs.map(d => d.data());
     save(STORE.records, records);
     refreshRecords();
@@ -1434,6 +1445,7 @@ function subscribeAll() {
   });
 
   col('daily').onSnapshot(snap => {
+    if (suppressSubscription) return;
     dailyEntries = snap.docs.map(d => d.data());
     save(STORE.daily, dailyEntries);
     refreshDailyEntries();
@@ -1441,6 +1453,7 @@ function subscribeAll() {
   });
 
   col('products').onSnapshot(snap => {
+    if (suppressSubscription) return;
     products = snap.docs.map(d => d.data());
     save(STORE.products, products);
     refreshProductList();
@@ -1794,6 +1807,41 @@ function calcSpanMins(start, end) {
   return Math.max(0, mins);
 }
 
+// 24 小時制時間輸入自動格式化（blur 時執行）
+// 規則：
+//   1 位 → 0X:00       例 "8" → "08:00"
+//   2 位 → HH:00       例 "17" → "17:00"
+//   3 位 → 0H:MM       例 "830" → "08:30"
+//   4+位 → HH:MM       例 "1730" → "17:30"
+//   含冒號則直接校正為 HH:MM
+function formatTime24(el) {
+  if (!el) return;
+  let v = (el.value || '').trim();
+  if (v === '') return;
+  // 去掉非數字和冒號
+  v = v.replace(/[^\d:]/g, '');
+  if (v === '') { el.value = ''; return; }
+  let h = 0, m = 0;
+  if (v.includes(':')) {
+    const parts = v.split(':');
+    h = parseInt(parts[0], 10) || 0;
+    m = parseInt(parts[1], 10) || 0;
+  } else {
+    // 純數字：依長度解析
+    if (v.length === 1) { h = parseInt(v, 10); m = 0; }
+    else if (v.length === 2) { h = parseInt(v, 10); m = 0; }
+    else if (v.length === 3) { h = parseInt(v[0], 10); m = parseInt(v.slice(1), 10); }
+    else { h = parseInt(v.slice(0, 2), 10); m = parseInt(v.slice(2, 4), 10); }
+  }
+  if (isNaN(h)) h = 0;
+  if (isNaN(m)) m = 0;
+  if (h > 23) h = 23;
+  if (m > 59) m = 59;
+  if (h < 0) h = 0;
+  if (m < 0) m = 0;
+  el.value = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+}
+
 // 時數規則：不足 30 分鐘不計，30 分鐘為單位（捨去）
 // 範例：0~29→0，30~59→30，60~89→60，90~119→90，120~149→120，...
 function roundWorkMinutes(mins) {
@@ -1822,6 +1870,22 @@ function autoFillLate(kind) {
 // 使用者手動編輯遲到欄位（保留為 placeholder，無特殊處理）
 function onLateInput(kind) {
   // 純粹保留給 HTML 用，不做任何事 — 讓使用者自由編輯
+}
+
+// 重置「快速新增本月出勤」表單（保留日期為今日）
+function resetQuickAttForm() {
+  const today = new Date();
+  const ymd = today.toISOString().slice(0, 10);
+  const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  setVal('quickAttDate', ymd);
+  setVal('quickAttType', 'normal');
+  setVal('quickAttWork', '');
+  setVal('quickAttStart', '');
+  setVal('quickAttEnd', '');
+  setVal('quickAttBreak', '0');
+  setVal('quickAttLate', '');
+  const result = document.getElementById('quickAttResult');
+  if (result) { result.style.display = 'none'; result.innerHTML = ''; }
 }
 
 function calcHours(start, end, breakMin) {
@@ -1937,8 +2001,8 @@ function addPieceEntry() {
 function addHourEntry() {
   const date = document.getElementById('dailyDate').value;
   const empId = document.getElementById('dailyEmp').value;
-  const start = document.getElementById('hourStart').value;
-  const end = document.getElementById('hourEnd').value;
+  let start = document.getElementById('hourStart').value;
+  let end = document.getElementById('hourEnd').value;
   const brk = parseFloat(document.getElementById('hourBreak').value) || 0;
   const rate = parseFloat(document.getElementById('hourRate').value) || 0;
   if (!date) { alert('請選擇日期'); return; }
@@ -1946,8 +2010,33 @@ function addHourEntry() {
   if (!start || !end) { alert('請輸入起訖時間'); return; }
   if (rate <= 0) { alert('請輸入時薪'); return; }
 
+  // ★ AM/PM 智慧偵測（同 quickAddAttendance）
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  if (sh >= 5 && sh <= 12 && eh < 12 && (eh*60+em) < (sh*60+sm)) {
+    const fixedH = eh + 12;
+    if (fixedH >= 12 && fixedH <= 23) {
+      const fixedEnd = String(fixedH).padStart(2,'0') + ':' + String(em).padStart(2,'0');
+      const ok = confirm(
+        `⚠ 偵測到可能的 AM/PM 設定錯誤\n\n` +
+        `上班：${start}\n下班：${end}（看起來像凌晨）\n\n` +
+        `您是否實際上是「下午 ${eh}:${String(em).padStart(2,'0')}」（即 ${fixedEnd}）？\n\n` +
+        `按「確定」→ 自動改為 ${fixedEnd}\n` +
+        `按「取消」→ 維持 ${end}（會被當成跨日工作）`
+      );
+      if (ok) {
+        end = fixedEnd;
+        document.getElementById('hourEnd').value = fixedEnd;
+      }
+    }
+  }
+
   const hours = calcHours(start, end, brk);
   if (hours <= 0) { alert('時數必須大於 0'); return; }
+  if (hours > 16) {
+    const ok2 = confirm(`⚠ 計算出 ${hours} 小時工時，這超出常規工作日範圍。\n\n上班：${start}\n下班：${end}\n\n是否確認儲存？`);
+    if (!ok2) return;
+  }
 
   const emp = employees.find(e => e._id === empId);
   const original = editingDailyId ? dailyEntries.find(x => x._id === editingDailyId) : null;
@@ -2221,6 +2310,13 @@ function resetDailyButtons() {
   document.getElementById('hourCancelBtn').style.display = 'none';
 }
 
+let monthlyDailyExpanded = {}; // 各日期展開狀態
+
+function toggleMonthlyDailyDate(date) {
+  monthlyDailyExpanded[date] = !monthlyDailyExpanded[date];
+  refreshMonthlyDaily();
+}
+
 function refreshMonthlyDaily() {
   const month = document.getElementById('dailyMonthFilter').value;
   const empId = document.getElementById('dailyEmpFilter').value;
@@ -2250,6 +2346,7 @@ function refreshMonthlyDaily() {
   const selectedEmp = empId ? employees.find(e => e._id === empId) : null;
   const isMonthlyEmp = selectedEmp && !selectedEmp.isHourly && selectedEmp.baseSalary > 0;
   const dailyWage = isMonthlyEmp ? Math.round(selectedEmp.baseSalary / 30) : 0;
+  const colspan = isMonthlyEmp ? 6 : 5;
 
   const dates = Object.keys(byDate).sort();
   let pieceTotal = 0, hourTotal = 0, wageTotal = 0, hoursSum = 0, qtySum = 0;
@@ -2267,14 +2364,43 @@ function refreshMonthlyDaily() {
     hoursSum += items.filter(x => x.type === 'hour').reduce((a,b) => a + b.hours, 0);
     qtySum += items.filter(x => x.type === 'piece').reduce((a,b) => a + b.qty, 0);
     const wageCol = isMonthlyEmp ? `<td class="currency">${dayWage ? formatMoney(dayWage) : '—'}</td>` : '';
-    return `<tr>
-      <td>${date.slice(5)}</td>
+
+    // 展開狀態 → 列出該日所有明細
+    const isOpen = !!monthlyDailyExpanded[date];
+    const arrow = isOpen ? '▼' : '▶';
+    let detail = '';
+    if (isOpen) {
+      const detailRows = items.map(it => {
+        const who = it.empName ? `${it.empNo || ''} ${it.empName}` : '';
+        let info = '';
+        if (it.type === 'piece') {
+          info = `論件 · ${it.name || ''} × ${it.qty || 0} = ${formatMoney(it.subtotal || 0)}`;
+        } else {
+          const att = it.attType && it.attType !== 'normal' ? ` [${it.attType}]` : '';
+          info = `計時${att} · ${it.start || ''}~${it.end || ''} · ${it.hours || 0}小時 · ${it.workContent || ''} = ${formatMoney(it.subtotal || 0)}`;
+        }
+        return `
+          <tr style="background:#f8f9fa; font-size:12px;">
+            <td colspan="${colspan - 1}" style="padding-left:24px;">
+              ${who ? `<span style="color:#6b7280;">${who} · </span>` : ''}${info}
+            </td>
+            <td style="text-align:right; white-space:nowrap;">
+              <button class="btn btn-secondary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); editDailyEntry('${it._id}')">編輯</button>
+              <button class="btn btn-danger btn-sm" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); deleteDailyEntry('${it._id}')">刪除</button>
+            </td>
+          </tr>`;
+      }).join('');
+      detail = detailRows;
+    }
+
+    return `<tr style="cursor:pointer;" onclick="toggleMonthlyDailyDate('${date}')">
+      <td><strong>${arrow} ${date.slice(5)}</strong></td>
       <td>${items.length}</td>
       <td class="currency">${formatMoney(dayPiece)}</td>
       <td class="currency">${formatMoney(dayHour)}</td>
       ${wageCol}
       <td class="currency"><strong>${formatMoney(dayTotal)}</strong></td>
-    </tr>`;
+    </tr>${detail}`;
   }).join('');
 
   const grand = pieceTotal + hourTotal + wageTotal;
@@ -2285,6 +2411,9 @@ function refreshMonthlyDaily() {
     : '';
 
   box.innerHTML = `
+    <div style="padding:8px 10px; background:#eff6ff; border-left:3px solid #3b82f6; border-radius:4px; font-size:12px; color:#1e40af; margin-bottom:8px; line-height:1.6;">
+      💡 點任一日期可展開當日所有記錄，並可直接「編輯」或「刪除」。發現舊資料殘留可在這裡逐筆清除。
+    </div>
     <table>
       <thead>
         <tr>
@@ -3665,15 +3794,42 @@ function quickAddAttendance() {
   const emp = employees.find(e => e._id === empId);
   if (!emp) return;
   const date = document.getElementById('quickAttDate').value;
-  const start = document.getElementById('quickAttStart').value;
-  const end = document.getElementById('quickAttEnd').value;
+  let start = document.getElementById('quickAttStart').value;
+  let end = document.getElementById('quickAttEnd').value;
   const brk = parseFloat(document.getElementById('quickAttBreak').value) || 0;
   const late = parseFloat(document.getElementById('quickAttLate').value) || 0;
   const work = document.getElementById('quickAttWork').value;
   if (!date || !start || !end) { alert('請填日期 + 上下班時間'); return; }
 
+  // ★ AM/PM 智慧偵測：若上班 8:00 之後，下班時間卻早於上班時間，
+  //   且上班是上午、下班是上午，極可能使用者把「下午 X 點」誤填成「早上 X 點」。
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  if (sh >= 5 && sh <= 12 && eh < 12 && (eh*60+em) < (sh*60+sm)) {
+    const fixedH = eh + 12;
+    if (fixedH >= 12 && fixedH <= 23) {
+      const fixedEnd = String(fixedH).padStart(2,'0') + ':' + String(em).padStart(2,'0');
+      const ok = confirm(
+        `⚠ 偵測到可能的 AM/PM 設定錯誤\n\n` +
+        `上班：${start}\n下班：${end}（看起來像凌晨）\n\n` +
+        `您是否實際上是「下午 ${eh}:${String(em).padStart(2,'0')}」（即 ${fixedEnd}）？\n\n` +
+        `按「確定」→ 自動改為 ${fixedEnd}\n` +
+        `按「取消」→ 維持 ${end}（會被當成跨日工作）`
+      );
+      if (ok) {
+        end = fixedEnd;
+        document.getElementById('quickAttEnd').value = fixedEnd;
+      }
+    }
+  }
+
   const hours = calcHours(start, end, brk);
   if (hours <= 0) { alert('時數必須大於 0'); return; }
+  // ★ 第二道防線：時數仍超過 16 小時，再提醒一次
+  if (hours > 16) {
+    const ok2 = confirm(`⚠ 計算出 ${hours} 小時工時，這超出常規工作日範圍。\n\n上班：${start}\n下班：${end}\n\n是否確認儲存？`);
+    if (!ok2) return;
+  }
   const rate = emp.hourlyRate || Math.round((emp.baseSalary || 0) / 30 / 8);
 
   const attType = document.getElementById('quickAttType').value || 'normal';
@@ -4768,9 +4924,17 @@ function removeDuplicateRecords() {
   alert(`✅ 清理完成：\n  保留 ${keepers.length} 筆\n  刪除 ${toDelete.length} 筆重複`);
 }
 
-function clearAllData() {
+async function clearAllData() {
   if (!confirm('確定清除所有員工與薪資記錄？此動作無法復原！')) return;
-  if (!confirm('再次確認：資料將完全清除！')) return;
+  if (!confirm('再次確認：資料將完全清除（包含雲端 Firestore）！')) return;
+
+  // 先記下所有要刪除的雲端文件 ID
+  const empIds = employees.map(e => e._id);
+  const recIds = records.map(r => r._id);
+  const dailyIds = dailyEntries.map(d => d._id);
+  const prodIds = products.map(p => p._id);
+
+  // 清空本地
   employees = []; records = []; dailyEntries = []; products = [];
   save(STORE.employees, []);
   save(STORE.records, []);
@@ -4783,7 +4947,73 @@ function clearAllData() {
   refreshMonthlyDaily();
   refreshProductList();
   updateSummary();
-  alert('已清除');
+
+  // 同步刪除雲端
+  if (cloudReady) {
+    try {
+      // 暫時關閉訂閱避免雲端把資料推回來
+      suppressSubscription = true;
+      await Promise.all([
+        ...empIds.map(id => cloudDelete('employees', id)),
+        ...recIds.map(id => cloudDelete('records', id)),
+        ...dailyIds.map(id => cloudDelete('daily', id)),
+        ...prodIds.map(id => cloudDelete('products', id))
+      ]);
+      // 雲端可能還有「已被軟刪除但下次又同步回來」的孤兒文件，
+      // 直接掃一次 collection 把所有殘留全部刪掉
+      const collectionsToWipe = ['employees', 'records', 'daily', 'products'];
+      for (const c of collectionsToWipe) {
+        try {
+          const snap = await ws().collection(c).get();
+          await Promise.all(snap.docs.map(d => d.ref.delete()));
+        } catch (err) {
+          console.warn('清除雲端 ' + c + ' 失敗:', err);
+        }
+      }
+      suppressSubscription = false;
+      alert('✅ 已完全清除（本地 + 雲端）');
+    } catch (e) {
+      suppressSubscription = false;
+      alert('本地已清除，但雲端清除失敗：' + e.message + '\n\n請按「設定 → 重設雲端」再試一次。');
+    }
+  } else {
+    alert('⚠ 已清除本地資料，但雲端未連線。請等雲端連線後再執行一次「清除全部」。');
+  }
+}
+
+// 單獨清除雲端（在「設定」頁提供按鈕，當本地清除完雲端又同步回來時使用）
+async function wipeCloudOnly() {
+  if (!cloudReady) { alert('雲端尚未連線'); return; }
+  if (!confirm('⚠ 確定要強制清除雲端所有資料嗎？\n\n（員工、薪資記錄、每日記錄、產品）\n此動作無法復原！')) return;
+  if (!confirm('再次確認：將清空 Firestore 所有文件！')) return;
+  try {
+    suppressSubscription = true;
+    const collectionsToWipe = ['employees', 'records', 'daily', 'products'];
+    let total = 0;
+    for (const c of collectionsToWipe) {
+      const snap = await ws().collection(c).get();
+      await Promise.all(snap.docs.map(d => d.ref.delete()));
+      total += snap.docs.length;
+    }
+    // 同步把本地也清空
+    employees = []; records = []; dailyEntries = []; products = [];
+    save(STORE.employees, []);
+    save(STORE.records, []);
+    save(STORE.daily, []);
+    save(STORE.products, []);
+    refreshEmployeeList();
+    refreshEmpDropdown();
+    refreshRecords();
+    refreshDailyEntries();
+    refreshMonthlyDaily();
+    refreshProductList();
+    updateSummary();
+    suppressSubscription = false;
+    alert(`✅ 已清除雲端 ${total} 筆文件，本地也已同步清空`);
+  } catch (e) {
+    suppressSubscription = false;
+    alert('清除失敗：' + e.message);
+  }
 }
 
 // ========= LIFF =========
