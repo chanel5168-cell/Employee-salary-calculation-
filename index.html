@@ -1151,14 +1151,17 @@
         </div>
       </div>
       <div class="form-group" id="newUserWorkplaceRow">
-        <label>限定廠別 *</label>
-        <select id="newUserWorkplace"><option value="">-- 請選擇 --</option></select>
+        <label>限定廠別 * <span style="color:#6b7280; font-size:11px; font-weight:normal;">（可勾選多個，未勾代表該廠看不到）</span></label>
+        <div id="newUserWorkplaceChecks" style="display:flex; flex-wrap:wrap; gap:10px; padding:10px; border:1px solid #e5e7eb; border-radius:6px; background:#f9fafb;"></div>
       </div>
       <div class="form-group" id="newUserEmpRow" style="display:none;">
         <label>對應員工 *</label>
         <select id="newUserEmp"><option value="">-- 請選擇 --</option></select>
       </div>
-      <button class="btn btn-primary btn-block" onclick="addUser()">新增使用者</button>
+      <div class="btn-group">
+        <button class="btn btn-secondary" id="userCancelBtn" onclick="cancelUserEdit()" style="display:none;">取消編輯</button>
+        <button class="btn btn-primary btn-block" id="userPrimaryBtn" onclick="saveUser()">新增使用者</button>
+      </div>
 
       <div style="margin-top:16px;">
         <h4 style="margin:0 0 8px 0;">使用者清單</h4>
@@ -5358,7 +5361,11 @@ function isEmployeeRole() { return currentUser && currentUser.role === 'employee
 // 過濾員工列表 — 依登入者角色限制可見範圍
 function getVisibleEmployees() {
   if (!currentUser || isAdmin()) return employees;
-  if (isFactoryRole()) return employees.filter(e => e.workplace === currentUser.workplace);
+  if (isFactoryRole()) {
+    const wps = getUserWorkplaces(currentUser);
+    if (wps.length === 0) return [];
+    return employees.filter(e => wps.includes(e.workplace));
+  }
   if (isEmployeeRole()) return employees.filter(e => e._id === currentUser.empId);
   return [];
 }
@@ -5433,7 +5440,14 @@ function updateUserInfoBar() {
   const bar = document.getElementById('userInfoBar');
   if (!bar) return;
   if (!currentUser) { bar.style.display = 'none'; return; }
-  const roleLabel = isAdmin() ? '管理者' : isFactoryRole() ? `廠別主管 (${currentUser.workplace || ''})` : `員工 (僅看自己)`;
+  let roleLabel;
+  if (isAdmin()) roleLabel = '管理者';
+  else if (isFactoryRole()) {
+    const wps = getUserWorkplaces(currentUser);
+    roleLabel = `廠別主管 (${wps.length > 0 ? wps.join('、') : '未設定'})`;
+  } else {
+    roleLabel = '員工 (僅看自己)';
+  }
   bar.innerHTML = `
     👤 <strong>${escapeHtml(currentUser.displayName || currentUser.username)}</strong>
     <span style="color:#6b7280; font-size:12px;">[${roleLabel}]</span>
@@ -5454,6 +5468,16 @@ function applyPermissionUI() {
 }
 
 // ========= 使用者管理（admin 專用）=========
+let editingUserId = null;
+
+// 取得使用者可看到的廠別陣列（兼容舊資料 workplace 字串）
+function getUserWorkplaces(u) {
+  if (!u) return [];
+  if (Array.isArray(u.workplaces)) return u.workplaces;
+  if (u.workplace) return [u.workplace];
+  return [];
+}
+
 function refreshUserList() {
   const box = document.getElementById('userListBox');
   if (!box) return;
@@ -5464,13 +5488,23 @@ function refreshUserList() {
   box.innerHTML = '<table><thead><tr><th>帳號</th><th>姓名</th><th>角色</th><th>限定範圍</th><th>操作</th></tr></thead><tbody>' +
     users.map(u => {
       const roleText = u.role === 'admin' ? '管理者' : u.role === 'factory' ? '廠別主管' : '員工';
-      const scope = u.role === 'factory' ? (u.workplace || '-') : u.role === 'employee' ? (u.empName || u.empId || '-') : '全部';
-      return `<tr>
-        <td>${escapeHtml(u.username)}</td>
+      let scope = '全部';
+      if (u.role === 'factory') {
+        const wps = getUserWorkplaces(u);
+        scope = wps.length > 0 ? wps.join('、') : '-';
+      } else if (u.role === 'employee') {
+        scope = u.empName || u.empId || '-';
+      }
+      const isEditing = editingUserId === u._id;
+      return `<tr ${isEditing ? 'style="background:#fffbeb;"' : ''}>
+        <td>${escapeHtml(u.username)}${isEditing ? ' <span class="badge" style="background:#fef3c7;color:#92400e;">編輯中</span>' : ''}</td>
         <td>${escapeHtml(u.displayName || '')}</td>
         <td>${roleText}</td>
         <td>${escapeHtml(scope)}</td>
-        <td><button class="btn btn-danger btn-sm" onclick="deleteUser('${u._id}')" style="padding:2px 8px; font-size:11px;">刪除</button></td>
+        <td>
+          <button class="btn btn-secondary btn-sm" onclick="editUser('${u._id}')" style="padding:2px 8px; font-size:11px;">✏️ 變更</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteUser('${u._id}')" style="padding:2px 8px; font-size:11px;">刪除</button>
+        </td>
       </tr>`;
     }).join('') + '</tbody></table>';
 }
@@ -5479,11 +5513,21 @@ function onUserRoleChange() {
   const role = document.getElementById('newUserRole').value;
   document.getElementById('newUserWorkplaceRow').style.display = role === 'factory' ? 'block' : 'none';
   document.getElementById('newUserEmpRow').style.display = role === 'employee' ? 'block' : 'none';
-  // 同步下拉選單
+  // 同步廠別 checkbox
   if (role === 'factory') {
-    const sel = document.getElementById('newUserWorkplace');
-    sel.innerHTML = '<option value="">-- 請選擇 --</option>' +
-      workplaces.map(w => `<option value="${escapeHtml(w.name)}">${escapeHtml(w.name)}</option>`).join('');
+    const box = document.getElementById('newUserWorkplaceChecks');
+    if (box) {
+      if (workplaces.length === 0) {
+        box.innerHTML = '<div style="color:#9ca3af; font-size:12px;">尚無廠別資料，請先到員工頁設定工作地點</div>';
+      } else {
+        box.innerHTML = workplaces.map(w => `
+          <label style="display:flex; align-items:center; gap:4px; cursor:pointer; background:#fff; padding:6px 10px; border-radius:6px; border:1px solid #e5e7eb;">
+            <input type="checkbox" class="user-wp-chk" value="${escapeHtml(w.name)}">
+            <span>${escapeHtml(w.name)}</span>
+          </label>
+        `).join('');
+      }
+    }
   }
   if (role === 'employee') {
     const sel = document.getElementById('newUserEmp');
@@ -5492,19 +5536,78 @@ function onUserRoleChange() {
   }
 }
 
-function addUser() {
-  if (!requireAdmin('新增使用者')) return;
+// 載入使用者到表單以便編輯
+function editUser(id) {
+  if (!requireAdmin('編輯使用者')) return;
+  const u = users.find(x => x._id === id);
+  if (!u) return;
+  editingUserId = id;
+  document.getElementById('newUserUsername').value = u.username || '';
+  document.getElementById('newUserPassword').value = u.password || '';
+  document.getElementById('newUserDisplayName').value = u.displayName || '';
+  document.getElementById('newUserRole').value = u.role || 'factory';
+  onUserRoleChange();
+  // 勾選原本的廠別
+  if (u.role === 'factory') {
+    const selectedWps = getUserWorkplaces(u);
+    document.querySelectorAll('.user-wp-chk').forEach(cb => {
+      cb.checked = selectedWps.includes(cb.value);
+    });
+  }
+  if (u.role === 'employee') {
+    document.getElementById('newUserEmp').value = u.empId || '';
+  }
+  document.getElementById('userPrimaryBtn').textContent = '💾 更新使用者';
+  document.getElementById('userCancelBtn').style.display = 'inline-block';
+  refreshUserList();
+  document.getElementById('userManagerCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function cancelUserEdit() {
+  editingUserId = null;
+  clearUserForm();
+  document.getElementById('userPrimaryBtn').textContent = '新增使用者';
+  document.getElementById('userCancelBtn').style.display = 'none';
+  refreshUserList();
+}
+
+function clearUserForm() {
+  document.getElementById('newUserUsername').value = '';
+  document.getElementById('newUserPassword').value = '';
+  document.getElementById('newUserDisplayName').value = '';
+  document.getElementById('newUserRole').value = 'factory';
+  onUserRoleChange();
+}
+
+// 儲存（新增或更新）
+function saveUser() {
+  if (!requireAdmin(editingUserId ? '更新使用者' : '新增使用者')) return;
   const username = (document.getElementById('newUserUsername').value || '').trim();
   const password = (document.getElementById('newUserPassword').value || '').trim();
   const displayName = (document.getElementById('newUserDisplayName').value || '').trim();
   const role = document.getElementById('newUserRole').value;
   if (!username || !password) { alert('請輸入帳號與密碼'); return; }
   if (username === 'admin') { alert('admin 為內建保留帳號'); return; }
-  if (users.some(u => u.username === username)) { alert('此帳號已存在'); return; }
-  const u = { _id: 'usr_' + Date.now(), username, password, displayName, role };
+  // 帳號重複檢查（編輯時排除自己）
+  if (users.some(u => u.username === username && u._id !== editingUserId)) {
+    alert('此帳號已存在'); return;
+  }
+
+  const u = editingUserId
+    ? { ...users.find(x => x._id === editingUserId) }
+    : { _id: 'usr_' + Date.now() };
+  u.username = username;
+  u.password = password;
+  u.displayName = displayName;
+  u.role = role;
+
+  // 清掉舊的範圍欄位，重新依角色填
+  delete u.workplace; delete u.workplaces; delete u.empId; delete u.empName;
+
   if (role === 'factory') {
-    u.workplace = document.getElementById('newUserWorkplace').value;
-    if (!u.workplace) { alert('請選擇廠別'); return; }
+    const checked = [...document.querySelectorAll('.user-wp-chk:checked')].map(c => c.value);
+    if (checked.length === 0) { alert('請至少勾選一個廠別'); return; }
+    u.workplaces = checked;
   }
   if (role === 'employee') {
     u.empId = document.getElementById('newUserEmp').value;
@@ -5512,27 +5615,41 @@ function addUser() {
     const emp = employees.find(e => e._id === u.empId);
     u.empName = emp ? emp.name : '';
   }
-  users.push(u);
+
+  if (editingUserId) {
+    users = users.map(x => x._id === editingUserId ? u : x);
+  } else {
+    users.push(u);
+  }
   save(STORE.users, users);
   cloudSave('users', u);
+  // 若編輯的是當前登入者，更新狀態
+  if (currentUser && editingUserId === currentUser._id) {
+    currentUser = u;
+    updateUserInfoBar();
+    applyPermissionUI();
+    refreshEmployeeList(); refreshEmpDropdown(); refreshRecords();
+    refreshDailyEntries(); refreshMonthlyDaily(); updateSummary();
+  }
+  const wasEditing = !!editingUserId;
+  editingUserId = null;
+  document.getElementById('userPrimaryBtn').textContent = '新增使用者';
+  document.getElementById('userCancelBtn').style.display = 'none';
+  clearUserForm();
   refreshUserList();
-  // 清空表單
-  document.getElementById('newUserUsername').value = '';
-  document.getElementById('newUserPassword').value = '';
-  document.getElementById('newUserDisplayName').value = '';
-  document.getElementById('newUserRole').value = 'factory';
-  onUserRoleChange();
-  alert(`✅ 已新增使用者：${username}`);
+  alert(wasEditing ? `✅ 已更新使用者：${username}` : `✅ 已新增使用者：${username}`);
 }
 
 function deleteUser(id) {
   if (!requireAdmin('刪除使用者')) return;
   const u = users.find(x => x._id === id);
   if (!u) return;
+  if (currentUser && u._id === currentUser._id) { alert('不能刪除目前登入的使用者，請先登出'); return; }
   if (!confirm(`確定刪除使用者「${u.username}」？`)) return;
   users = users.filter(x => x._id !== id);
   save(STORE.users, users);
   cloudDelete('users', id);
+  if (editingUserId === id) cancelUserEdit();
   refreshUserList();
 }
 
