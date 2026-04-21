@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>員工薪資系統 — 管理維運手冊（部署 / 修改 / 維護 / 安全）</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", "PingFang TC", sans-serif;
+    background: #f3f4f6; color: #1f2937; line-height: 1.7;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 24px; }
+  header {
+    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+    color: white; padding: 28px 32px; border-radius: 14px;
+    margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  }
+  header h1 { font-size: 26px; margin-bottom: 6px; }
+  header .sub { font-size: 14px; opacity: 0.95; }
+  .audience {
+    background: #fef3c7; padding: 12px 16px; border-radius: 8px;
+    margin-bottom: 20px; border-left: 4px solid #f59e0b;
+    font-size: 14px; color: #92400e; line-height: 1.7;
+  }
+  nav.toc {
+    background: white; padding: 20px 26px; border-radius: 12px;
+    margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  nav.toc h2 { font-size: 16px; margin-bottom: 12px; color: #111827; }
+  nav.toc ol { padding-left: 22px; }
+  nav.toc li { margin-bottom: 6px; }
+  nav.toc a { color: #1e40af; text-decoration: none; font-weight: 500; }
+  nav.toc a:hover { text-decoration: underline; }
+  section {
+    background: white; padding: 24px 28px; border-radius: 12px;
+    margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  h2 {
+    font-size: 22px; color: #111827; border-bottom: 3px solid #3b82f6;
+    padding-bottom: 10px; margin-bottom: 16px;
+  }
+  h3 {
+    font-size: 17px; color: #1e40af; margin-top: 22px; margin-bottom: 10px;
+    padding-left: 10px; border-left: 4px solid #3b82f6;
+  }
+  h4 { font-size: 15px; color: #374151; margin: 14px 0 8px; }
+  p { margin-bottom: 10px; }
+  ul, ol { padding-left: 24px; margin-bottom: 12px; }
+  li { margin-bottom: 4px; }
+  code {
+    background: #1f2937; color: #e5e7eb; padding: 2px 6px;
+    border-radius: 4px; font-size: 13px; font-family: "Fira Code", monospace;
+  }
+  pre {
+    background: #1f2937; color: #e5e7eb; padding: 14px 18px;
+    border-radius: 8px; overflow-x: auto; margin: 10px 0; font-size: 13px;
+    line-height: 1.5;
+  }
+  pre code { background: none; padding: 0; }
+  .step {
+    display: flex; gap: 14px; margin-bottom: 14px;
+    padding: 12px 14px; background: #f9fafb; border-radius: 8px;
+    border-left: 4px solid #3b82f6;
+  }
+  .step-num {
+    flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%;
+    background: #3b82f6; color: white; display: flex; align-items: center;
+    justify-content: center; font-weight: 700; font-size: 15px;
+  }
+  .step-body { flex: 1; }
+  .step-body strong { display: block; margin-bottom: 4px; color: #111827; }
+  .step-body .desc { font-size: 14px; color: #4b5563; }
+  .callout {
+    padding: 14px 16px; border-radius: 8px; margin: 12px 0; font-size: 14px;
+    line-height: 1.7;
+  }
+  .tip { background: #dbeafe; border-left: 4px solid #3b82f6; color: #1e3a8a; }
+  .warn { background: #fef3c7; border-left: 4px solid #f59e0b; color: #92400e; }
+  .danger { background: #fee2e2; border-left: 4px solid #dc2626; color: #991b1b; }
+  .success { background: #d1fae5; border-left: 4px solid #059669; color: #065f46; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 14px; }
+  th { background: #3b82f6; color: white; padding: 10px; text-align: left; }
+  td { padding: 10px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+  tr:hover td { background: #fafafa; }
+  footer {
+    text-align: center; padding: 20px; color: #6b7280; font-size: 13px;
+    margin-top: 20px;
+  }
+  @media print {
+    body { background: white; }
+    section, header, nav.toc { box-shadow: none; border: 1px solid #e5e7eb; }
+    pre { page-break-inside: avoid; }
+    .audience { background: #fef3c7; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <h1>🛠 員工薪資系統 — 管理維運手冊</h1>
+  <div class="sub">部署 · 修改 · 維護 · 安全性 | v2.0 獨立版</div>
+</header>
+
+<div class="audience">
+  <strong>📌 適用對象：</strong>系統總管理者、IT 人員、負責部署或更新系統的人員。<br>
+  本手冊只含部署與維護相關內容，一般使用者（員工、會計、廠別主管）請看「使用手冊」或「完整操作手冊」。
+</div>
+
+<nav class="toc">
+  <h2>📑 目錄</h2>
+  <ol>
+    <li><a href="#deploy">☁ 如何放上雲端（GitHub Pages + Firebase + LINE LIFF）</a></li>
+    <li><a href="#modify">🔧 如何修改系統</a></li>
+    <li><a href="#maintain">🛠 維護與常見問題</a></li>
+    <li><a href="#security">🔐 安全性設定（Firestore 規則）</a></li>
+  </ol>
+</nav>
+
+<!-- ========== 1. 部署 ========== -->
+<section id="deploy">
+  <h2>1. ☁ 如何放上雲端（GitHub Pages + LINE LIFF）</h2>
+
+  <div class="callout tip">
+    <strong>整個部署流程約 30 分鐘，都是免費的</strong><br>
+    GitHub Pages、Firebase、LINE LIFF、LINE Developers 通通終身免費
+  </div>
+
+  <h3>第一部分：GitHub Pages（網頁主機）</h3>
+
+  <div class="step"><div class="step-num">1</div><div class="step-body">
+    <strong>註冊 GitHub</strong>
+    <div class="desc">到 <a href="https://github.com" target="_blank">https://github.com</a>，用 email 註冊（完全免費）</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">2</div><div class="step-body">
+    <strong>建立倉庫（Repository）</strong>
+    <div class="desc">登入後右上角 <strong>+</strong> → <strong>New repository</strong><br>
+      • Repository name 填：<code>salary-app</code>（或其他名稱）<br>
+      • 設為 <strong>Public</strong>（GitHub Pages 免費版需要公開）<br>
+      • 勾選 <strong>Add a README file</strong><br>
+      • 按 <strong>Create repository</strong>
+    </div>
+  </div></div>
+
+  <div class="step"><div class="step-num">3</div><div class="step-body">
+    <strong>上傳 index.html</strong>
+    <div class="desc">在倉庫首頁 → <strong>Add file</strong> → <strong>Upload files</strong> → 拖入 <code>index.html</code> → 下方 Commit message 寫「首次上傳」→ 按綠色 <strong>Commit changes</strong></div>
+  </div></div>
+
+  <div class="step"><div class="step-num">4</div><div class="step-body">
+    <strong>啟用 GitHub Pages</strong>
+    <div class="desc">倉庫頁面上方 <strong>Settings</strong> → 左側 <strong>Pages</strong> → Source 選 <strong>main branch</strong> → <strong>Save</strong></div>
+  </div></div>
+
+  <div class="step"><div class="step-num">5</div><div class="step-body">
+    <strong>等待約 1~2 分鐘 → 取得網址</strong>
+    <div class="desc">頁面會顯示 <code>https://您的帳號.github.io/salary-app/</code>，點開就是您的系統網頁！</div>
+  </div></div>
+
+  <h3>第二部分：Firebase（雲端資料庫）</h3>
+
+  <div class="step"><div class="step-num">1</div><div class="step-body">
+    <strong>註冊 Firebase</strong>
+    <div class="desc">到 <a href="https://console.firebase.google.com" target="_blank">Firebase Console</a>，用 Google 帳號登入 → 點 <strong>Add project</strong> 建立專案</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">2</div><div class="step-body">
+    <strong>啟用 Firestore</strong>
+    <div class="desc">左側選單 → <strong>Firestore Database</strong> → <strong>Create database</strong> → 選「測試模式」(開啟 30 天臨時規則) → 選區域（建議 asia-east1）→ Enable</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">3</div><div class="step-body">
+    <strong>取得 Firebase 設定資訊</strong>
+    <div class="desc">專案首頁 → <strong>Project settings</strong>（齒輪圖示）→ 下方「您的應用程式」→ 選「Web 應用程式 &lt;/&gt;」→ 註冊 app → 複製 <code>firebaseConfig</code> 這段程式碼</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">4</div><div class="step-body">
+    <strong>把 firebaseConfig 貼到 index.html</strong>
+    <div class="desc">打開 index.html → 搜尋 <code>firebaseConfig</code> → 用您的值取代裡面的 apiKey、projectId 等 → 重新上傳到 GitHub</div>
+  </div></div>
+
+  <div class="callout danger">
+    <strong>🚨 重要：</strong>Firestore 測試模式 30 天後會鎖死！請在到期前到 Firestore → 規則頁面，改成永久規則。系統內會有倒數提醒橫幅（管理者登入時顯示），點橫幅可看完整設定步驟。詳見第 4 章。
+  </div>
+
+  <h3>第三部分：LINE LIFF（在 LINE 裡開啟）</h3>
+
+  <div class="step"><div class="step-num">1</div><div class="step-body">
+    <strong>註冊 LINE Developers</strong>
+    <div class="desc">到 <a href="https://developers.line.biz" target="_blank">LINE Developers</a>，用 LINE 帳號登入</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">2</div><div class="step-body">
+    <strong>建立 Provider</strong>
+    <div class="desc">點 <strong>Create a new provider</strong> → 輸入公司/組織名稱</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">3</div><div class="step-body">
+    <strong>建立 LINE Login Channel</strong>
+    <div class="desc">在 Provider 下 → <strong>Create a new channel</strong> → 選 <strong>LINE Login</strong><br>
+      • Channel name：薪資系統<br>
+      • App types：勾 <strong>Web app</strong><br>
+      • 填完表單 → 建立
+    </div>
+  </div></div>
+
+  <div class="step"><div class="step-num">4</div><div class="step-body">
+    <strong>新增 LIFF App</strong>
+    <div class="desc">進入 Channel → <strong>LIFF</strong> 分頁 → <strong>Add</strong><br>
+      • LIFF app name：薪資系統<br>
+      • Size：<strong>Full</strong><br>
+      • Endpoint URL：貼您的 GitHub Pages 網址<br>
+      • Scope：勾 <code>profile</code>、<code>openid</code><br>
+      • 建立後會取得 <strong>LIFF ID</strong>（格式如 <code>1234567890-AbCdEfGh</code>）
+    </div>
+  </div></div>
+
+  <div class="step"><div class="step-num">5</div><div class="step-body">
+    <strong>在系統裡設定 LIFF ID</strong>
+    <div class="desc">打開您的系統網頁 → 登入總管理者 → 設定頁最上方「📱 LINE LIFF 設定」→ 貼入 LIFF ID → 按「儲存並重新初始化」</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">6</div><div class="step-body">
+    <strong>在 LINE 裡測試</strong>
+    <div class="desc">LIFF URL 為：<code>https://liff.line.me/您的LIFF_ID</code><br>
+      把這個網址貼到 LINE 聊天 → 點擊 → 在 LINE 內開啟系統
+    </div>
+  </div></div>
+
+  <div class="callout success">
+    <strong>✅ 部署完成後，三個網址都可以用：</strong><br>
+    • 電腦瀏覽器：<code>https://您的帳號.github.io/salary-app/</code><br>
+    • 手機瀏覽器：同上<br>
+    • LINE 內：<code>https://liff.line.me/您的LIFF_ID</code>
+  </div>
+</section>
+
+<!-- ========== 2. 修改 ========== -->
+<section id="modify">
+  <h2>2. 🔧 如何修改系統</h2>
+
+  <p>無論是想調整文字、改按鈕顏色、加新功能，都是修改同一個 <code>index.html</code> 檔案。</p>
+
+  <h3>方法 A：直接在 GitHub 網頁編輯（簡單改動適用）</h3>
+
+  <div class="step"><div class="step-num">1</div><div class="step-body">
+    <strong>進入倉庫首頁</strong>
+    <div class="desc">到 <code>https://github.com/您的帳號/salary-app</code></div>
+  </div></div>
+
+  <div class="step"><div class="step-num">2</div><div class="step-body">
+    <strong>點 index.html</strong>
+    <div class="desc">進入檔案後，右上角有鉛筆圖示 <strong>🖊</strong> 或 <strong>Edit in place</strong>，點下去</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">3</div><div class="step-body">
+    <strong>編輯內容</strong>
+    <div class="desc">用 Ctrl+F 搜尋要改的文字 → 修改</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">4</div><div class="step-body">
+    <strong>Commit changes</strong>
+    <div class="desc">右上角 <strong>Commit changes</strong> → 寫說明 → 綠色按鈕 → 完成</div>
+  </div></div>
+
+  <div class="callout warn">
+    <strong>⚠ 網頁編輯器的限制：</strong>本系統 index.html 超過 8000 行，GitHub 網頁編輯器可能會卡頓或有卷軸問題。建議簡單改動用此法，大範圍改動用方法 B。
+  </div>
+
+  <h3>方法 B：下載到電腦 → 修改 → 上傳（推薦）</h3>
+
+  <div class="step"><div class="step-num">1</div><div class="step-body">
+    <strong>下載最新版</strong>
+    <div class="desc">到 GitHub 倉庫首頁 → 綠色 <strong>&lt;&gt; Code</strong> 按鈕 → <strong>Download ZIP</strong> → 解壓縮到電腦</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">2</div><div class="step-body">
+    <strong>用編輯器打開 index.html</strong>
+    <div class="desc">推薦：<a href="https://code.visualstudio.com" target="_blank">VS Code</a>（免費）、Notepad++、甚至 Windows 內建的記事本都可以</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">3</div><div class="step-body">
+    <strong>修改並儲存</strong>
+    <div class="desc">找到要改的地方 → 修改 → Ctrl+S 儲存</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">4</div><div class="step-body">
+    <strong>本機測試</strong>
+    <div class="desc">雙擊 <code>index.html</code> 用瀏覽器打開 → 確認改動正確</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">5</div><div class="step-body">
+    <strong>上傳到 GitHub</strong>
+    <div class="desc">倉庫首頁 → <strong>Add file</strong> → <strong>Upload files</strong> → 拖入新版 <code>index.html</code> → Commit message 寫「更新 XXX 功能」→ Commit changes</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">6</div><div class="step-body">
+    <strong>等 1~2 分鐘 → 強制重新整理</strong>
+    <div class="desc">打開系統網頁 → <strong>Ctrl + F5</strong>（強制重整、清快取）→ 確認新版上線</div>
+  </div></div>
+
+  <h3>方法 C：用 Cowork / Claude 幫您改（最輕鬆）</h3>
+  <p>如果要改的功能比較複雜，可以把整份 <code>index.html</code> 上傳到 Cowork → 告訴 Claude 您要改什麼 → Claude 會直接幫您改好 → 下載後依方法 B 步驟 5 上傳。</p>
+
+  <h3>常見修改範例</h3>
+
+  <h4>🎨 改變主色調（綠色改其他顏色）</h4>
+  <p>搜尋 <code>#06C755</code>（LINE 綠），把它換成您想要的顏色代碼（如 <code>#3b82f6</code> 藍、<code>#f59e0b</code> 橘）。</p>
+
+  <h4>💰 修改勞健保費率</h4>
+  <p>不用改程式！到「設定」頁下方「台灣勞健保參數」直接改數值即可。</p>
+
+  <h4>📝 新增工作地點/廠別</h4>
+  <p>不用改程式！到員工頁 → 工作地點欄位旁的齒輪 ⚙ → 管理工作地點 → 新增。</p>
+
+  <h4>📅 新增國定假日</h4>
+  <p>不用改程式！到「設定 → 國定假日管理」 → 新增日期。</p>
+
+  <h4>🌴 調整特休規則</h4>
+  <p>搜尋 <code>function calcAnnualLeave</code>，該函式內有勞基法的天數對照，可以依公司規定調整（通常不建議改，依法就好）。</p>
+
+  <h4>🔐 修改管理者密碼</h4>
+  <p>搜尋 <code>const ADMIN_PASSWORD</code>，改成新密碼。</p>
+
+  <h4>🕐 調整 30 天照片保留期</h4>
+  <p>搜尋 <code>PHOTO_RETENTION_DAYS = 30</code>，改成您要的天數（例 60、90）。</p>
+
+  <h4>📅 調整 Firestore 規則到期提醒日期</h4>
+  <p>搜尋 <code>FIRESTORE_RULES_EXPIRY = </code>，更新成新的到期日（格式 <code>'2026-05-20'</code>）。</p>
+</section>
+
+<!-- ========== 3. 維護 ========== -->
+<section id="maintain">
+  <h2>3. 🛠 維護與常見問題</h2>
+
+  <h3>Q1：我新增了員工，但另一部電腦看不到？</h3>
+  <ul>
+    <li>確認兩邊都有連上網</li>
+    <li>左上角同步狀態應該顯示「☁ 已同步」</li>
+    <li>若顯示錯誤，到「匯出 → 資料管理」按「🔄 從雲端強制同步」</li>
+  </ul>
+
+  <h3>Q2：員工看不到自己的薪資？</h3>
+  <ul>
+    <li>確認該員工帳號的「對應員工」有設對（不是空的）</li>
+    <li>確認員工的工作地點有填</li>
+    <li>確認月薪頁已經儲存過該月資料</li>
+  </ul>
+
+  <h3>Q3：會計人員匯出的報表是全部員工，不是只有他負責的廠別？</h3>
+  <ul>
+    <li>會計人員的角色是否是「🏭 廠別主管」？</li>
+    <li>有沒有勾選正確的廠別？</li>
+    <li>員工資料的「工作地點」有沒有填？（沒填廠別的員工不會被匯出）</li>
+  </ul>
+
+  <h3>Q4：Firebase 額度快滿了？</h3>
+  <ul>
+    <li>最常見原因：計時照片太多</li>
+    <li>到「匯出 → 資料管理」按「📷 清理 30 天前舊照片」</li>
+    <li>系統也會每 24 小時自動清理一次</li>
+    <li>若還是滿，可以在程式裡把 <code>PHOTO_RETENTION_DAYS</code> 改小（如 14 或 7）</li>
+  </ul>
+
+  <h3>Q5：不小心按了「清除全部」怎麼救？</h3>
+  <ul>
+    <li>如果有「備份 JSON」→ 按「還原備份」選那份 .json 救回來</li>
+    <li>如果沒備份，但雲端還有 → 按「🔄 從雲端強制同步」</li>
+    <li>如果雲端也被清了 → 無法救回，所以 <strong>一定要定期備份！</strong></li>
+  </ul>
+
+  <h3>Q6：忘記管理者密碼？</h3>
+  <ul>
+    <li>程式內的固定密碼是在 <code>ADMIN_PASSWORD</code> 這個變數</li>
+    <li>請聯絡原建置人員，或修改程式後重新上傳</li>
+  </ul>
+
+  <h3>Q7：頂部橫幅提醒 Firestore 規則快到期？</h3>
+  <ul>
+    <li>點橫幅 → 彈出完整步驟說明</li>
+    <li>按步驟到 Firebase Console 更新規則（詳見第 4 章）</li>
+    <li>完成後回到系統，點橫幅 → 按「✅ 我已完成更新」</li>
+    <li>橫幅就會永久消失</li>
+  </ul>
+
+  <h3>Q8：GitHub Pages 上傳後新版沒生效？</h3>
+  <ul>
+    <li>通常要等 1~2 分鐘 GitHub Pages 才會重新建置</li>
+    <li>到 GitHub 倉庫上方 <strong>Actions</strong> 分頁，看「pages build and deployment」是不是跑完（綠色勾勾）</li>
+    <li>完成後瀏覽器要 <strong>Ctrl + F5</strong> 強制重整，清除瀏覽器快取</li>
+    <li>如果還沒有，開一個<strong>無痕視窗</strong>再試</li>
+  </ul>
+
+  <h3>Q9：LINE 內打開的還是舊版？</h3>
+  <ul>
+    <li>LINE App 會快取 LIFF 頁面</li>
+    <li>完全關閉 LINE 內開著的 LIFF 視窗</li>
+    <li>重新從選單點開一次</li>
+    <li>如果還是舊版，到 LINE 設定 → 清除快取</li>
+  </ul>
+
+  <h3>🗓 建議的維護排程</h3>
+  <table>
+    <tr><th>頻率</th><th>工作</th></tr>
+    <tr><td>每月 1 次</td><td>按「備份 JSON」下載完整備份</td></tr>
+    <tr><td>每月 1 次</td><td>從匯出頁下載照片 ZIP 存檔（重要照片備援）</td></tr>
+    <tr><td>每季 1 次</td><td>檢查 Firebase 用量儀表板，確認儲存空間還在 1 GB 以內</td></tr>
+    <tr><td>每年 1 次</td><td>檢查勞健保費率是否依法調整</td></tr>
+    <tr><td>每年 1 次</td><td>新增下一年度國定假日</td></tr>
+    <tr><td>依需要</td><td>新增/離職員工處理（月結算前）</td></tr>
+    <tr><td>到期前</td><td>Firestore 規則到期時更新（系統會提醒）</td></tr>
+  </table>
+</section>
+
+<!-- ========== 4. 安全 ========== -->
+<section id="security">
+  <h2>4. 🔐 安全性設定（Firestore 規則）</h2>
+
+  <div class="callout danger">
+    <strong>🚨 超級重要：</strong>新建 Firebase 專案的 Firestore 預設使用「測試模式」規則，30 天後會自動鎖死。請務必在到期前設定永久規則！
+  </div>
+
+  <h3>設定步驟</h3>
+
+  <div class="step"><div class="step-num">1</div><div class="step-body">
+    <strong>打開 Firebase Console</strong>
+    <div class="desc"><a href="https://console.firebase.google.com" target="_blank">https://console.firebase.google.com</a> → 選您的專案</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">2</div><div class="step-body">
+    <strong>進入 Firestore 規則頁</strong>
+    <div class="desc">左側 <strong>Firestore Database</strong> → 上方頁籤 <strong>規則 (Rules)</strong></div>
+  </div></div>
+
+  <div class="step"><div class="step-num">3</div><div class="step-body">
+    <strong>刪除現有規則，貼上永久規則</strong>
+    <div class="desc">全選現有內容 Delete → 貼上以下規則：</div>
+  </div></div>
+
+<pre><code>rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /workspaces/default/{document=**} {
+      allow read, write: if true;
+    }
+  }
+}</code></pre>
+
+  <div class="step"><div class="step-num">4</div><div class="step-body">
+    <strong>按右上角「發布」(Publish)</strong>
+    <div class="desc">等幾秒鐘 → 完成</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">5</div><div class="step-body">
+    <strong>回系統標記完成</strong>
+    <div class="desc">登入系統 → 點到期提醒橫幅 → 「✅ 我已完成更新」→ 橫幅永久消失</div>
+  </div></div>
+
+  <h3>規則說明</h3>
+  <p>這段規則的意思：</p>
+  <ul>
+    <li><code>workspaces/default/{document=**}</code>：匹配 <code>workspaces/default</code> 底下所有文件（含子集合）</li>
+    <li><code>allow read, write: if true</code>：允許讀寫</li>
+    <li>其他未匹配的路徑：預設拒絕</li>
+  </ul>
+
+  <div class="callout tip">
+    <strong>💡 適用情境：</strong>小團隊內部使用，只要不公開 Firebase Project ID 就算足夠的安全（需要知道集合路徑 + SDK 才能存取）。
+  </div>
+
+  <div class="callout warn">
+    <strong>⚠ 如果要更嚴格的安全：</strong>可以整合 Firebase Authentication，讓規則變成 <code>allow read, write: if request.auth != null</code>（需要登入才能存取），但要改較多程式碼，請找工程師協助。
+  </div>
+
+  <h3>進階：使用 LINE Login 身份驗證</h3>
+  <p>如果您已經設定好 LIFF，可以考慮整合 Firebase Auth，讓只有透過 LINE 登入的人才能存取資料：</p>
+
+  <pre><code>rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /workspaces/default/{document=**} {
+      // 只有已登入的使用者能讀寫
+      allow read, write: if request.auth != null;
+    }
+  }
+}</code></pre>
+
+  <p>這需要搭配程式碼修改，讓系統在 LIFF 登入成功後換取 Firebase Custom Token，並以該 Token 登入 Firebase。如果需要此層級的安全，建議找工程師協助實作。</p>
+
+  <h3>📋 安全檢查清單</h3>
+  <table>
+    <tr><th>項目</th><th>狀態說明</th></tr>
+    <tr><td>GitHub 倉庫是公開的嗎？</td><td>是（GitHub Pages 免費版必須公開）</td></tr>
+    <tr><td>index.html 裡有 firebaseConfig 嗎？</td><td>有。這個設定是公開的，不是機密，可以放倉庫裡</td></tr>
+    <tr><td>Firestore 規則已設好了嗎？</td><td>請依本章步驟確認</td></tr>
+    <tr><td>管理者密碼有修改過嗎？</td><td>建議修改 <code>ADMIN_PASSWORD</code> 預設值</td></tr>
+    <tr><td>LIFF ID 有正確設定嗎？</td><td>到「設定 → LINE LIFF 設定」確認</td></tr>
+  </table>
+</section>
+
+<footer>
+  © 2026 員工薪資計算系統 · 管理維運手冊 v2.0（獨立版）<br>
+  搭配「使用手冊」或「完整操作手冊」一起使用<br>
+  本手冊可列印：Ctrl + P → 儲存為 PDF
+</footer>
+
+</div>
+</body>
+</html>

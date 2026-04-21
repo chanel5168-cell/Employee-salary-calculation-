@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>員工薪資計算系統 — 完整操作手冊 v2</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", "PingFang TC", sans-serif;
+    background: #f3f4f6; color: #1f2937; line-height: 1.7;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 24px; }
+  header {
+    background: linear-gradient(135deg, #06C755 0%, #00B900 100%);
+    color: white; padding: 28px 32px; border-radius: 14px;
+    margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  }
+  header h1 { font-size: 26px; margin-bottom: 6px; }
+  header .sub { font-size: 14px; opacity: 0.95; }
+  nav.toc {
+    background: white; padding: 20px 26px; border-radius: 12px;
+    margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  nav.toc h2 { font-size: 16px; margin-bottom: 12px; color: #111827; }
+  nav.toc ol { padding-left: 22px; }
+  nav.toc li { margin-bottom: 6px; }
+  nav.toc a { color: #059669; text-decoration: none; font-weight: 500; }
+  nav.toc a:hover { text-decoration: underline; }
+  section {
+    background: white; padding: 24px 28px; border-radius: 12px;
+    margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  h2 {
+    font-size: 22px; color: #111827; border-bottom: 3px solid #06C755;
+    padding-bottom: 10px; margin-bottom: 16px;
+  }
+  h3 {
+    font-size: 17px; color: #1e40af; margin-top: 22px; margin-bottom: 10px;
+    padding-left: 10px; border-left: 4px solid #3b82f6;
+  }
+  h4 { font-size: 15px; color: #374151; margin: 14px 0 8px; }
+  p { margin-bottom: 10px; }
+  ul, ol { padding-left: 24px; margin-bottom: 12px; }
+  li { margin-bottom: 4px; }
+  code {
+    background: #1f2937; color: #e5e7eb; padding: 2px 6px;
+    border-radius: 4px; font-size: 13px; font-family: "Fira Code", monospace;
+  }
+  pre {
+    background: #1f2937; color: #e5e7eb; padding: 14px 18px;
+    border-radius: 8px; overflow-x: auto; margin: 10px 0; font-size: 13px;
+    line-height: 1.5;
+  }
+  pre code { background: none; padding: 0; }
+  .step {
+    display: flex; gap: 14px; margin-bottom: 14px;
+    padding: 12px 14px; background: #f9fafb; border-radius: 8px;
+    border-left: 4px solid #06C755;
+  }
+  .step-num {
+    flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%;
+    background: #06C755; color: white; display: flex; align-items: center;
+    justify-content: center; font-weight: 700; font-size: 15px;
+  }
+  .step-body { flex: 1; }
+  .step-body strong { display: block; margin-bottom: 4px; color: #111827; }
+  .step-body .desc { font-size: 14px; color: #4b5563; }
+  .callout {
+    padding: 14px 16px; border-radius: 8px; margin: 12px 0; font-size: 14px;
+    line-height: 1.7;
+  }
+  .tip { background: #dbeafe; border-left: 4px solid #3b82f6; color: #1e3a8a; }
+  .warn { background: #fef3c7; border-left: 4px solid #f59e0b; color: #92400e; }
+  .danger { background: #fee2e2; border-left: 4px solid #dc2626; color: #991b1b; }
+  .success { background: #d1fae5; border-left: 4px solid #059669; color: #065f46; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 14px; }
+  th { background: #06C755; color: white; padding: 10px; text-align: left; }
+  td { padding: 10px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+  tr:hover td { background: #fafafa; }
+  .role-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px; margin: 14px 0;
+  }
+  .role-card {
+    padding: 14px; border-radius: 10px; border: 2px solid; background: white;
+  }
+  .role-super { border-color: #9333ea; background: #faf5ff; }
+  .role-admin { border-color: #06C755; background: #f0fdf4; }
+  .role-factory { border-color: #3b82f6; background: #eff6ff; }
+  .role-emp { border-color: #6b7280; background: #f9fafb; }
+  .role-card h4 { font-size: 16px; margin-bottom: 8px; border: none; padding: 0; }
+  .role-card .perm { font-size: 12px; color: #4b5563; }
+  .diagram {
+    background: #f9fafb; padding: 18px; border-radius: 8px; margin: 12px 0;
+    font-family: "Fira Code", monospace; font-size: 13px; line-height: 1.8;
+    border: 1px dashed #9ca3af; white-space: pre-wrap; word-wrap: break-word;
+  }
+  .feature-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; margin: 12px 0; }
+  .feature-item {
+    padding: 12px; background: #f0fdf4; border-radius: 8px;
+    border-left: 3px solid #06C755; font-size: 14px;
+  }
+  .feature-item strong { display: block; margin-bottom: 4px; color: #065f46; }
+  footer {
+    text-align: center; padding: 20px; color: #6b7280; font-size: 13px;
+    margin-top: 20px;
+  }
+  .emoji-big { font-size: 22px; vertical-align: middle; }
+  @media print {
+    body { background: white; }
+    section, header, nav.toc { box-shadow: none; border: 1px solid #e5e7eb; }
+    pre { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <h1>📘 員工薪資計算系統 — 完整操作手冊</h1>
+  <div class="sub">版本 v2.0 · 包含使用說明、GitHub 部署、程式修改</div>
+</header>
+
+<nav class="toc">
+  <h2>📑 目錄</h2>
+  <ol>
+    <li><a href="#intro">系統簡介與核心功能</a></li>
+    <li><a href="#quickstart">🚀 3 分鐘快速上手</a></li>
+    <li><a href="#roles">👥 四種角色與權限</a></li>
+    <li><a href="#pages">📝 七個頁籤詳細操作</a></li>
+    <li><a href="#scenarios">💼 常見工作情境</a></li>
+    <li><a href="#deploy">☁ 如何放上雲端（GitHub Pages + LINE LIFF）</a></li>
+    <li><a href="#modify">🔧 如何修改系統</a></li>
+    <li><a href="#maintain">🛠 維護與常見問題</a></li>
+    <li><a href="#security">🔐 安全性設定（Firestore 規則）</a></li>
+  </ol>
+</nav>
+
+<!-- ========== 1. 系統簡介 ========== -->
+<section id="intro">
+  <h2>1. 系統簡介與核心功能</h2>
+  <p>這是一套建置在 <strong>LINE LIFF + Firebase</strong> 上的員工薪資計算系統，適合中小型企業、連鎖店、多廠區或跨區域管理。</p>
+
+  <h3>🎯 核心功能</h3>
+  <div class="feature-list">
+    <div class="feature-item"><strong>👥 員工管理</strong>月薪/時薪制、保險、眷屬、自提勞退都支援</div>
+    <div class="feature-item"><strong>📅 每日計時</strong>論件、計時、加班、請假一頁搞定，可附照片</div>
+    <div class="feature-item"><strong>💰 月薪結算</strong>含勞健保、加班費、特休折算、請假扣款</div>
+    <div class="feature-item"><strong>📊 分析圖表</strong>月度趨勢、廠別占比、加班排行</div>
+    <div class="feature-item"><strong>📦 多種匯出</strong>Excel 薪資單、會計傳票、照片 ZIP、特休稽核</div>
+    <div class="feature-item"><strong>🌴 特休追蹤</strong>依勞基法自動計算，稽核表可給勞保局查</div>
+    <div class="feature-item"><strong>🏭 多廠別隔離</strong>香港/台北互不可見，資料安全分離</div>
+    <div class="feature-item"><strong>☁ 雲端同步</strong>Firebase 即時同步，多裝置協作</div>
+  </div>
+
+  <h3>📱 支援的使用方式</h3>
+  <ul>
+    <li><strong>網頁瀏覽器</strong>：Chrome / Edge / Safari / Firefox（手機與電腦都可）</li>
+    <li><strong>LINE App</strong>：透過 LIFF 直接在 LINE 裡使用</li>
+  </ul>
+</section>
+
+<!-- ========== 2. 快速上手 ========== -->
+<section id="quickstart">
+  <h2>2. 🚀 3 分鐘快速上手</h2>
+
+  <div class="callout tip">
+    <strong>💡 第一次使用的人請照順序做：</strong>
+  </div>
+
+  <div class="step"><div class="step-num">1</div><div class="step-body">
+    <strong>開啟網址</strong>
+    <div class="desc">用瀏覽器開啟您的系統網址（例如 <code>https://chanel5168-cell.github.io/Employee-salary-calculation-/</code>）</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">2</div><div class="step-body">
+    <strong>登入管理者帳號</strong>
+    <div class="desc">內建帳號 <code>admin</code>，密碼由系統設定（第一次請向建置人員詢問）</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">3</div><div class="step-body">
+    <strong>到「設定」頁建立使用者</strong>
+    <div class="desc">為主管、會計、廠別負責人建立帳號，指定角色與廠別範圍</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">4</div><div class="step-body">
+    <strong>到「員工」頁新增員工資料</strong>
+    <div class="desc">員工編號、姓名、薪資、工作地點、勞健保等基本資料</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">5</div><div class="step-body">
+    <strong>每日由員工或主管填寫「每日」計時</strong>
+    <div class="desc">論件、計時、加班、請假都在這裡登記，可拍照存證</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">6</div><div class="step-body">
+    <strong>月底到「月薪」頁結算</strong>
+    <div class="desc">系統自動彙整當月資料，計算勞健保、加班費、實發金額</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">7</div><div class="step-body">
+    <strong>從「匯出」或「分析」頁下載報表</strong>
+    <div class="desc">會計人員直接拿 Excel 去做帳</div>
+  </div></div>
+</section>
+
+<!-- ========== 3. 角色與權限 ========== -->
+<section id="roles">
+  <h2>3. 👥 四種角色與權限</h2>
+
+  <div class="role-grid">
+    <div class="role-card role-super">
+      <h4>👑 總管理者 (super)</h4>
+      <div class="perm">
+        • 最高權限，看所有資料<br>
+        • 可管理所有帳號（含其他總管理者）<br>
+        • 可修改 LIFF 設定、勞健保費率<br>
+        • 可匯出所有報表<br>
+        • 可執行所有清除、同步操作
+      </div>
+    </div>
+    <div class="role-card role-admin">
+      <h4>🔧 管理者 (admin)</h4>
+      <div class="perm">
+        • 預設可看所有資料<br>
+        • <strong>可指定限定廠別</strong>（香港/台北資料隔離）<br>
+        • 可新增、編輯員工與薪資<br>
+        • 不能修改總管理者帳號<br>
+        • 可匯出限定範圍的報表
+      </div>
+    </div>
+    <div class="role-card role-factory">
+      <h4>🏭 廠別主管 (factory)</h4>
+      <div class="perm">
+        • 只看指定廠別的員工、薪資<br>
+        • 可編輯該廠員工資料<br>
+        • <strong>可匯出該廠的做帳報表</strong><br>
+        • 適合會計人員使用<br>
+        • 看不到「設定」頁
+      </div>
+    </div>
+    <div class="role-card role-emp">
+      <h4>👤 員工 (employee)</h4>
+      <div class="perm">
+        • 只看自己的薪資與出勤<br>
+        • 無法編輯任何資料（唯讀）<br>
+        • 無匯出權限<br>
+        • 不能看「分析」、「匯出」、「設定」<br>
+        • 適合一般員工查詢薪資用
+      </div>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <strong>⚠ 權限階層規則：</strong><br>
+    • 只有較高權重的角色才能建立、編輯、刪除較低權重的帳號<br>
+    • 權重順序：👑 super &gt; 🔧 admin &gt; 🏭 factory &gt; 👤 employee<br>
+    • 總管理者例外：可編輯其他總管理者（管理人員交接用）
+  </div>
+
+  <h3>🏭 廠別範圍設定（香港/台北資料隔離）</h3>
+  <p>當您想讓「香港場管理者」看不到「台北場」的員工資料時，可以這樣做：</p>
+  <ol>
+    <li>登入總管理者 → 進入「設定」頁</li>
+    <li>在「使用者管理」新增使用者</li>
+    <li>角色選「🔧 管理者」</li>
+    <li>勾選廠別時<strong>只勾香港相關廠別</strong>（例：香港倉、香港廠）</li>
+    <li>儲存後，該管理者登入就只看得到香港員工與薪資</li>
+  </ol>
+  <div class="callout tip">
+    <strong>💡 會計人員怎麼設定？</strong><br>
+    會計人員通常建議用「🏭 廠別主管」角色，並勾選其負責的廠別。這樣他可以：<br>
+    ✓ 看到負責廠別的員工、薪資<br>
+    ✓ 匯出 Excel、會計做帳表、照片 ZIP、特休稽核表<br>
+    ✗ 看不到其他廠別的資料，符合資料隔離
+  </div>
+</section>
+
+<!-- ========== 4. 頁籤說明 ========== -->
+<section id="pages">
+  <h2>4. 📝 七個頁籤詳細操作</h2>
+
+  <h3>① 員工頁</h3>
+  <p>建立與維護員工基本資料，包括薪資設定、勞健保、工作地點。</p>
+  <h4>🆕 新增員工的欄位</h4>
+  <table>
+    <tr><th>欄位</th><th>說明</th></tr>
+    <tr><td>員工編號</td><td>選填，例 E001。方便內部識別</td></tr>
+    <tr><td>姓名 *</td><td>必填</td></tr>
+    <tr><td>到職日</td><td>用於特休計算（勞基法 §38）</td></tr>
+    <tr><td>投保日</td><td>勞健保起算日</td></tr>
+    <tr><td>月薪（底薪）</td><td>月薪制填這欄；時薪制可填 0</td></tr>
+    <tr><td>時薪</td><td>時薪制必填；月薪制可留空（系統自動 = 月薪÷30÷8）</td></tr>
+    <tr><td>月投保薪資</td><td>勞健保依此計算</td></tr>
+    <tr><td>工作地點</td><td>廠別範圍限制的關鍵欄位，<strong>一定要填</strong></td></tr>
+    <tr><td>健保眷口數</td><td>0~3 口，健保費 = 投保薪資×1.655%×(1+眷口數)</td></tr>
+    <tr><td>自提勞退 %</td><td>0~6%，員工自願從薪資扣除</td></tr>
+  </table>
+
+  <h3>② 每日頁</h3>
+  <p>登記員工每天的工作內容（論件、計時、加班、請假）。</p>
+  <h4>四種記錄類型</h4>
+  <ul>
+    <li><strong>📦 論件</strong>：選產品、填數量與單價，自動計算金額</li>
+    <li><strong>⏰ 計時</strong>：填起迄時間、扣除休息，系統自動算時數 × 時薪</li>
+    <li><strong>🔥 加班</strong>：平日加班（1.34×）、假日加班（1.67×）依勞基法自動計算</li>
+    <li><strong>🌴 請假</strong>：選類別（特休/病假/事假…），自動換算扣款</li>
+  </ul>
+  <div class="callout tip">
+    <strong>📷 拍照功能：</strong>論件、計時都可以附照片（例如現場產出照、工時證明），照片會自動壓縮節省空間。
+  </div>
+  <div class="callout warn">
+    <strong>⏰ 時數規則（系統自動處理）：</strong><br>
+    • 不足 30 分鐘不計<br>
+    • 30 分鐘為單位捨去<br>
+    • 範例：45 分 → 30 分；59 分 → 30 分；60 分 → 60 分
+  </div>
+
+  <h3>③ 月薪頁</h3>
+  <p>彙整當月所有每日記錄，計算最終薪資。</p>
+  <h4>薪資組成</h4>
+  <div class="diagram">應發合計 = 底薪 + 論件收入 + 計時收入 + 特休折算 + 平日加班費 + 假日加班費 + 獎金 - 請假扣款
+
+勞健保扣除 = 勞保費 + 健保費 × (1 + 眷口數)
+
+實發金額 = 應發合計 - 勞健保扣除 - 其他扣款
+  </div>
+  <div class="callout tip">
+    <strong>💡 計算後記得儲存</strong>：系統會產生「月薪記錄」存到 records。儲存後才會在匯出頁看到。
+  </div>
+
+  <h3>④ 分析頁（管理者專用）</h3>
+  <p>視覺化報表 + 會計人員做帳匯出。</p>
+  <h4>4 張圖表</h4>
+  <ol>
+    <li><strong>📈 近 6 個月總薪資趨勢</strong>（折線圖）：應發 / 實發雙線</li>
+    <li><strong>🥧 廠別薪資占比</strong>（甜甜圈圖）：看哪個廠薪資支出最多</li>
+    <li><strong>📊 加班時數 TOP 10</strong>（橫向柱狀圖）：找出加班最多的人</li>
+    <li><strong>💳 摘要卡</strong>：員工人次、應發、勞健保、實發、加班總時數</li>
+  </ol>
+  <h4>5 種匯出（都會依您的可管理廠別過濾）</h4>
+  <table>
+    <tr><th>按鈕</th><th>用途</th></tr>
+    <tr><td>📥 匯出分析 Excel</td><td>含摘要、廠別小計、月薪明細三張工作表</td></tr>
+    <tr><td>💼 匯出會計做帳表</td><td>含借方/貸方分錄，會計可直接寫傳票</td></tr>
+    <tr><td>📊 下載完整月薪 Excel</td><td>含摘要、月薪明細、出勤明細多張工作表</td></tr>
+    <tr><td>📷 下載照片 ZIP</td><td>所有計時照片打包（檔名含日期_員工_品名）</td></tr>
+    <tr><td>🌴 特休稽核表</td><td>勞保局格式，總覽 + 每位員工個別明細</td></tr>
+  </table>
+
+  <h3>⑤ 匯出頁</h3>
+  <p>原始匯出功能（和分析頁部分重疊）+ 資料管理工具。</p>
+  <h4>📥 匯出類</h4>
+  <ul>
+    <li>下載 Excel 檔案（月薪總表）</li>
+    <li>📷 下載所有照片 ZIP</li>
+    <li>🌴 特休請假稽核表</li>
+  </ul>
+  <h4>📊 統計摘要</h4>
+  <p>顯示各月份總覽，可點展開看明細。</p>
+  <h4>🛠 資料管理</h4>
+  <ul>
+    <li><strong>備份 JSON</strong>：全部資料匯出為 .json 備份檔</li>
+    <li><strong>🔐 還原備份</strong>：從 .json 檔還原（需管理者密碼）</li>
+    <li><strong>🔐 清除全部</strong>：清除本機資料（需管理者密碼）</li>
+    <li><strong>🧹 清理重複記錄</strong>：移除重複的月薪/每日記錄</li>
+    <li><strong>🔧 修正時數/加班</strong>：重新計算金額</li>
+    <li><strong>📷 清理 30 天前舊照片</strong>：節省 Firebase 空間（手動執行）</li>
+    <li><strong>🔐 ☁ 強制重設雲端</strong>：清空 Firestore 資料</li>
+    <li><strong>🔄 從雲端強制同步</strong>：把雲端資料覆蓋本機</li>
+  </ul>
+
+  <h3>⑥ 特休頁</h3>
+  <p>依勞基法 §38 自動計算每位員工的特休額度。</p>
+  <table>
+    <tr><th>年資</th><th>特休天數</th></tr>
+    <tr><td>6 個月~1 年</td><td>3 天</td></tr>
+    <tr><td>1~2 年</td><td>7 天</td></tr>
+    <tr><td>2~3 年</td><td>10 天</td></tr>
+    <tr><td>3~5 年</td><td>14 天</td></tr>
+    <tr><td>5~10 年</td><td>15 天</td></tr>
+    <tr><td>10 年以上</td><td>每滿 1 年加 1 天，上限 30 天</td></tr>
+  </table>
+  <div class="callout tip">
+    <strong>💡 時薪制員工</strong>：依比例計算，公式 = 全時特休 × (每週工時 ÷ 40)
+  </div>
+
+  <h3>⑦ 設定頁（僅管理者）</h3>
+  <p>系統最上方是 <strong>📱 LINE LIFF 設定</strong>，接著是：</p>
+  <ul>
+    <li><strong>👥 使用者管理</strong>：新增/編輯/刪除帳號</li>
+    <li><strong>🎌 國定假日管理</strong>：新增假日，影響月薪頁出勤紅字</li>
+    <li><strong>💰 台灣勞健保參數</strong>：2026 年的勞保 2.42%、健保 1.655%（法規異動時才改）</li>
+  </ul>
+</section>
+
+<!-- ========== 5. 常見情境 ========== -->
+<section id="scenarios">
+  <h2>5. 💼 常見工作情境</h2>
+
+  <h3>情境 A：新員工報到</h3>
+  <ol>
+    <li>到「員工」頁 → 填寫基本資料 + 薪資設定 + 工作地點 → 儲存</li>
+    <li>若需要該員工自行登入查薪資 → 到「設定 → 使用者管理」新增帳號，角色選「👤 員工」，對應員工選剛建立的</li>
+    <li>告訴員工帳號密碼 → 完成</li>
+  </ol>
+
+  <h3>情境 B：每月薪資結算（會計流程）</h3>
+  <ol>
+    <li>確認當月所有「每日」記錄都完整（可從匯出頁「統計摘要」檢查）</li>
+    <li>到「月薪」頁 → 選員工 → 選月份 → 系統自動算出應發 → 填獎金/扣款 → 儲存</li>
+    <li>重複上一步處理每位員工（或用「全部月薪制員工一起算」）</li>
+    <li>到「分析」頁 → 選該月份 → 按「💼 匯出會計做帳表」</li>
+    <li>打開 Excel → 把分錄寫進會計系統的傳票</li>
+  </ol>
+
+  <h3>情境 C：香港/台北資料隔離</h3>
+  <ol>
+    <li>總管理者登入 → 設定 → 使用者管理</li>
+    <li>新增「香港場管理者」：角色 = 🔧 管理者，勾選香港相關廠別</li>
+    <li>新增「台北場管理者」：角色 = 🔧 管理者，勾選台北相關廠別</li>
+    <li>分別把帳密告知各場主管</li>
+    <li>兩人登入後看到的員工、薪資、圖表、匯出都只有自己廠別</li>
+  </ol>
+
+  <h3>情境 D：勞保局稽核</h3>
+  <ol>
+    <li>到「分析」或「匯出」頁</li>
+    <li>點「🌴 特休稽核表」</li>
+    <li>下載 Excel，含「總覽」工作表 + 每位員工個別明細工作表</li>
+    <li>列印或直接 email 給勞保局</li>
+  </ol>
+
+  <h3>情境 E：換手機/換電腦</h3>
+  <ol>
+    <li>舊裝置：到「匯出 → 資料管理」→ 按「備份 JSON」下載備份檔</li>
+    <li>新裝置：開啟網頁 → 登入 → 到「匯出 → 資料管理」→ 按「🔐 還原備份」</li>
+    <li>或更簡單：新裝置不用還原，登入後系統會自動從 Firebase 同步所有資料</li>
+  </ol>
+</section>
+
+<!-- ========== 6. 部署 ========== -->
+<section id="deploy">
+  <h2>6. ☁ 如何放上雲端（GitHub Pages + LINE LIFF）</h2>
+
+  <div class="callout tip">
+    <strong>整個部署流程約 30 分鐘，都是免費的</strong><br>
+    GitHub Pages、Firebase、LINE LIFF、LINE Developers 通通終身免費
+  </div>
+
+  <h3>第一部分：GitHub Pages（網頁主機）</h3>
+
+  <div class="step"><div class="step-num">1</div><div class="step-body">
+    <strong>註冊 GitHub</strong>
+    <div class="desc">到 <a href="https://github.com" target="_blank">https://github.com</a>，用 email 註冊（完全免費）</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">2</div><div class="step-body">
+    <strong>建立倉庫（Repository）</strong>
+    <div class="desc">登入後右上角 <strong>+</strong> → <strong>New repository</strong><br>
+      • Repository name 填：<code>salary-app</code>（或其他名稱）<br>
+      • 設為 <strong>Public</strong>（GitHub Pages 免費版需要公開）<br>
+      • 勾選 <strong>Add a README file</strong><br>
+      • 按 <strong>Create repository</strong>
+    </div>
+  </div></div>
+
+  <div class="step"><div class="step-num">3</div><div class="step-body">
+    <strong>上傳 index.html</strong>
+    <div class="desc">在倉庫首頁 → <strong>Add file</strong> → <strong>Upload files</strong> → 拖入 <code>index.html</code> → 下方 Commit message 寫「首次上傳」→ 按綠色 <strong>Commit changes</strong></div>
+  </div></div>
+
+  <div class="step"><div class="step-num">4</div><div class="step-body">
+    <strong>啟用 GitHub Pages</strong>
+    <div class="desc">倉庫頁面上方 <strong>Settings</strong> → 左側 <strong>Pages</strong> → Source 選 <strong>main branch</strong> → <strong>Save</strong></div>
+  </div></div>
+
+  <div class="step"><div class="step-num">5</div><div class="step-body">
+    <strong>等待約 1~2 分鐘 → 取得網址</strong>
+    <div class="desc">頁面會顯示 <code>https://您的帳號.github.io/salary-app/</code>，點開就是您的系統網頁！</div>
+  </div></div>
+
+  <h3>第二部分：Firebase（雲端資料庫）</h3>
+
+  <div class="step"><div class="step-num">1</div><div class="step-body">
+    <strong>註冊 Firebase</strong>
+    <div class="desc">到 <a href="https://console.firebase.google.com" target="_blank">Firebase Console</a>，用 Google 帳號登入 → 點 <strong>Add project</strong> 建立專案</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">2</div><div class="step-body">
+    <strong>啟用 Firestore</strong>
+    <div class="desc">左側選單 → <strong>Firestore Database</strong> → <strong>Create database</strong> → 選「測試模式」(開啟 30 天臨時規則) → 選區域（建議 asia-east1）→ Enable</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">3</div><div class="step-body">
+    <strong>取得 Firebase 設定資訊</strong>
+    <div class="desc">專案首頁 → <strong>Project settings</strong>（齒輪圖示）→ 下方「您的應用程式」→ 選「Web 應用程式 &lt;/&gt;」→ 註冊 app → 複製 <code>firebaseConfig</code> 這段程式碼</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">4</div><div class="step-body">
+    <strong>把 firebaseConfig 貼到 index.html</strong>
+    <div class="desc">打開 index.html → 搜尋 <code>firebaseConfig</code> → 用您的值取代裡面的 apiKey、projectId 等 → 重新上傳到 GitHub</div>
+  </div></div>
+
+  <div class="callout danger">
+    <strong>🚨 重要：</strong>Firestore 測試模式 30 天後會鎖死！請在到期前到 Firestore → 規則頁面，改成永久規則。系統內會有倒數提醒橫幅（管理者登入時顯示），點橫幅可看完整設定步驟。
+  </div>
+
+  <h3>第三部分：LINE LIFF（在 LINE 裡開啟）</h3>
+
+  <div class="step"><div class="step-num">1</div><div class="step-body">
+    <strong>註冊 LINE Developers</strong>
+    <div class="desc">到 <a href="https://developers.line.biz" target="_blank">LINE Developers</a>，用 LINE 帳號登入</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">2</div><div class="step-body">
+    <strong>建立 Provider</strong>
+    <div class="desc">點 <strong>Create a new provider</strong> → 輸入公司/組織名稱</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">3</div><div class="step-body">
+    <strong>建立 LINE Login Channel</strong>
+    <div class="desc">在 Provider 下 → <strong>Create a new channel</strong> → 選 <strong>LINE Login</strong><br>
+      • Channel name：薪資系統<br>
+      • App types：勾 <strong>Web app</strong><br>
+      • 填完表單 → 建立
+    </div>
+  </div></div>
+
+  <div class="step"><div class="step-num">4</div><div class="step-body">
+    <strong>新增 LIFF App</strong>
+    <div class="desc">進入 Channel → <strong>LIFF</strong> 分頁 → <strong>Add</strong><br>
+      • LIFF app name：薪資系統<br>
+      • Size：<strong>Full</strong><br>
+      • Endpoint URL：貼您的 GitHub Pages 網址<br>
+      • Scope：勾 <code>profile</code>、<code>openid</code><br>
+      • 建立後會取得 <strong>LIFF ID</strong>（格式如 <code>1234567890-AbCdEfGh</code>）
+    </div>
+  </div></div>
+
+  <div class="step"><div class="step-num">5</div><div class="step-body">
+    <strong>在系統裡設定 LIFF ID</strong>
+    <div class="desc">打開您的系統網頁 → 登入總管理者 → 設定頁最上方「📱 LINE LIFF 設定」→ 貼入 LIFF ID → 按「儲存並重新初始化」</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">6</div><div class="step-body">
+    <strong>在 LINE 裡測試</strong>
+    <div class="desc">LIFF URL 為：<code>https://liff.line.me/您的LIFF_ID</code><br>
+      把這個網址貼到 LINE 聊天 → 點擊 → 在 LINE 內開啟系統
+    </div>
+  </div></div>
+
+  <div class="callout success">
+    <strong>✅ 部署完成後，三個網址都可以用：</strong><br>
+    • 電腦瀏覽器：<code>https://您的帳號.github.io/salary-app/</code><br>
+    • 手機瀏覽器：同上<br>
+    • LINE 內：<code>https://liff.line.me/您的LIFF_ID</code>
+  </div>
+</section>
+
+<!-- ========== 7. 修改 ========== -->
+<section id="modify">
+  <h2>7. 🔧 如何修改系統</h2>
+
+  <p>無論是想調整文字、改按鈕顏色、加新功能，都是修改同一個 <code>index.html</code> 檔案。</p>
+
+  <h3>方法 A：直接在 GitHub 網頁編輯（簡單改動適用）</h3>
+
+  <div class="step"><div class="step-num">1</div><div class="step-body">
+    <strong>進入倉庫首頁</strong>
+    <div class="desc">到 <code>https://github.com/您的帳號/salary-app</code></div>
+  </div></div>
+
+  <div class="step"><div class="step-num">2</div><div class="step-body">
+    <strong>點 index.html</strong>
+    <div class="desc">進入檔案後，右上角有鉛筆圖示 <strong>🖊</strong> 或 <strong>Edit in place</strong>，點下去</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">3</div><div class="step-body">
+    <strong>編輯內容</strong>
+    <div class="desc">用 Ctrl+F 搜尋要改的文字 → 修改</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">4</div><div class="step-body">
+    <strong>Commit changes</strong>
+    <div class="desc">右上角 <strong>Commit changes</strong> → 寫說明 → 綠色按鈕 → 完成</div>
+  </div></div>
+
+  <div class="callout warn">
+    <strong>⚠ 網頁編輯器的限制：</strong>本系統 index.html 超過 8000 行，GitHub 網頁編輯器可能會卡頓或有卷軸問題。建議簡單改動用此法，大範圍改動用方法 B。
+  </div>
+
+  <h3>方法 B：下載到電腦 → 修改 → 上傳（推薦）</h3>
+
+  <div class="step"><div class="step-num">1</div><div class="step-body">
+    <strong>下載最新版</strong>
+    <div class="desc">到 GitHub 倉庫首頁 → 綠色 <strong>&lt;&gt; Code</strong> 按鈕 → <strong>Download ZIP</strong> → 解壓縮到電腦</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">2</div><div class="step-body">
+    <strong>用編輯器打開 index.html</strong>
+    <div class="desc">推薦：<a href="https://code.visualstudio.com" target="_blank">VS Code</a>（免費）、Notepad++、甚至 Windows 內建的記事本都可以</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">3</div><div class="step-body">
+    <strong>修改並儲存</strong>
+    <div class="desc">找到要改的地方 → 修改 → Ctrl+S 儲存</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">4</div><div class="step-body">
+    <strong>本機測試</strong>
+    <div class="desc">雙擊 <code>index.html</code> 用瀏覽器打開 → 確認改動正確</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">5</div><div class="step-body">
+    <strong>上傳到 GitHub</strong>
+    <div class="desc">倉庫首頁 → <strong>Add file</strong> → <strong>Upload files</strong> → 拖入新版 <code>index.html</code> → Commit message 寫「更新 XXX 功能」→ Commit changes</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">6</div><div class="step-body">
+    <strong>等 1~2 分鐘 → 強制重新整理</strong>
+    <div class="desc">打開系統網頁 → <strong>Ctrl + F5</strong>（強制重整、清快取）→ 確認新版上線</div>
+  </div></div>
+
+  <h3>方法 C：用 Cowork / Claude 幫您改（最輕鬆）</h3>
+  <p>如果要改的功能比較複雜，可以把整份 <code>index.html</code> 上傳到 Cowork → 告訴 Claude 您要改什麼 → Claude 會直接幫您改好 → 下載後依方法 B 步驟 5 上傳。</p>
+
+  <h3>常見修改範例</h3>
+
+  <h4>🎨 改變主色調（綠色改其他顏色）</h4>
+  <p>搜尋 <code>#06C755</code>（LINE 綠），把它換成您想要的顏色代碼（如 <code>#3b82f6</code> 藍、<code>#f59e0b</code> 橘）。</p>
+
+  <h4>💰 修改勞健保費率</h4>
+  <p>不用改程式！到「設定」頁下方「台灣勞健保參數」直接改數值即可。</p>
+
+  <h4>📝 新增工作地點/廠別</h4>
+  <p>不用改程式！到員工頁 → 工作地點欄位旁的齒輪 ⚙ → 管理工作地點 → 新增。</p>
+
+  <h4>📅 新增國定假日</h4>
+  <p>不用改程式！到「設定 → 國定假日管理」 → 新增日期。</p>
+
+  <h4>🌴 調整特休規則</h4>
+  <p>搜尋 <code>function calcAnnualLeave</code>，該函式內有勞基法的天數對照，可以依公司規定調整（通常不建議改，依法就好）。</p>
+
+  <h4>🔐 修改管理者密碼</h4>
+  <p>搜尋 <code>const ADMIN_PASSWORD</code>，改成新密碼。</p>
+
+  <h4>🕐 調整 30 天照片保留期</h4>
+  <p>搜尋 <code>PHOTO_RETENTION_DAYS = 30</code>，改成您要的天數（例 60、90）。</p>
+</section>
+
+<!-- ========== 8. 維護 ========== -->
+<section id="maintain">
+  <h2>8. 🛠 維護與常見問題</h2>
+
+  <h3>Q1：我新增了員工，但另一部電腦看不到？</h3>
+  <ul>
+    <li>確認兩邊都有連上網</li>
+    <li>左上角同步狀態應該顯示「☁ 已同步」</li>
+    <li>若顯示錯誤，到「匯出 → 資料管理」按「🔄 從雲端強制同步」</li>
+  </ul>
+
+  <h3>Q2：員工看不到自己的薪資？</h3>
+  <ul>
+    <li>確認該員工帳號的「對應員工」有設對（不是空的）</li>
+    <li>確認員工的工作地點有填</li>
+    <li>確認月薪頁已經儲存過該月資料</li>
+  </ul>
+
+  <h3>Q3：會計人員匯出的報表是全部員工，不是只有他負責的廠別？</h3>
+  <ul>
+    <li>會計人員的角色是否是「🏭 廠別主管」？</li>
+    <li>有沒有勾選正確的廠別？</li>
+    <li>員工資料的「工作地點」有沒有填？（沒填廠別的員工不會被匯出）</li>
+  </ul>
+
+  <h3>Q4：Firebase 額度快滿了？</h3>
+  <ul>
+    <li>最常見原因：計時照片太多</li>
+    <li>到「匯出 → 資料管理」按「📷 清理 30 天前舊照片」</li>
+    <li>系統也會每 24 小時自動清理一次</li>
+    <li>若還是滿，可以在程式裡把 <code>PHOTO_RETENTION_DAYS</code> 改小（如 14 或 7）</li>
+  </ul>
+
+  <h3>Q5：不小心按了「清除全部」怎麼救？</h3>
+  <ul>
+    <li>如果有「備份 JSON」→ 按「還原備份」選那份 .json 救回來</li>
+    <li>如果沒備份，但雲端還有 → 按「🔄 從雲端強制同步」</li>
+    <li>如果雲端也被清了 → 無法救回，所以 <strong>一定要定期備份！</strong></li>
+  </ul>
+
+  <h3>Q6：忘記管理者密碼？</h3>
+  <ul>
+    <li>程式內的固定密碼是在 <code>ADMIN_PASSWORD</code> 這個變數</li>
+    <li>請聯絡原建置人員，或修改程式後重新上傳</li>
+  </ul>
+
+  <h3>Q7：頂部橫幅提醒 Firestore 規則快到期？</h3>
+  <ul>
+    <li>點橫幅 → 彈出完整步驟說明</li>
+    <li>按步驟到 Firebase Console 更新規則</li>
+    <li>完成後回到系統，點橫幅 → 按「✅ 我已完成更新」</li>
+    <li>橫幅就會永久消失</li>
+  </ul>
+
+  <h3>🗓 建議的維護排程</h3>
+  <table>
+    <tr><th>頻率</th><th>工作</th></tr>
+    <tr><td>每月 1 次</td><td>按「備份 JSON」下載完整備份</td></tr>
+    <tr><td>每月 1 次</td><td>從匯出頁下載照片 ZIP 存檔（重要照片備援）</td></tr>
+    <tr><td>每年 1 次</td><td>檢查勞健保費率是否依法調整</td></tr>
+    <tr><td>每年 1 次</td><td>新增下一年度國定假日</td></tr>
+    <tr><td>依需要</td><td>新增/離職員工處理（月結算前）</td></tr>
+  </table>
+</section>
+
+<!-- ========== 9. 安全 ========== -->
+<section id="security">
+  <h2>9. 🔐 安全性設定（Firestore 規則）</h2>
+
+  <div class="callout danger">
+    <strong>🚨 超級重要：</strong>新建 Firebase 專案的 Firestore 預設使用「測試模式」規則，30 天後會自動鎖死。請務必在到期前設定永久規則！
+  </div>
+
+  <h3>設定步驟</h3>
+
+  <div class="step"><div class="step-num">1</div><div class="step-body">
+    <strong>打開 Firebase Console</strong>
+    <div class="desc"><a href="https://console.firebase.google.com" target="_blank">https://console.firebase.google.com</a> → 選您的專案</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">2</div><div class="step-body">
+    <strong>進入 Firestore 規則頁</strong>
+    <div class="desc">左側 <strong>Firestore Database</strong> → 上方頁籤 <strong>規則 (Rules)</strong></div>
+  </div></div>
+
+  <div class="step"><div class="step-num">3</div><div class="step-body">
+    <strong>刪除現有規則，貼上永久規則</strong>
+    <div class="desc">全選現有內容 Delete → 貼上：</div>
+  </div></div>
+
+<pre><code>rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /workspaces/default/{document=**} {
+      allow read, write: if true;
+    }
+  }
+}</code></pre>
+
+  <div class="step"><div class="step-num">4</div><div class="step-body">
+    <strong>按右上角「發布」(Publish)</strong>
+    <div class="desc">等幾秒鐘 → 完成</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">5</div><div class="step-body">
+    <strong>回系統標記完成</strong>
+    <div class="desc">登入系統 → 點到期提醒橫幅 → 「✅ 我已完成更新」→ 橫幅永久消失</div>
+  </div></div>
+
+  <h3>規則說明</h3>
+  <p>這段規則的意思：</p>
+  <ul>
+    <li><code>workspaces/default/{document=**}</code>：匹配 <code>workspaces/default</code> 底下所有文件（含子集合）</li>
+    <li><code>allow read, write: if true</code>：允許讀寫</li>
+    <li>其他未匹配的路徑：預設拒絕</li>
+  </ul>
+  <div class="callout tip">
+    <strong>💡 適用情境：</strong>小團隊內部使用，只要不公開 Firebase Project ID 就算足夠的安全（需要知道集合路徑 + SDK 才能存取）。
+  </div>
+  <div class="callout warn">
+    <strong>⚠ 如果要更嚴格的安全：</strong>可以整合 Firebase Authentication，讓規則變成 <code>allow read, write: if request.auth != null</code>（需要登入才能存取），但要改較多程式碼，請找工程師協助。
+  </div>
+</section>
+
+<footer>
+  © 2026 員工薪資計算系統 · 操作手冊 v2.0<br>
+  本手冊可列印：Ctrl + P → 儲存為 PDF
+</footer>
+
+</div>
+</body>
+</html>
