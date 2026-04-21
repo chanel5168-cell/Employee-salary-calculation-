@@ -699,7 +699,11 @@
 
     <!-- ② 快速新增本月出勤 -->
     <div class="card">
-      <h3>⚡ 快速新增本月出勤</h3>
+      <h3 style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleQuickCard()">
+        <span>⚡ 快速新增本月出勤</span>
+        <button type="button" id="quickToggleBtn" style="background:#f3f4f6; border:1px solid #d1d5db; padding:4px 12px; border-radius:8px; font-size:12px; color:#374151; cursor:pointer;">▼ 收合</button>
+      </h3>
+      <div id="quickCardBody">
       <div style="padding:8px; background:#eff6ff; border-radius:6px; font-size:12px; color:#1e40af; margin-bottom:10px;">
         直接在月薪頁輸入今日或某日上下班時間，會自動儲存為「每日計時記錄」，並即時更新下方月曆與遲到提示。
       </div>
@@ -764,11 +768,16 @@
       </div>
       <div style="font-size:11px; color:#666; margin-top:6px;">提示：輸入新紀錄前可先按「重置」，避免遲到分鐘等欄位殘留上一筆的數值。</div>
       <div id="quickAttResult" style="display:none; margin-top:8px; padding:10px; background:#d1fae5; border:2px solid #10b981; border-radius:6px; font-size:13px; color:#065f46; font-weight:600;"></div>
+      </div> <!-- end #quickCardBody -->
     </div>
 
     <!-- ③ 批次新增整月出勤 -->
     <div class="card">
-      <h3>📋 批次新增整月出勤</h3>
+      <h3 style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleBatchCard()">
+        <span>📋 批次新增整月出勤</span>
+        <button type="button" id="batchToggleBtn" style="background:#f3f4f6; border:1px solid #d1d5db; padding:4px 12px; border-radius:8px; font-size:12px; color:#374151; cursor:pointer;">▼ 收合</button>
+      </h3>
+      <div id="batchCardBody">
       <div style="padding:8px; background:#fef3c7; border-radius:6px; font-size:12px; color:#92400e; margin-bottom:10px; line-height:1.6;">
         適合固定上下班時間的員工 — 設定預設時間後勾選日期一次建立。<br>
         • <strong>月薪制</strong>：批次記錄會標為「僅打卡」，不會與底薪重複計算。<br>
@@ -823,6 +832,7 @@
       </div>
       <div id="batchAttList"></div>
       <button type="button" class="btn btn-primary btn-block" onclick="batchSaveAttendance()" style="margin-top:8px;">✅ 批次儲存勾選日期</button>
+      </div> <!-- end #batchCardBody -->
     </div>
 
     <!-- ④ 月薪計算明細（主表單）-->
@@ -840,7 +850,10 @@
           <button type="button" onclick="toggleLeaveCatManager()" style="background:none; border:1px solid #06C755; color:#06C755; padding:2px 8px; border-radius:12px; cursor:pointer; font-size:11px;">⚙ 管理請假類別</button>
         </label>
         <div id="leaveItemsBox"></div>
-        <button type="button" onclick="addLeaveItem()" class="btn btn-secondary btn-sm btn-block" style="margin-top:6px;">+ 新增請假項目</button>
+        <div style="display:flex; gap:6px; margin-top:6px;">
+          <button type="button" onclick="addLeaveItem()" class="btn btn-secondary btn-sm" style="flex:1;">+ 新增請假項目</button>
+          <button type="button" onclick="autoFillLeaveFromAttendance()" class="btn btn-primary btn-sm" style="flex:1;">🔄 從出勤明細自動帶入</button>
+        </div>
         <input type="hidden" id="leaveDays" value="0">
         <div id="leaveTotalInfo" style="text-align:right; margin-top:8px; padding:6px 10px; background:#fef2f2; border-radius:6px; font-size:12px; color:#374151;">
           請假合計 0 天 · 扣款 NT$ 0
@@ -914,6 +927,7 @@
       </div>
 
       <!-- 特休補休折算 -->
+      <div id="annualLeaveHint" style="display:none; padding:8px 10px; background:#fef3c7; border-left:3px solid #f59e0b; border-radius:6px; font-size:12px; color:#92400e; margin-bottom:8px; line-height:1.6;"></div>
       <div class="form-row">
         <div class="form-group">
           <label>特休未休折算天數</label>
@@ -1048,8 +1062,12 @@
       <button class="btn btn-secondary btn-block" onclick="exportPhotosZip()" style="margin-top:8px;">
         📷 下載所有照片 (ZIP)
       </button>
+      <button class="btn btn-secondary btn-block" onclick="exportAnnualLeaveAudit()" style="margin-top:8px; background:#fef3c7; color:#92400e; border:1px solid #f59e0b;">
+        🌴 特休請假稽核表（勞保局格式）
+      </button>
       <div class="alert alert-info" style="margin-top:8px; font-size:12px;">
-        照片會以「日期_員工_品名.jpg」格式命名，方便對照 Excel 核對稽核。
+        照片會以「日期_員工_品名.jpg」格式命名，方便對照 Excel 核對稽核。<br>
+        <strong>特休稽核表</strong>：依員工列出本年度每筆特休的起訖日、天數/時數、剩餘天數，6 個月/週年自動加新得天數，方便勞保局查帳。
       </div>
     </div>
 
@@ -2130,6 +2148,25 @@ function onLateInput(kind) {
   if (kind === 'hour') updateHourPreview();
 }
 
+// 卡片收合 / 展開（避免月薪頁太長）
+function toggleBatchCard() {
+  const body = document.getElementById('batchCardBody');
+  const btn = document.getElementById('batchToggleBtn');
+  if (!body) return;
+  const isHidden = body.style.display === 'none';
+  body.style.display = isHidden ? '' : 'none';
+  if (btn) btn.textContent = isHidden ? '▼ 收合' : '▶ 展開';
+}
+
+function toggleQuickCard() {
+  const body = document.getElementById('quickCardBody');
+  const btn = document.getElementById('quickToggleBtn');
+  if (!body) return;
+  const isHidden = body.style.display === 'none';
+  body.style.display = isHidden ? '' : 'none';
+  if (btn) btn.textContent = isHidden ? '▼ 收合' : '▶ 展開';
+}
+
 // 重置「快速新增本月出勤」表單（保留日期為今日）
 function resetQuickAttForm() {
   const today = new Date();
@@ -2586,8 +2623,9 @@ function saveAttendanceFromModal(id) {
     const attType = document.getElementById('attEditType').value;
     const work = document.getElementById('attEditWork').value;
 
-    const isLeave = attType !== 'normal' && attType !== '加班';
-    const hours = isLeave ? (entry.hours || 8) : calcHours(start, end, brk, late);
+    const isLeave = attType !== 'normal' && attType !== '加班' && attType !== '時薪加班';
+    // ★ 一律從時段重算 hours（請假也要算實際時段，避免改了時間但 hours 沒更新）
+    const hours = (start && end) ? calcHours(start, end, brk, late) : (entry.hours || 8);
     const emp = employees.find(e => e._id === entry.empId);
     const isMonthly = emp && !emp.isHourly;
     const attendanceOnly = isMonthly && attType === 'normal';
@@ -3452,6 +3490,57 @@ function addLeaveItem() {
   renderLeaveItems();
 }
 
+// 從本月出勤明細的請假類型記錄自動帶入「請假明細」
+function autoFillLeaveFromAttendance() {
+  const empId = document.getElementById('calcEmp').value;
+  const month = document.getElementById('calcMonth').value;
+  if (!empId || !month) { alert('請先選員工與月份'); return; }
+  // 抓出所有該員工該月的請假類型出勤
+  const list = dailyEntries.filter(d =>
+    d.empId === empId && d.date.startsWith(month) && d.type === 'hour' &&
+    d.attType && d.attType !== 'normal' && d.attType !== '加班' && d.attType !== '時薪加班'
+  );
+  if (list.length === 0) {
+    alert('本月出勤明細中沒有任何請假類型記錄');
+    return;
+  }
+  // 依 attType 分類加總時數
+  const byType = {};
+  list.forEach(d => {
+    const h = d.hours || 0;
+    if (!byType[d.attType]) byType[d.attType] = 0;
+    byType[d.attType] += h;
+  });
+  // 換算為「天 + 小時」（8h = 1天）並寫入 currentLeaveItems
+  const newItems = [];
+  Object.entries(byType).forEach(([attType, totalHr]) => {
+    // 對應到 leaveCategories
+    const cat = leaveCategories.find(c => c.name === attType);
+    if (!cat) {
+      console.warn('找不到請假類別:', attType);
+      return;
+    }
+    const days = Math.floor(totalHr / 8);
+    const hours = totalHr - days * 8;
+    newItems.push({ categoryId: cat._id, days, hours: Math.round(hours * 100) / 100 });
+  });
+  if (newItems.length === 0) {
+    alert('沒有可對應的請假類別（請先到設定頁建立對應類別）');
+    return;
+  }
+  // 顯示確認，告知會覆蓋現有請假明細
+  const summary = newItems.map(it => {
+    const cat = leaveCategories.find(c => c._id === it.categoryId);
+    return `  ${cat.name} ${it.days}天${it.hours > 0 ? it.hours + '小時' : ''}`;
+  }).join('\n');
+  if (!confirm(`將從本月出勤明細自動帶入請假：\n\n${summary}\n\n注意：會覆蓋目前請假明細區塊的內容。\n\n繼續？`)) return;
+  currentLeaveItems = newItems;
+  renderLeaveItems();
+  // 連動更新隱藏的 leaveDays
+  updateLeaveTotal();
+  alert(`✅ 已帶入 ${newItems.length} 筆請假項目，記得按下方「💾 儲存記錄」存檔！`);
+}
+
 function removeLeaveItem(idx) {
   currentLeaveItems.splice(idx, 1);
   renderLeaveItems();
@@ -4194,12 +4283,40 @@ function updateBonusTotal() {
 }
 
 // 顯示員工日薪計算方式（時薪制 vs 月薪制）
+// ★ 顯示員工特休應有/已休/剩餘
+function updateAnnualLeaveHint() {
+  const empId = document.getElementById('calcEmp').value;
+  const month = document.getElementById('calcMonth').value;
+  const hint = document.getElementById('annualLeaveHint');
+  if (!hint) return;
+  const emp = employees.find(e => e._id === empId);
+  if (!emp || !month) { hint.style.display = 'none'; return; }
+  // 以月底為基準計算特休應有
+  const [y, m] = month.split('-').map(Number);
+  const monthEnd = new Date(y, m, 0).toISOString().slice(0, 10);
+  const info = calcAnnualLeave(emp.hireDate, monthEnd);
+  if (!info.valid) { hint.style.display = 'none'; return; }
+  // 應有：時薪制按比例
+  const isHourly = !!emp.isHourly;
+  const weekly = parseFloat(emp.weeklyHours) || 0;
+  const override = parseFloat(emp.leaveEntitledOverride);
+  let entitled = info.entitled;
+  if (isHourly && weekly > 0) entitled = Math.round(info.entitled * weekly / 40 * 10) / 10;
+  else if (!isNaN(override)) entitled = override;
+  const used = parseFloat(emp.leaveUsed) || 0;
+  const remain = Math.round((entitled - used) * 10) / 10;
+  hint.innerHTML = `🌴 <strong>特休狀態</strong>（到 ${monthEnd}）：應有 <strong>${entitled}</strong> 天｜已休 <strong>${used}</strong> 天｜剩餘 <strong style="color:${remain > 0 ? '#059669' : '#dc2626'};">${remain}</strong> 天 ${remain > 0 ? '（可填入下方折算）' : '（已用完）'}`;
+  hint.style.display = 'block';
+}
+
 function updateDailyRateHint() {
   const empId = document.getElementById('calcEmp').value;
   const emp = employees.find(e => e._id === empId);
   const hint = document.getElementById('dailyRateHint');
   if (!hint) return;
   if (!emp) { hint.style.display = 'none'; return; }
+  // ★ 同時更新特休提示
+  updateAnnualLeaveHint();
   // 自動帶出員工時薪到月薪表單
   const mh = document.getElementById('monthHourly');
   if (mh && !mh.value && emp.hourlyRate > 0) mh.value = emp.hourlyRate;
@@ -4487,6 +4604,11 @@ function batchSaveAttendance() {
   catch (e) { alert('儲存失敗：' + e.message); }
   alert(`✅ 已批次新增 ${count} 天出勤`);
   refreshAllDailyViews();
+  // 完成後自動收合，畫面比較簡潔
+  const body = document.getElementById('batchCardBody');
+  const btn = document.getElementById('batchToggleBtn');
+  if (body) body.style.display = 'none';
+  if (btn) btn.textContent = '▶ 展開';
 }
 
 // 月薪頁快速新增出勤
@@ -4842,22 +4964,48 @@ function calculateAndPreview() {
     leaveDeductDetail = details.join('');
   }
 
+  // ★ 獎金明細：按項目列出
+  let bonusDetail = '';
+  if (currentBonusItems && currentBonusItems.length > 0) {
+    const details = currentBonusItems
+      .filter(it => it.amount > 0)
+      .map(it => `<div class="result-row" style="padding-left:16px; font-size:12px; color:#6b7280;"><span>├ ${escapeHtml(it.name || '(未命名)')}</span><span>NT$ ${formatMoney(it.amount)}</span></div>`)
+      .join('');
+    bonusDetail = details;
+  }
+
+  // ★ 其他扣款明細：按項目列出
+  let deductDetail = '';
+  if (currentDeductItems && currentDeductItems.length > 0) {
+    const details = currentDeductItems
+      .filter(it => it.amount > 0)
+      .map(it => `<div class="result-row" style="padding-left:16px; font-size:12px; color:#6b7280;"><span>├ ${escapeHtml(it.name || '(未命名)')}</span><span>-NT$ ${formatMoney(it.amount)}</span></div>`)
+      .join('');
+    deductDetail = details;
+  }
+
   const box = document.getElementById('calcResult');
   box.style.display = 'block';
   box.innerHTML = `
     <div class="result-row"><span>底薪</span><span>NT$ ${formatMoney(r.base)}</span></div>
     ${r.pieceIncome ? `<div class="result-row"><span>論件收入</span><span>NT$ ${formatMoney(r.pieceIncome)}</span></div>` : ''}
-    ${r.hourIncome ? `<div class="result-row"><span>計時收入（含加班平額）</span><span>NT$ ${formatMoney(r.hourIncome)}</span></div>` : ''}
+    ${r.hourIncome ? `<div class="result-row"><span>計時收入（含時薪加班）</span><span>NT$ ${formatMoney(r.hourIncome)}</span></div>` : ''}
     ${r.leavePayAmount ? `<div class="result-row"><span>特休未休折算 (${r.leavePayDays}天)</span><span>NT$ ${formatMoney(r.leavePayAmount)}</span></div>` : ''}
-    ${r.otPay1 ? `<div class="result-row"><span>平日加班費（1.34×）</span><span>NT$ ${formatMoney(r.otPay1)}</span></div>` : ''}
-    ${r.otPay2 ? `<div class="result-row"><span>假日加班費（1.67×）</span><span>NT$ ${formatMoney(r.otPay2)}</span></div>` : ''}
-    ${r.bonus ? `<div class="result-row"><span>獎金/津貼</span><span>NT$ ${formatMoney(r.bonus)}</span></div>` : ''}
+    ${r.otPay1 ? `
+      <div class="result-row"><span>平日加班費</span><span>NT$ ${formatMoney(r.otPay1)}</span></div>
+      <div class="result-row" style="padding-left:16px; font-size:12px; color:#6b7280;"><span>├ ${input.ot1 || 0} 小時 × ${formatMoney(r.otHourly || 0)} × 1.34</span><span>NT$ ${formatMoney(r.otPay1)}</span></div>
+    ` : ''}
+    ${r.otPay2 ? `
+      <div class="result-row"><span>假日加班費</span><span>NT$ ${formatMoney(r.otPay2)}</span></div>
+      <div class="result-row" style="padding-left:16px; font-size:12px; color:#6b7280;"><span>├ ${input.ot2 || 0} 小時 × ${formatMoney(r.otHourly || 0)} × 1.67</span><span>NT$ ${formatMoney(r.otPay2)}</span></div>
+    ` : ''}
+    ${r.bonus ? `<div class="result-row"><span>獎金/津貼</span><span>NT$ ${formatMoney(r.bonus)}</span></div>${bonusDetail}` : ''}
     ${r.leaveDeduct ? `<div class="result-row"><span>請假扣款</span><span>-NT$ ${formatMoney(r.leaveDeduct)}</span></div>${leaveDeductDetail}` : ''}
     <div class="result-row"><span>應發合計</span><span>NT$ ${formatMoney(r.gross)}</span></div>
     <div class="result-row"><span>勞保</span><span>-NT$ ${formatMoney(r.laborIns)}</span></div>
     <div class="result-row"><span>健保${r.dependents ? ' (含 ' + r.dependents + ' 眷口)' : ''}</span><span>-NT$ ${formatMoney(r.healthIns)}</span></div>
     ${r.pensionSelf ? `<div class="result-row"><span>自提勞退 (${r.pensionSelfRate}%)</span><span>-NT$ ${formatMoney(r.pensionSelf)}</span></div>` : ''}
-    ${r.otherDeduct ? `<div class="result-row"><span>其他扣款</span><span>-NT$ ${formatMoney(r.otherDeduct)}</span></div>` : ''}
+    ${r.otherDeduct ? `<div class="result-row"><span>其他扣款</span><span>-NT$ ${formatMoney(r.otherDeduct)}</span></div>${deductDetail}` : ''}
     <div class="result-row total"><span>實發金額</span><span>NT$ ${formatMoney(r.net)}</span></div>
   `;
 }
@@ -5553,6 +5701,150 @@ async function exportProducts() {
   } catch (e) {
     alert('匯出失敗：' + e.message);
   }
+}
+
+// 🌴 特休稽核表：勞保局格式（每員工列出每筆特休、累計、剩餘）
+function exportAnnualLeaveAudit() {
+  const visEmployees = getVisibleEmployees();
+  if (visEmployees.length === 0) { alert('沒有員工資料'); return; }
+  const wb = XLSX.utils.book_new();
+  const today = new Date().toISOString().slice(0, 10);
+
+  // 1. 摘要表（所有員工的特休總覽）
+  const summaryRows = [
+    ['編號', '姓名', '到職日', '到稽核日年資', '應有特休(天)', '已休(天)', '剩餘(天)', '備註']
+  ];
+  visEmployees.forEach(e => {
+    if (!e.hireDate) return;
+    const info = calcAnnualLeave(e.hireDate, today);
+    if (!info.valid) return;
+    let entitled = info.entitled;
+    if (e.isHourly && e.weeklyHours > 0) entitled = Math.round(info.entitled * e.weeklyHours / 40 * 10) / 10;
+    const used = parseFloat(e.leaveUsed) || 0;
+    const yrs = `${info.years}年${info.months}月`;
+    summaryRows.push([
+      e.id || '',
+      e.name,
+      e.hireDate,
+      yrs,
+      entitled,
+      used,
+      Math.round((entitled - used) * 10) / 10,
+      e.isHourly ? `時薪制(週工時${e.weeklyHours || '-'})` : ''
+    ]);
+  });
+  const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
+  summarySheet['!cols'] = [{wch:8},{wch:12},{wch:12},{wch:10},{wch:12},{wch:10},{wch:10},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, summarySheet, '特休總覽');
+
+  // 2. 每位員工一張個別明細表（依勞動部規範）
+  visEmployees.forEach(emp => {
+    if (!emp.hireDate) return;
+    const info = calcAnnualLeave(emp.hireDate, today);
+    if (!info.valid) return;
+    let entitled = info.entitled;
+    if (emp.isHourly && emp.weeklyHours > 0) entitled = Math.round(info.entitled * emp.weeklyHours / 40 * 10) / 10;
+    const hireDt = new Date(emp.hireDate);
+
+    // 表頭
+    const rows = [];
+    rows.push([`員工：${emp.name}（編號 ${emp.id || '-'}）`]);
+    rows.push([`到職日：${emp.hireDate}　　稽核日：${today}　　年資：${info.years} 年 ${info.months} 月`]);
+    rows.push([`制度：${emp.isHourly ? '時薪制（週工時 ' + (emp.weeklyHours || '-') + '）' : '月薪制'}`]);
+    rows.push([`應有特休：${entitled} 天`]);
+    rows.push([]); // 空行
+    rows.push(['日期', '請假類別', '起時間', '迄時間', '請假天數', '請假時數', '累計已休', '剩餘特休', '備註']);
+
+    // 找出所有該員工的特休記錄（從 dailyEntries）並按日期排序
+    const leaveRecords = dailyEntries
+      .filter(d => d.empId === emp._id && d.type === 'hour' && d.attType === '特休')
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    let cumUsedHours = 0; // 累計已休時數
+    const entitledHours = entitled * 8; // 應有時數 = 應有天 × 8
+
+    // 計算到職以來的「週年/6 個月加給」事件
+    // 規則（勞基法第 38 條）：
+    //   滿 6 個月 → 3 天
+    //   滿 1 年 → 7 天
+    //   滿 2 年 → 10 天
+    //   滿 3-4 年 → 14 天
+    //   滿 5-9 年 → 15 天
+    //   10 年以上每年加 1 天，最高 30 天
+    const milestones = [];
+    const addMilestone = (dateStr, label, addDays) => {
+      milestones.push({ date: dateStr, label, addDays });
+    };
+    // 6 個月
+    const m6 = new Date(hireDt); m6.setMonth(m6.getMonth() + 6);
+    if (m6 <= new Date()) addMilestone(m6.toISOString().slice(0, 10), '滿 6 個月', 3);
+    for (let yr = 1; yr <= info.years; yr++) {
+      const md = new Date(hireDt); md.setFullYear(md.getFullYear() + yr);
+      let addDays;
+      if (yr === 1) addDays = 7 - 3;
+      else if (yr === 2) addDays = 10 - 7;
+      else if (yr === 3) addDays = 14 - 10;
+      else if (yr === 4) addDays = 0;
+      else if (yr === 5) addDays = 15 - 14;
+      else if (yr >= 10) addDays = 1; // 10 年起每年 +1
+      else addDays = 0;
+      if (addDays > 0) addMilestone(md.toISOString().slice(0, 10), `滿 ${yr} 年`, addDays);
+    }
+
+    // 合併 milestones + leaveRecords，按日期排序
+    let mIdx = 0;
+    let cumEntitledDays = 0;
+    leaveRecords.forEach(rec => {
+      // 在 rec.date 之前先列出所有 milestones
+      while (mIdx < milestones.length && milestones[mIdx].date <= rec.date) {
+        cumEntitledDays += milestones[mIdx].addDays;
+        rows.push([
+          milestones[mIdx].date,
+          `★ 應得特休增加`,
+          '', '', '', '',
+          '', cumEntitledDays - cumUsedHours / 8, milestones[mIdx].label + ` +${milestones[mIdx].addDays} 天`
+        ]);
+        mIdx++;
+      }
+      const hours = rec.hours || 0;
+      cumUsedHours += hours;
+      const days = Math.round((hours / 8) * 100) / 100;
+      rows.push([
+        rec.date,
+        '特休',
+        rec.start || '',
+        rec.end || '',
+        days,
+        hours,
+        Math.round((cumUsedHours / 8) * 100) / 100,
+        Math.round((cumEntitledDays - cumUsedHours / 8) * 100) / 100,
+        rec.note || ''
+      ]);
+    });
+    // 列出剩餘 milestones
+    while (mIdx < milestones.length) {
+      cumEntitledDays += milestones[mIdx].addDays;
+      rows.push([
+        milestones[mIdx].date,
+        `★ 應得特休增加`,
+        '', '', '', '',
+        '', cumEntitledDays - cumUsedHours / 8, milestones[mIdx].label + ` +${milestones[mIdx].addDays} 天`
+      ]);
+      mIdx++;
+    }
+
+    // 結尾合計
+    rows.push([]);
+    rows.push(['【合計】', '', '', '', `${Math.round((cumUsedHours/8)*100)/100} 天`, `${cumUsedHours} 小時`, '', `${Math.round((entitled - cumUsedHours/8)*100)/100} 天剩`, '']);
+
+    const sheet = XLSX.utils.aoa_to_sheet(rows);
+    sheet['!cols'] = [{wch:12},{wch:14},{wch:8},{wch:8},{wch:10},{wch:10},{wch:10},{wch:10},{wch:20}];
+    // Sheet 名稱：員工編號_姓名（避免特殊字元）
+    const sheetName = `${emp.id || ''}_${emp.name}`.replace(/[\\/?\*\[\]]/g, '_').slice(0, 31);
+    XLSX.utils.book_append_sheet(wb, sheet, sheetName);
+  });
+
+  XLSX.writeFile(wb, `特休稽核表_${today}.xlsx`);
 }
 
 async function exportPhotosZip() {
