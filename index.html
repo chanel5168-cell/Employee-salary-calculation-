@@ -3270,35 +3270,35 @@ function refreshMonthlyAttendance() {
     </div>
     <div style="font-size:11px; color:#6b7280; margin-bottom:8px;">（點每列「✏️」可編輯，或按上方按鈕強制刷新上方出勤天數/加班時數）</div>
 
-    <!-- ★ 工時稽核摘要 -->
+    <!-- ★ 工時稽核摘要（僅月薪制員工）-->
     ${(() => {
+      // 時薪制不用稽核（按實際工時付薪）
+      if (!empObj || empObj.isHourly) return '';
       const expectedHours = monthWorkdays * 8;
-      let actualWorkHours = 0;
-      let leaveHours = 0;
+      let normalHours = 0;    // 正常上班（底薪範圍內）
+      let leaveHours = 0;     // 請假（抵銷工時）
       empEntries.forEach(d => {
         if (d.type !== 'hour') return;
         const type = d.attType || 'normal';
         const isLeave = type !== 'normal' && type !== '加班' && type !== '時薪加班';
         const h = isLeave ? ((d.hours && d.hours > 0) ? d.hours : 8) : (d.hours || 0);
-        // 只計工作日的實際工時（含加班）
         const dow = new Date(d.date).getDay();
         const isHol = holidays.includes(d.date);
         const isWorkDay = dow !== 0 && dow !== 6 && !isHol;
-        if (isLeave) {
-          if (isWorkDay) leaveHours += h;
-        } else {
-          if (isWorkDay) actualWorkHours += h;
-        }
+        if (!isWorkDay) return;
+        if (isLeave) leaveHours += h;
+        else if (type === 'normal') normalHours += h; // 加班、時薪加班不計（已另計薪）
       });
-      const shortage = expectedHours - actualWorkHours - leaveHours;
-      const color = shortage > 0 ? '#dc2626' : shortage < 0 ? '#059669' : '#6b7280';
-      const label = shortage > 0 ? `⚠ 工時缺漏 ${shortage.toFixed(1)}h（未請假）`
-                  : shortage < 0 ? `✓ 加班 ${(-shortage).toFixed(1)}h`
-                  : `✓ 工時足額`;
+      const shortage = expectedHours - normalHours - leaveHours;
+      const color = shortage > 0 ? '#dc2626' : '#059669';
+      const label = shortage > 0
+        ? `⚠ 工時缺漏 ${shortage.toFixed(1)}h（未請假）`
+        : `✓ 工時足額`;
       return `
       <div style="padding:10px 12px; background:${shortage > 0 ? '#fef2f2' : '#f0fdf4'}; border-left:4px solid ${color}; border-radius:6px; margin-bottom:8px; font-size:13px; line-height:1.6;">
-        <strong style="color:${color};">📏 工時稽核</strong>（工作日 ${monthWorkdays} 天 × 8h）<br>
-        應上班 <strong>${expectedHours}h</strong>｜實際上班 <strong>${actualWorkHours.toFixed(1)}h</strong>｜請假 <strong>${leaveHours.toFixed(1)}h</strong>｜<span style="color:${color}; font-weight:700;">${label}</span>
+        <strong style="color:${color};">📏 工時稽核（月薪制）</strong>（工作日 ${monthWorkdays} 天 × 8h = ${expectedHours}h）<br>
+        正常上班 <strong>${normalHours.toFixed(1)}h</strong>｜請假 <strong>${leaveHours.toFixed(1)}h</strong>｜合計 <strong>${(normalHours + leaveHours).toFixed(1)}h</strong>｜<span style="color:${color}; font-weight:700;">${label}</span>
+        <div style="font-size:11px; color:#6b7280; margin-top:4px;">💡 此檢查不含加班/時薪加班/論件（已另計薪）。正常上班 + 請假應 ≥ 應上班時數。</div>
       </div>`;
     })()}
 
@@ -3801,7 +3801,6 @@ function refreshLeaveList() {
   }
   box.innerHTML = visible.map(e => {
     const info = calcAnnualLeave(e.hireDate, baseDate);
-    const used = parseFloat(e.leaveUsed) || 0;
     const isHourly = !!e.isHourly;
     const weekly = parseFloat(e.weeklyHours) || 0;
     const override = parseFloat(e.leaveEntitledOverride);
@@ -3820,7 +3819,23 @@ function refreshLeaveList() {
         formulaNote = '請填每週工時';
       }
     }
-    const remaining = Math.max(0, entitled - used);
+    // ★ 已休：自動從 dailyEntries 累計當年度特休時數 / 8
+    const currentYear = (baseDate || new Date().toISOString().slice(0, 10)).slice(0, 4);
+    const yearStart = `${currentYear}-01-01`;
+    const yearEnd = `${currentYear}-12-31`;
+    const autoUsedHours = dailyEntries
+      .filter(d => d.empId === e._id && d.type === 'hour' && d.attType === '特休'
+        && d.date >= yearStart && d.date <= yearEnd)
+      .reduce((a, b) => a + ((b.hours && b.hours > 0) ? b.hours : 8), 0);
+    const autoUsedDays = Math.round((autoUsedHours / 8) * 100) / 100;
+    // 手動調整值
+    const manualUsed = parseFloat(e.leaveUsed) || 0;
+    const used = autoUsedDays > 0 ? autoUsedDays : manualUsed;
+    // ★ 去年結轉剩餘 (使用者手動填，例如去年未休完延用)
+    const carryover = parseFloat(e.leaveCarryover) || 0;
+    // ★ 補薪折算天數 (已發現金不再視為可休)
+    const compensated = parseFloat(e.leaveCompensated) || 0;
+    const remaining = Math.round((carryover + entitled - used - compensated) * 100) / 100;
     const tierHint = !info.valid
       ? '<span style="color:#9ca3af;">未填到職日</span>'
       : info.totalMonths < 6
@@ -3849,20 +3864,33 @@ function refreshLeaveList() {
           <div style="font-size:12px; color:#6b7280;">${tierHint}</div>
         </div>
         ${hourlyHint}
-        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; font-size:13px;">
-          <div style="background:#eff6ff; padding:8px; border-radius:6px; text-align:center;">
-            <div style="color:#6b7280; font-size:11px;">應有</div>
+        <div style="background:#f9fafb; padding:8px; border-radius:6px; font-size:12px; color:#374151; text-align:center; line-height:1.6;">
+          剩餘 = <strong style="color:#6b21a8;">去年結轉 ${carryover}</strong> + <strong style="color:#1e40af;">應有 ${entitled}</strong> − <strong style="color:#92400e;">已休 ${used}</strong> − <strong style="color:#7c2d12;">補薪 ${compensated}</strong> = <strong style="color:#059669; font-size:15px;">${remaining} 天</strong>
+        </div>
+        <div style="display:grid; grid-template-columns: repeat(5, 1fr); gap:6px; font-size:13px;">
+          <div style="background:#faf5ff; padding:6px; border-radius:6px; text-align:center;">
+            <div style="color:#6b7280; font-size:10px;">去年結轉</div>
+            <input type="number" value="${e.leaveCarryover || ''}" placeholder="0" min="0" step="0.5" onchange="updateEmpLeaveCarryover('${e._id}', this.value)" style="width:100%; text-align:center; font-weight:700; color:#6b21a8; font-size:16px; border:1px solid #a855f7; border-radius:4px; background:white;">
+            <div style="font-size:10px; color:#6b7280;">天 (可改)</div>
+          </div>
+          <div style="background:#eff6ff; padding:6px; border-radius:6px; text-align:center;">
+            <div style="color:#6b7280; font-size:10px;">應有</div>
             ${entitledField}
             <div style="font-size:10px; color:#6b7280;">天</div>
           </div>
-          <div style="background:#fef3c7; padding:8px; border-radius:6px; text-align:center;">
-            <div style="color:#6b7280; font-size:11px;">已休</div>
-            <input type="number" value="${used || ''}" placeholder="0" min="0" step="0.5" onchange="updateEmpLeaveUsed('${e._id}', this.value)" style="width:100%; text-align:center; font-weight:700; color:#92400e; font-size:18px; border:1px solid #f59e0b; border-radius:4px; background:white;">
+          <div style="background:#fef3c7; padding:6px; border-radius:6px; text-align:center;">
+            <div style="color:#6b7280; font-size:10px;">已休${autoUsedDays > 0 ? ' (自動)' : ''}</div>
+            <input type="number" value="${used || ''}" placeholder="0" min="0" step="0.5" onchange="updateEmpLeaveUsed('${e._id}', this.value)" style="width:100%; text-align:center; font-weight:700; color:#92400e; font-size:16px; border:1px solid #f59e0b; border-radius:4px; background:white;" ${autoUsedDays > 0 ? 'readonly title="依本年度出勤明細特休自動累計，去修改出勤明細"' : ''}>
+            <div style="font-size:10px; color:#6b7280;">天${autoUsedHours > 0 ? ` (${autoUsedHours}h)` : ''}</div>
+          </div>
+          <div style="background:#fff7ed; padding:6px; border-radius:6px; text-align:center;">
+            <div style="color:#6b7280; font-size:10px;">補薪折算</div>
+            <input type="number" value="${e.leaveCompensated || ''}" placeholder="0" min="0" step="0.5" onchange="updateEmpLeaveCompensated('${e._id}', this.value)" style="width:100%; text-align:center; font-weight:700; color:#7c2d12; font-size:16px; border:1px solid #ea580c; border-radius:4px; background:white;">
             <div style="font-size:10px; color:#6b7280;">天</div>
           </div>
-          <div style="background:#f0fdf4; padding:8px; border-radius:6px; text-align:center;">
-            <div style="color:#6b7280; font-size:11px;">未休</div>
-            <div style="font-weight:700; color:#059669; font-size:18px;">${remaining}</div>
+          <div style="background:#f0fdf4; padding:6px; border-radius:6px; text-align:center;">
+            <div style="color:#6b7280; font-size:10px;">剩餘</div>
+            <div style="font-weight:700; color:${remaining > 0 ? '#059669' : '#dc2626'}; font-size:18px;">${remaining}</div>
             <div style="font-size:10px; color:#6b7280;">天</div>
           </div>
         </div>
@@ -3890,6 +3918,24 @@ function updateEmpLeaveUsed(empId, value) {
   const emp = employees.find(e => e._id === empId);
   if (!emp) return;
   emp.leaveUsed = parseFloat(value) || 0;
+  save(STORE.employees, employees);
+  cloudSave('employees', emp);
+  refreshLeaveList();
+}
+
+function updateEmpLeaveCarryover(empId, value) {
+  const emp = employees.find(e => e._id === empId);
+  if (!emp) return;
+  emp.leaveCarryover = parseFloat(value) || 0;
+  save(STORE.employees, employees);
+  cloudSave('employees', emp);
+  refreshLeaveList();
+}
+
+function updateEmpLeaveCompensated(empId, value) {
+  const emp = employees.find(e => e._id === empId);
+  if (!emp) return;
+  emp.leaveCompensated = parseFloat(value) || 0;
   save(STORE.employees, employees);
   cloudSave('employees', emp);
   refreshLeaveList();
