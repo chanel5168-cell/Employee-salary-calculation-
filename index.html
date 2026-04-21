@@ -756,6 +756,7 @@
           <div style="font-weight:600; margin-bottom:4px;">📊 此員工本月每日記錄合計</div>
           <div id="monthlyDailyHintContent" style="color:#374151;"></div>
           <button type="button" onclick="importDailyIncomes()" class="btn btn-primary btn-sm" style="margin-top:6px;">一鍵帶入論件/計時收入</button>
+          <button type="button" onclick="document.getElementById('pieceIncome').value=''; document.getElementById('hourIncome').value=''; calculateAndPreview();" class="btn btn-secondary btn-sm" style="margin-top:6px;">🔄 清空並重新計算</button>
         </div>
         <div class="form-row">
           <div class="form-group" style="margin-bottom:0;">
@@ -2508,17 +2509,18 @@ function refreshMonthlyDaily() {
   let pieceTotal = 0, hourTotal = 0, wageTotal = 0, hoursSum = 0, qtySum = 0;
   const rows = dates.map(date => {
     const items = byDate[date];
-    const dayPiece = items.filter(x => x.type === 'piece').reduce((a,b) => a + b.subtotal, 0);
-    const dayHour = items.filter(x => x.type === 'hour').reduce((a,b) => a + b.subtotal, 0);
-    // 月薪制日薪：該日有正常上班/加班記錄才加
+    // ★ 使用統一規則：月薪制正常上班不計入計時合計
+    const dayPiece = items.filter(x => isPaidPieceEntry(x)).reduce((a,b) => a + (b.subtotal || 0), 0);
+    const dayHour = items.filter(x => isPaidHourEntry(x, selectedEmp)).reduce((a,b) => a + (b.subtotal || 0), 0);
+    // 月薪制日薪：該日有正常上班/加班記錄才加（視為當日有出勤）
     const hasWorkEntry = items.some(x => x.type === 'hour' && (!x.attType || x.attType === 'normal' || x.attType === '加班'));
     const dayWage = (isMonthlyEmp && hasWorkEntry) ? dailyWage : 0;
     const dayTotal = dayPiece + dayHour + dayWage;
     pieceTotal += dayPiece;
     hourTotal += dayHour;
     wageTotal += dayWage;
-    hoursSum += items.filter(x => x.type === 'hour').reduce((a,b) => a + b.hours, 0);
-    qtySum += items.filter(x => x.type === 'piece').reduce((a,b) => a + b.qty, 0);
+    hoursSum += items.filter(x => x.type === 'hour').reduce((a,b) => a + (b.hours || 0), 0);
+    qtySum += items.filter(x => x.type === 'piece').reduce((a,b) => a + (b.qty || 0), 0);
     const wageCol = isMonthlyEmp ? `<td class="currency">${dayWage ? formatMoney(dayWage) : '—'}</td>` : '';
 
     // 展開狀態 → 列出該日所有明細
@@ -2533,9 +2535,22 @@ function refreshMonthlyDaily() {
           info = `論件 · ${it.name || ''} × ${it.qty || 0} = ${formatMoney(it.subtotal || 0)}`;
         } else {
           const att = it.attType && it.attType !== 'normal' ? ` [${it.attType}]` : '';
-          const attOnlyBadge = it.attendanceOnly ? ' <span style="background:#e0e7ff; color:#4338ca; padding:1px 6px; border-radius:8px; font-size:10px;">📍 僅打卡</span>' : '';
-          const amountText = it.attendanceOnly ? '底薪含' : formatMoney(it.subtotal || 0);
-          info = `計時${att} · ${it.start || ''}~${it.end || ''} · ${it.hours || 0}小時 · ${it.workContent || ''} = ${amountText}${attOnlyBadge}`;
+          // ★ 用統一判斷規則決定是否計薪
+          const itEmp = selectedEmp || employees.find(e => e._id === it.empId);
+          const isPaid = isPaidHourEntry(it, itEmp);
+          let badge = '', amountText;
+          if (!isPaid) {
+            if (itEmp && !itEmp.isHourly && (it.attType || 'normal') === 'normal') {
+              badge = ' <span style="background:#e0e7ff; color:#4338ca; padding:1px 6px; border-radius:8px; font-size:10px;">📍 月薪含</span>';
+              amountText = '底薪含';
+            } else {
+              badge = ' <span style="background:#fee2e2; color:#991b1b; padding:1px 6px; border-radius:8px; font-size:10px;">不計薪</span>';
+              amountText = '—';
+            }
+          } else {
+            amountText = formatMoney(it.subtotal || 0);
+          }
+          info = `計時${att} · ${it.start || ''}~${it.end || ''} · ${it.hours || 0}小時 · ${it.workContent || ''} = ${amountText}${badge}`;
         }
         return `
           <tr style="background:#f8f9fa; font-size:12px;">
@@ -4149,21 +4164,34 @@ function updateMonthlyDailyHint() {
   const month = document.getElementById('calcMonth').value;
   const hint = document.getElementById('monthlyDailyHint');
   if (!empId || !month || !hint) { if (hint) hint.style.display = 'none'; return; }
+  const emp = employees.find(e => e._id === empId);
   const list = dailyEntries.filter(d => d.empId === empId && d.date.startsWith(month));
   if (list.length === 0) { hint.style.display = 'none'; return; }
-  // ★ 排除「僅打卡」記錄
-  const paidList = list.filter(d => !d.attendanceOnly);
-  const attOnlyList = list.filter(d => d.attendanceOnly);
-  const pieceTotal = paidList.filter(d => d.type === 'piece').reduce((a,b) => a + (b.subtotal || 0), 0);
-  const hourTotal = paidList.filter(d => d.type === 'hour').reduce((a,b) => a + (b.subtotal || 0), 0);
-  const qty = paidList.filter(d => d.type === 'piece').reduce((a,b) => a + (b.qty || 0), 0);
-  const hrs = paidList.filter(d => d.type === 'hour').reduce((a,b) => a + (b.hours || 0), 0);
-  const attDays = attOnlyList.length;
-  const attOnlyNote = attDays > 0 ? `<br><span style="color:#6b7280; font-size:11px;">📌 另有 ${attDays} 天月薪打卡記錄（不列入計時收入，底薪已含）</span>` : '';
+
+  // ★ 用統一規則 isPaidHourEntry / isPaidPieceEntry
+  const paidPieces = list.filter(d => isPaidPieceEntry(d));
+  const paidHours = list.filter(d => isPaidHourEntry(d, emp));
+  // 不算薪的計時（月薪正常上班 / 請假等）
+  const unpaidHours = list.filter(d => d.type === 'hour' && !isPaidHourEntry(d, emp));
+
+  const pieceTotal = paidPieces.reduce((a,b) => a + (b.subtotal || 0), 0);
+  const hourTotal = paidHours.reduce((a,b) => a + (b.subtotal || 0), 0);
+  const qty = paidPieces.reduce((a,b) => a + (b.qty || 0), 0);
+  const hrs = paidHours.reduce((a,b) => a + (b.hours || 0), 0);
+  const unpaidDays = unpaidHours.length;
+
+  const isMonthlyEmp = emp && !emp.isHourly;
+  let unpaidNote = '';
+  if (unpaidDays > 0) {
+    const reason = isMonthlyEmp ? '月薪正常上班，底薪已含' : '請假/特休等不計薪類型';
+    unpaidNote = `<br><span style="color:#6b7280; font-size:11px;">📌 另有 ${unpaidDays} 筆計時記錄不列入計時收入（${reason}）</span>`;
+  }
+
   document.getElementById('monthlyDailyHintContent').innerHTML = `
     論件: ${qty} 個 · NT$ <strong>${formatMoney(pieceTotal)}</strong><br>
-    計時: ${hrs.toFixed(2)} 小時 · NT$ <strong>${formatMoney(hourTotal)}</strong><br>
-    合計: NT$ <strong style="color:#1e40af;">${formatMoney(pieceTotal + hourTotal)}</strong>${attOnlyNote}
+    計時: ${hrs.toFixed(2)} 小時 · NT$ <strong>${formatMoney(hourTotal)}</strong>
+    ${isMonthlyEmp ? '<span style="color:#6b7280; font-size:11px;">（僅加班）</span>' : ''}<br>
+    合計: NT$ <strong style="color:#1e40af;">${formatMoney(pieceTotal + hourTotal)}</strong>${unpaidNote}
   `;
   hint.style.display = 'block';
 }
@@ -4172,18 +4200,28 @@ function importDailyIncomes() {
   const empId = document.getElementById('calcEmp').value;
   const month = document.getElementById('calcMonth').value;
   if (!empId || !month) { alert('請先選擇員工與月份'); return; }
-  // ★ 排除「僅打卡」的月薪制出勤記錄
-  const list = dailyEntries.filter(d => d.empId === empId && d.date.startsWith(month) && !d.attendanceOnly);
-  const pieceTotal = list.filter(d => d.type === 'piece').reduce((a,b) => a + (b.subtotal || 0), 0);
-  // 計時收入僅計算正常上班與加班（不含特休/請假等）
-  const hourTotal = list
-    .filter(d => d.type === 'hour' && (!d.attType || d.attType === 'normal' || d.attType === '加班'))
-    .reduce((a,b) => a + (b.subtotal || 0), 0);
+  const emp = employees.find(e => e._id === empId);
+  const list = dailyEntries.filter(d => d.empId === empId && d.date.startsWith(month));
+
+  // ★ 統一規則：用 isPaidHourEntry / isPaidPieceEntry 判斷
+  //   月薪制：只算「加班」型計時 + 論件；正常上班含於底薪
+  //   時薪制：正常上班 + 加班 + 論件 都算
+  const pieceTotal = list.filter(d => isPaidPieceEntry(d)).reduce((a,b) => a + (b.subtotal || 0), 0);
+  // 為兼容舊資料，月薪制要從 subtotal 動態重算（避免舊資料殘留 1664）
+  let hourTotal = 0;
+  list.filter(d => isPaidHourEntry(d, emp)).forEach(d => {
+    hourTotal += d.subtotal || 0;
+  });
+
   document.getElementById('pieceIncome').value = pieceTotal || '';
   document.getElementById('hourIncome').value = hourTotal || '';
   // 自動執行預覽計算，讓應發金額立即更新
   calculateAndPreview();
-  alert(`✅ 已帶入並計算：\n  論件 NT$ ${formatMoney(pieceTotal)}\n  計時 NT$ ${formatMoney(hourTotal)}\n\n應發合計已更新，請往下滑看結果。\n\n(月薪制「僅打卡」記錄已自動排除，避免與底薪重複)`);
+  const empType = emp && !emp.isHourly ? '月薪制' : '時薪制';
+  const note = emp && !emp.isHourly
+    ? '\n\n💡 月薪制：正常上班日已含於底薪，僅加班與論件會帶入。'
+    : '\n\n💡 時薪制：正常上班 + 加班 + 論件 都會帶入。';
+  alert(`✅ 已帶入並計算 [${empType}]：\n  論件 NT$ ${formatMoney(pieceTotal)}\n  計時 NT$ ${formatMoney(hourTotal)}${note}`);
 }
 
 function onProductSelected() {
@@ -4415,22 +4453,25 @@ function editSalaryRecord(id) {
   document.getElementById('calcMonth').value = r.month;
   refreshEmpDropdown();
   document.getElementById('calcEmp').value = r.empId;
-  // ★ 偵測舊資料 hourIncome 是否來自「打卡記錄」(已修正前的錯誤)
+  // ★ 用統一規則 isPaidHourEntry 重算該月真正該付的計時收入
+  //   若與原記錄差很多 → 提示使用者
   const emp = employees.find(x => x._id === r.empId);
-  if (emp && !emp.isHourly && (r.hourIncome || 0) > 0) {
+  if (emp) {
     const monthEntries = dailyEntries.filter(d => d.empId === r.empId && d.date.startsWith(r.month));
     const realHourIncome = monthEntries
-      .filter(d => d.type === 'hour' && !d.attendanceOnly && (!d.attType || d.attType === 'normal' || d.attType === '加班'))
+      .filter(d => isPaidHourEntry(d, emp))
       .reduce((a,b) => a + (b.subtotal || 0), 0);
-    if (realHourIncome === 0 && r.hourIncome > 0) {
+    const savedHour = r.hourIncome || 0;
+    if (Math.abs(realHourIncome - savedHour) >= 1) {
       const ok = confirm(
-        `⚠ 偵測到此筆月薪記錄的「計時收入」NT$ ${formatMoney(r.hourIncome)} 可能是舊版錯誤累計（月薪打卡被計算成計時）。\n\n` +
-        `按「確定」→ 自動歸零並重算（建議）\n` +
+        `⚠ 偵測到此筆月薪記錄的「計時收入」與每日記錄不一致：\n` +
+        `  記錄中：NT$ ${formatMoney(savedHour)}\n` +
+        `  依目前每日記錄重算：NT$ ${formatMoney(realHourIncome)}\n\n` +
+        (emp.isHourly ? '' : '💡 月薪制規則：正常上班含於底薪，僅加班計薪。\n\n') +
+        `按「確定」→ 採用重算值（建議）\n` +
         `按「取消」→ 保留原值不動`
       );
-      if (ok) {
-        r.hourIncome = 0;
-      }
+      if (ok) r.hourIncome = realHourIncome;
     }
   }
   document.getElementById('workDays').value = r.workDays || '';
@@ -5350,6 +5391,27 @@ function requireAdmin(reason) {
   }
   adminAuthUntil = now + 10 * 60 * 1000;
   return true;
+}
+
+// ========= 計薪判斷統一函式 =========
+// 判斷某筆每日記錄（hour type）是否應計入「計時收入」
+// 規則：
+//   1. 請假/特休類型不計薪
+//   2. 明確 attendanceOnly=true 不計薪
+//   3. 月薪制員工：只有「加班」才計薪（正常上班含於底薪）
+//   4. 時薪制員工：正常上班 + 加班 都計薪
+function isPaidHourEntry(d, emp) {
+  if (!d || d.type !== 'hour') return false;
+  if (d.attendanceOnly) return false;
+  const attType = d.attType || 'normal';
+  if (attType !== 'normal' && attType !== '加班') return false; // 請假類型
+  if (emp && !emp.isHourly && attType === 'normal') return false; // 月薪制正常上班 → 底薪已含
+  return true;
+}
+
+// 判斷論件記錄是否計薪（所有 piece 都算，不論員工型態）
+function isPaidPieceEntry(d) {
+  return d && d.type === 'piece' && (d.subtotal || 0) > 0;
 }
 
 // ========= 使用者權限系統 =========
