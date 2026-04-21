@@ -1069,9 +1069,11 @@
       <button class="btn btn-secondary btn-block" onclick="removeDuplicateRecords()" style="margin-top:8px;">🧹 清理重複的月薪記錄（同員工同月）</button>
       <button class="btn btn-secondary btn-block" onclick="removeDuplicateDailyEntries()" style="margin-top:8px;">🧹 清理重複的每日計時記錄（同員工同日同時段）</button>
       <button class="btn btn-danger btn-block" onclick="wipeCloudOnly()" style="margin-top:8px; background:#c92a2a;">🔐 ☁ 強制重設雲端資料（清除全部後仍殘留時使用）</button>
+      <button class="btn btn-secondary btn-block" onclick="forcePullFromCloud()" style="margin-top:8px;">🔄 從雲端強制同步（清空本地以雲端為準）</button>
       <div style="padding:8px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; font-size:12px; color:#664d03; margin-top:6px;">
         💡 若按「清除全部」後，舊的每日記錄又自動跑回來，代表雲端還保留資料。<br>
         請按上方「☁ 強制重設雲端資料」把 Firestore 也一併清空。<br>
+        🔄 <strong>從雲端強制同步</strong>：如果此裝置（尤其手機）發現資料跟其他人不同步，按這個會把本裝置清空，重新從雲端下載最新版。<br>
         🔐 標示的按鈕需要管理者密碼（驗證後 10 分鐘內不再重問）。
       </div>
       <input type="file" id="restoreFile" style="display:none" accept=".json" onchange="restoreData(event)">
@@ -1574,6 +1576,9 @@ async function migrateAndSubscribe() {
 }
 
 function subscribeAll() {
+  // ★ 最先訂閱清除廣播，避免在收到 clear 之前先把舊資料推上雲端
+  subscribeClearBroadcast();
+
   col('employees').onSnapshot(snap => {
     if (suppressSubscription) return;
     employees = snap.docs.map(d => d.data());
@@ -1698,6 +1703,99 @@ async function cloudSaveRates() {
   if (!cloudReady) return;
   try { await ws().collection('config').doc('rates').set(rates); }
   catch (e) { console.error('cloudSaveRates error:', e); }
+}
+
+// ========= 雲端清除廣播：確保多裝置狀態一致 =========
+// 管理者在任何裝置按「清除全部」或「重設雲端」→ 會寫一個 clearedAt 時間戳到雲端
+// 所有其他裝置一打開網頁或收到此 config doc 變更，會比對自己的 lastClearAck
+// 若雲端更新 → 把本地也清掉，避免本地殘留資料被再次上傳
+async function broadcastClear(reason) {
+  if (!cloudReady) return;
+  const now = new Date().toISOString();
+  try {
+    await ws().collection('config').doc('meta').set({
+      lastClearedAt: now,
+      clearedBy: (currentUser && currentUser.username) || 'admin',
+      reason: reason || 'clearAll'
+    }, { merge: true });
+    // 本地也記錄自己確認過這次清除
+    localStorage.setItem('salary_last_clear_ack', now);
+  } catch (e) { console.error('broadcastClear error:', e); }
+}
+
+function wipeLocalSilently() {
+  suppressSubscription = true;
+  employees = []; records = []; dailyEntries = []; products = [];
+  save(STORE.employees, []);
+  save(STORE.records, []);
+  save(STORE.daily, []);
+  save(STORE.products, []);
+  refreshEmployeeList && refreshEmployeeList();
+  refreshEmpDropdown && refreshEmpDropdown();
+  refreshRecords && refreshRecords();
+  refreshDailyEntries && refreshDailyEntries();
+  refreshMonthlyDaily && refreshMonthlyDaily();
+  updateSummary && updateSummary();
+  setTimeout(() => { suppressSubscription = false; }, 500);
+}
+
+// 從雲端強制同步：清空本地後重新從雲端下載（使用者主動觸發）
+async function forcePullFromCloud() {
+  if (!cloudReady) { alert('雲端尚未連線，請稍候再試'); return; }
+  if (!confirm('⚠ 此操作會：\n\n1. 清空本地的員工、薪資、每日、產品資料\n2. 重新從雲端下載最新版\n\n本地未同步到雲端的資料會遺失。要繼續嗎？')) return;
+  suppressSubscription = true;
+  employees = []; records = []; dailyEntries = []; products = [];
+  save(STORE.employees, []);
+  save(STORE.records, []);
+  save(STORE.daily, []);
+  save(STORE.products, []);
+  try {
+    const [empSnap, recSnap, dSnap, pSnap] = await Promise.all([
+      ws().collection('employees').get(),
+      ws().collection('records').get(),
+      ws().collection('daily').get(),
+      ws().collection('products').get()
+    ]);
+    employees = empSnap.docs.map(d => d.data());
+    records = recSnap.docs.map(d => d.data());
+    dailyEntries = dSnap.docs.map(d => d.data());
+    products = pSnap.docs.map(d => d.data());
+    save(STORE.employees, employees);
+    save(STORE.records, records);
+    save(STORE.daily, dailyEntries);
+    save(STORE.products, products);
+    refreshEmployeeList();
+    refreshEmpDropdown();
+    refreshRecords();
+    refreshDailyEntries();
+    refreshMonthlyDaily();
+    refreshProductList();
+    updateSummary();
+    // 記錄最新 clear ack（避免再次觸發廣播清空）
+    const metaSnap = await ws().collection('config').doc('meta').get();
+    if (metaSnap.exists && metaSnap.data().lastClearedAt) {
+      localStorage.setItem('salary_last_clear_ack', metaSnap.data().lastClearedAt);
+    }
+    alert(`✅ 已從雲端重新同步：\n  員工 ${employees.length} 位\n  月薪記錄 ${records.length} 筆\n  每日記錄 ${dailyEntries.length} 筆\n  產品 ${products.length} 個`);
+  } catch (e) {
+    alert('同步失敗：' + e.message);
+  }
+  suppressSubscription = false;
+}
+
+// 監聽雲端 clear 廣播：若發現雲端清除時間比本地新 → 立即清空本地
+function subscribeClearBroadcast() {
+  ws().collection('config').doc('meta').onSnapshot(snap => {
+    const d = snap.data();
+    if (!d || !d.lastClearedAt) return;
+    const ack = localStorage.getItem('salary_last_clear_ack') || '';
+    if (d.lastClearedAt > ack) {
+      console.log('[clear-broadcast] 偵測到雲端清除:', d.lastClearedAt, ' 本地 ack:', ack);
+      wipeLocalSilently();
+      localStorage.setItem('salary_last_clear_ack', d.lastClearedAt);
+      setSyncStatus('☁ 雲端已被清除，本地已同步', 'ok');
+    }
+  });
 }
 
 // ========= 照片處理 =========
@@ -2039,6 +2137,8 @@ function resetQuickAttForm() {
   setVal('quickAttEnd', '');
   setVal('quickAttBreak', '0');
   setVal('quickAttLate', '');
+  // ★ 呼叫 onQuickAttTypeChange 以確保時間欄位顯示/隱藏狀態正確
+  if (typeof onQuickAttTypeChange === 'function') onQuickAttTypeChange();
   const result = document.getElementById('quickAttResult');
   if (result) { result.style.display = 'none'; result.innerHTML = ''; }
 }
@@ -2351,14 +2451,147 @@ function forceRefillFromAttendance(workDays, leaveDays, ot1, ot2) {
   alert(`✅ 已依出勤明細重算：\n  出勤 ${workDays} 天\n  請假 ${leaveDays} 天\n  平日加班 ${ot1} 時\n  例假加班 ${ot2} 時`);
 }
 
+// 月薪頁直接彈出 Modal 編輯，不再跳轉到每日頁
 function editAttendanceFromMonth(id) {
   const entry = dailyEntries.find(d => d._id === id);
   if (!entry) { alert('找不到此筆記錄'); return; }
-  // 切換到「每日」頁籤並載入編輯
-  const dailyTab = document.querySelector('.tab[data-panel="daily"]');
-  if (dailyTab) dailyTab.click();
-  // 等 tab 切換完再載入
-  setTimeout(() => editDailyEntry(id), 100);
+  openAttendanceEditModal(entry);
+}
+
+// 月薪頁的出勤編輯 Modal
+function openAttendanceEditModal(entry) {
+  let modal = document.getElementById('attEditModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'attEditModal';
+    modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9998; display:flex; align-items:center; justify-content:center; padding:16px;';
+    document.body.appendChild(modal);
+  }
+  const typeOptions = [
+    ['normal', '✅ 正常上班'], ['加班', '💪 加班'], ['特休', '🌴 特休'],
+    ['事假', '📋 事假（不給薪）'], ['病假', '🤒 病假（半薪）'], ['公假', '🏛 公假'],
+    ['婚假', '💒 婚假'], ['喪假', '🕊 喪假'], ['產假', '👶 產假'],
+    ['陪產假', '👨 陪產假'], ['颱風假', '🌀 颱風假']
+  ];
+  // 兼容兩種：計時 (hour) 與論件 (piece)
+  let body;
+  if (entry.type === 'piece') {
+    body = `
+      <div class="form-group"><label>日期</label><input type="date" id="attEditDate" value="${entry.date}"></div>
+      <div class="form-group"><label>品名</label><input type="text" id="attEditPieceName" value="${escapeHtml(entry.name || '')}"></div>
+      <div class="form-row">
+        <div class="form-group"><label>數量</label><input type="number" id="attEditQty" value="${entry.qty || 0}" min="0" step="1"></div>
+        <div class="form-group"><label>單價</label><input type="number" id="attEditPrice" value="${entry.price || 0}" min="0" step="0.01"></div>
+      </div>
+      <div class="form-group"><label>小計 (NT$)</label><input type="number" id="attEditSubtotal" value="${entry.subtotal || 0}" min="0" step="0.01"></div>
+      <div class="form-group"><label>備註</label><input type="text" id="attEditNote" value="${escapeHtml(entry.note || '')}"></div>
+    `;
+  } else {
+    body = `
+      <div class="form-row">
+        <div class="form-group"><label>日期</label><input type="date" id="attEditDate" value="${entry.date}"></div>
+        <div class="form-group"><label>出勤類型</label>
+          <select id="attEditType">
+            ${typeOptions.map(([v,l]) => `<option value="${v}" ${entry.attType === v || (!entry.attType && v === 'normal') ? 'selected' : ''}>${l}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>上班時間</label><input type="text" id="attEditStart" value="${entry.start || ''}" placeholder="HH:MM" pattern="^([01]?\\d|2[0-3]):[0-5]\\d$" maxlength="5" onblur="formatTime24(this)"></div>
+        <div class="form-group"><label>下班時間</label><input type="text" id="attEditEnd" value="${entry.end || ''}" placeholder="HH:MM" pattern="^([01]?\\d|2[0-3]):[0-5]\\d$" maxlength="5" onblur="formatTime24(this)"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>休息 (分)</label><input type="number" id="attEditBreak" value="${entry.breakMin || 0}" min="0" step="5"></div>
+        <div class="form-group"><label>遲到 (分)</label><input type="number" id="attEditLate" value="${entry.lateMinutes || 0}" min="0" step="1"></div>
+      </div>
+      <div class="form-group"><label>工作內容</label>
+        <select id="attEditWork">
+          <option value="">-- 請選擇 --</option>
+          ${workContents.map(w => `<option value="${escapeHtml(w.name)}" ${entry.workContent === w.name ? 'selected' : ''}>${escapeHtml(w.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label>備註</label><input type="text" id="attEditNote" value="${escapeHtml(entry.note || '')}"></div>
+    `;
+  }
+  modal.innerHTML = `
+    <div style="background:#fff; border-radius:12px; padding:20px; max-width:500px; width:100%; max-height:90vh; overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3 style="margin:0;">✏️ 編輯出勤 (${entry.type === 'piece' ? '論件' : '計時'})</h3>
+        <button onclick="closeAttEditModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:#6b7280;">×</button>
+      </div>
+      <div style="padding:8px; background:#eff6ff; border-radius:6px; font-size:12px; color:#1e40af; margin-bottom:12px;">
+        員工：<strong>${escapeHtml(entry.empName || '')}</strong>
+      </div>
+      ${body}
+      <div class="btn-group" style="margin-top:12px;">
+        <button class="btn btn-secondary" onclick="closeAttEditModal()">取消</button>
+        <button class="btn btn-primary btn-block" onclick="saveAttendanceFromModal('${entry._id}')" style="background:#06C755;">💾 儲存變更</button>
+      </div>
+    </div>
+  `;
+  modal.style.display = 'flex';
+}
+
+function closeAttEditModal() {
+  const modal = document.getElementById('attEditModal');
+  if (modal) modal.style.display = 'none';
+}
+
+function saveAttendanceFromModal(id) {
+  const entry = dailyEntries.find(d => d._id === id);
+  if (!entry) { alert('找不到記錄'); return; }
+  const date = document.getElementById('attEditDate').value;
+  if (!date) { alert('請選擇日期'); return; }
+  const note = document.getElementById('attEditNote').value.trim();
+
+  if (entry.type === 'piece') {
+    const name = document.getElementById('attEditPieceName').value.trim();
+    const qty = parseFloat(document.getElementById('attEditQty').value) || 0;
+    const price = parseFloat(document.getElementById('attEditPrice').value) || 0;
+    const subtotal = parseFloat(document.getElementById('attEditSubtotal').value) || Math.round(qty * price);
+    entry.date = date;
+    entry.name = name;
+    entry.qty = qty;
+    entry.price = price;
+    entry.subtotal = subtotal;
+    entry.note = note;
+  } else {
+    const start = document.getElementById('attEditStart').value;
+    const end = document.getElementById('attEditEnd').value;
+    const brk = parseFloat(document.getElementById('attEditBreak').value) || 0;
+    const late = parseFloat(document.getElementById('attEditLate').value) || 0;
+    const attType = document.getElementById('attEditType').value;
+    const work = document.getElementById('attEditWork').value;
+
+    const isLeave = attType !== 'normal' && attType !== '加班';
+    const hours = isLeave ? (entry.hours || 8) : calcHours(start, end, brk, late);
+    const emp = employees.find(e => e._id === entry.empId);
+    const isMonthly = emp && !emp.isHourly;
+    const attendanceOnly = isMonthly && attType === 'normal';
+    const rate = entry.rate || (emp ? (emp.hourlyRate || Math.round((emp.baseSalary || 0) / 30 / 8)) : 0);
+
+    entry.date = date;
+    entry.start = start;
+    entry.end = end;
+    entry.breakMin = brk;
+    entry.lateMinutes = late;
+    entry.attType = attType;
+    entry.workContent = work;
+    entry.hours = Math.round(hours * 100) / 100;
+    entry.rate = (isLeave || attendanceOnly) ? 0 : rate;
+    entry.subtotal = (isLeave || attendanceOnly) ? 0 : Math.round(hours * rate * 100) / 100;
+    entry.attendanceOnly = attendanceOnly;
+    entry.note = note;
+  }
+  entry.updatedAt = new Date().toISOString();
+  save(STORE.daily, dailyEntries);
+  cloudSave('daily', entry);
+  closeAttEditModal();
+  refreshMonthlyAttendance();
+  refreshDailyEntries();
+  refreshMonthlyDaily();
+  updateMonthlyDailyHint();
+  alert('✅ 已更新該筆出勤記錄');
 }
 
 function deleteAttendanceFromMonth(id) {
@@ -4230,6 +4463,8 @@ function quickAddAttendance() {
   document.getElementById('quickAttLate').value = '';
   document.getElementById('quickAttWork').selectedIndex = 0;
   document.getElementById('quickAttType').value = 'normal';
+  // ★ 觸發顯示/隱藏邏輯：確保時間欄位重新顯示
+  if (typeof onQuickAttTypeChange === 'function') onQuickAttTypeChange();
 
   // 刷新相關畫面
   refreshMonthlyAttendance();
@@ -5425,8 +5660,10 @@ async function clearAllData() {
           console.warn('清除雲端 ' + c + ' 失敗:', err);
         }
       }
+      // ★ 廣播清除時間戳，所有裝置下次打開會自動同步
+      await broadcastClear('clearAllData');
       suppressSubscription = false;
-      alert('✅ 已完全清除（本地 + 雲端）');
+      alert('✅ 已完全清除（本地 + 雲端）\n\n💡 其他裝置（手機/其他電腦）下次打開網頁時會自動偵測並清除本地殘留');
     } catch (e) {
       suppressSubscription = false;
       alert('本地已清除，但雲端清除失敗：' + e.message + '\n\n請按「設定 → 重設雲端」再試一次。');
@@ -5464,8 +5701,10 @@ async function wipeCloudOnly() {
     refreshMonthlyDaily();
     refreshProductList();
     updateSummary();
+    // ★ 廣播清除，讓其他裝置同步
+    await broadcastClear('wipeCloudOnly');
     suppressSubscription = false;
-    alert(`✅ 已清除雲端 ${total} 筆文件，本地也已同步清空`);
+    alert(`✅ 已清除雲端 ${total} 筆文件，本地也已同步清空\n\n💡 其他裝置下次打開會自動同步`);
   } catch (e) {
     suppressSubscription = false;
     alert('清除失敗：' + e.message);
