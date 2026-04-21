@@ -1090,6 +1090,7 @@
       </div>
       <button class="btn btn-secondary btn-block" onclick="removeDuplicateRecords()" style="margin-top:8px;">🧹 清理重複的月薪記錄（同員工同月）</button>
       <button class="btn btn-secondary btn-block" onclick="removeDuplicateDailyEntries()" style="margin-top:8px;">🧹 清理重複的每日計時記錄（同員工同日同時段）</button>
+      <button class="btn btn-secondary btn-block" onclick="fixStaleHours()" style="margin-top:8px;">🔧 修正所有時數不一致的計時記錄（依時段重算）</button>
       <button class="btn btn-danger btn-block" onclick="wipeCloudOnly()" style="margin-top:8px; background:#c92a2a;">🔐 ☁ 強制重設雲端資料（清除全部後仍殘留時使用）</button>
       <button class="btn btn-secondary btn-block" onclick="forcePullFromCloud()" style="margin-top:8px;">🔄 從雲端強制同步（清空本地以雲端為準）</button>
       <div style="padding:8px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; font-size:12px; color:#664d03; margin-top:6px;">
@@ -3139,20 +3140,24 @@ function refreshMonthlyAttendance() {
     const isWeekend = isShiftEmp ? false : isWeekendCal;
     // 請假類型（含 時薪加班 不算請假）
     const isLeaveType = type !== 'normal' && type !== '加班' && type !== '時薪加班';
-    // 時薪加班 → 計入計時收入，不算法定倍率加班
-    const isSpecialHourly = type === '時薪加班';
+    // 「有明確金額」的加班 → 走計時收入，不再走 ot1/ot2 倍率
+    const hasExplicitSubtotal = (type === '加班' || type === '時薪加班') && (d.subtotal || 0) > 0;
 
-    if (!isLeaveType && !isSpecialHourly) {
-      // 上班或法定加班
+    if (!isLeaveType && !hasExplicitSubtotal) {
+      // 上班或法定加班（subtotal=0 才走倍率）
       if (isWeekend) {
         weekendWorkDates.add(d.date);
         // 例假日工作視為例假日加班時數（含 normal & 加班）
         weekendOtHours += d.hours || 0;
       } else {
         weekdayWorkDates.add(d.date);
-        // 平日加班 = 明確選「加班」的時數（不含時薪加班）
+        // 平日加班 = 明確選「加班」的時數（無 subtotal 的才走倍率）
         if (type === '加班') weekdayOtHours += d.hours || 0;
       }
+    } else if (hasExplicitSubtotal) {
+      // 有明確金額的加班 → 工作天記入但不算 ot1/ot2
+      if (isWeekend) weekendWorkDates.add(d.date);
+      else weekdayWorkDates.add(d.date);
     } else if (isLeaveType) {
       // ★ 累計請假時數（小時制支援）
       const h = d.hours || 8; // 沒填時段就當全天 8 小時
@@ -6029,6 +6034,32 @@ function removeDuplicateRecords() {
   alert(`✅ 清理完成：\n  保留 ${keepers.length} 筆\n  刪除 ${toDelete.length} 筆重複`);
 }
 
+// 🔧 依上下班時間重新計算所有計時記錄的 hours 與 subtotal
+//   解決：使用者改了時段但 hours 沒同步更新（舊版 bug 留下的）
+function fixStaleHours() {
+  if (!confirm('將掃描所有計時記錄，依目前的上下班時間 + 休息 + 遲到 重新計算 hours 與 subtotal。\n\n受影響：時段不為空、且 hours 與計算結果不符的記錄。\n\n繼續？')) return;
+  let count = 0;
+  dailyEntries.forEach(d => {
+    if (d.type !== 'hour' || !d.start || !d.end) return;
+    const expectedHours = calcHours(d.start, d.end, d.breakMin || 0, d.lateMinutes || 0);
+    const oldHours = d.hours || 0;
+    if (Math.abs(expectedHours - oldHours) >= 0.01) {
+      d.hours = Math.round(expectedHours * 100) / 100;
+      // 同步重算 subtotal（若不是 attendanceOnly 且 rate > 0）
+      if (!d.attendanceOnly && (d.rate || 0) > 0) {
+        d.subtotal = Math.round(d.hours * d.rate * 100) / 100;
+      }
+      d.updatedAt = new Date().toISOString();
+      cloudSave('daily', d);
+      count++;
+    }
+  });
+  if (count === 0) { alert('✅ 所有計時記錄都正確，無需修正'); return; }
+  save(STORE.daily, dailyEntries);
+  refreshAllDailyViews();
+  alert(`✅ 已修正 ${count} 筆時數不一致的記錄`);
+}
+
 // 清理重複的每日計時記錄（同員工同日同時段視為重複）
 function removeDuplicateDailyEntries() {
   // 只檢查 hour type；依 empId + date + start + end 分組
@@ -6199,26 +6230,26 @@ function refreshAllDailyViews() {
 
 // ========= 計薪判斷統一函式 =========
 // 判斷某筆每日記錄（hour type）是否應計入「計時收入」
-// 規則（已與實務確認）：
-//   1. 請假/特休 → 不計薪
+// 統一規則（以 subtotal 為準）：
+//   1. 請假類型 → 不計薪
 //   2. attendanceOnly=true 的打卡紀錄 → 不計薪
 //   3. 月薪制 + 正常上班 → 底薪已含，不計薪
-//   4. 加班（一般） → 走法定倍率，由 ot1/ot2 自動累計後 × 1.34 / 1.67，不算在計時收入
-//   5. 💰 時薪加班（另計時薪，特殊困難工作給較高時薪） → 計入計時收入（hours × rate）
-//   6. 時薪制 + 正常上班 → 計入計時收入
+//   4. 「加班」或「時薪加班」 → 若 subtotal > 0（有明確金額）→ 計入計時收入
+//      若 subtotal = 0 → 走法定倍率（ot1/ot2 自動填入）
+//   5. 時薪制 + 正常上班 → 計入計時收入
 function isPaidHourEntry(d, emp) {
   if (!d || d.type !== 'hour') return false;
   if (d.attendanceOnly) return false;
   const attType = d.attType || 'normal';
-  // 時薪加班 → 一律計入計時收入
-  if (attType === '時薪加班') return true;
-  // 加班（法定倍率）→ 不計入（走 ot1/ot2 乘倍率）
-  if (attType === '加班') return false;
-  // 其他請假類型 → 不計入
-  if (attType !== 'normal') return false;
+  // 請假類型 → 不計薪
+  if (attType !== 'normal' && attType !== '加班' && attType !== '時薪加班') return false;
   // 月薪正常上班 → 底薪已含
   if (emp && !emp.isHourly && attType === 'normal') return false;
-  // 時薪制正常上班 → 計入
+  // 加班（含時薪加班）→ 只要有 subtotal > 0 就計入
+  if (attType === '加班' || attType === '時薪加班') {
+    return (d.subtotal || 0) > 0;
+  }
+  // 正常上班（時薪制）→ 計入
   return true;
 }
 
