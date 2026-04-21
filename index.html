@@ -1001,6 +1001,7 @@
         <button class="btn btn-danger" onclick="clearAllData()">清除全部</button>
       </div>
       <button class="btn btn-secondary btn-block" onclick="removeDuplicateRecords()" style="margin-top:8px;">🧹 清理重複的月薪記錄（同員工同月）</button>
+      <button class="btn btn-secondary btn-block" onclick="removeDuplicateDailyEntries()" style="margin-top:8px;">🧹 清理重複的每日計時記錄（同員工同日同時段）</button>
       <button class="btn btn-danger btn-block" onclick="wipeCloudOnly()" style="margin-top:8px; background:#c92a2a;">☁ 強制重設雲端資料（清除全部後仍殘留時使用）</button>
       <div style="padding:8px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; font-size:12px; color:#664d03; margin-top:6px;">
         💡 若按「清除全部」後，舊的每日記錄又自動跑回來，代表雲端還保留資料。<br>
@@ -2039,6 +2040,19 @@ function addHourEntry() {
   }
 
   const emp = employees.find(e => e._id === empId);
+  // ★ 同日同員工重複檢查（編輯模式下除外）
+  if (!editingDailyId) {
+    const dup = dailyEntries.find(d => d.empId === empId && d.date === date && d.type === 'hour');
+    if (dup) {
+      const ok3 = confirm(
+        `⚠ ${emp ? emp.name : ''} 在 ${date} 已有一筆計時記錄：\n` +
+        `  ${dup.start}-${dup.end} (${dup.hours} 小時) ${dup.workContent || ''}\n\n` +
+        `按「確定」→ 仍要新增（會變成兩筆）\n` +
+        `按「取消」→ 不新增（建議改用編輯既有記錄）`
+      );
+      if (!ok3) return;
+    }
+  }
   const original = editingDailyId ? dailyEntries.find(x => x._id === editingDailyId) : null;
   const entry = {
     _id: editingDailyId || ('d_' + Date.now()),
@@ -3753,11 +3767,28 @@ function batchSaveAttendance() {
 
   const checkedDates = [...document.querySelectorAll('.batch-day-chk:checked:not(:disabled)')].map(c => c.dataset.date);
   if (checkedDates.length === 0) { alert('請勾選要新增的日期'); return; }
-  if (!confirm(`將為 ${emp.name} 批次新增 ${checkedDates.length} 天出勤：\n  ${start}-${end}（休息 ${brk} 分 = ${hours} 小時/天）\n\n繼續？`)) return;
+
+  // ★ 重複檢查：找出已經有計時記錄的日期
+  const dupDates = checkedDates.filter(date =>
+    dailyEntries.some(d => d.empId === empId && d.date === date && d.type === 'hour')
+  );
+  let datesToAdd = checkedDates;
+  if (dupDates.length > 0) {
+    const ok = confirm(
+      `⚠ 偵測到以下 ${dupDates.length} 個日期已有計時記錄：\n${dupDates.join(', ')}\n\n` +
+      `按「確定」→ 跳過已有記錄的日期，只新增剩下的 ${checkedDates.length - dupDates.length} 天\n` +
+      `按「取消」→ 完全取消批次新增`
+    );
+    if (!ok) return;
+    datesToAdd = checkedDates.filter(d => !dupDates.includes(d));
+    if (datesToAdd.length === 0) { alert('沒有要新增的日期'); return; }
+  }
+
+  if (!confirm(`將為 ${emp.name} 批次新增 ${datesToAdd.length} 天出勤：\n  ${start}-${end}（休息 ${brk} 分 = ${hours} 小時/天）\n\n繼續？`)) return;
 
   let baseId = Date.now();
   let count = 0;
-  checkedDates.forEach(date => {
+  datesToAdd.forEach(date => {
     const entry = {
       _id: 'd_' + (baseId + count),
       date, empId, empName: emp.name, empNo: emp.id,
@@ -3829,6 +3860,17 @@ function quickAddAttendance() {
   if (hours > 16) {
     const ok2 = confirm(`⚠ 計算出 ${hours} 小時工時，這超出常規工作日範圍。\n\n上班：${start}\n下班：${end}\n\n是否確認儲存？`);
     if (!ok2) return;
+  }
+  // ★ 第三道防線：同日同員工已有計時記錄 → 提醒
+  const dupOnSameDay = dailyEntries.find(d => d.empId === empId && d.date === date && d.type === 'hour');
+  if (dupOnSameDay) {
+    const ok3 = confirm(
+      `⚠ ${emp.name} 在 ${date} 已有一筆計時記錄：\n` +
+      `  ${dupOnSameDay.start}-${dupOnSameDay.end} (${dupOnSameDay.hours} 小時) ${dupOnSameDay.workContent || ''}\n\n` +
+      `按「確定」→ 仍要新增（會變成兩筆）\n` +
+      `按「取消」→ 不新增（建議改用編輯既有記錄）`
+    );
+    if (!ok3) return;
   }
   const rate = emp.hourlyRate || Math.round((emp.baseSalary || 0) / 30 / 8);
 
@@ -4922,6 +4964,46 @@ function removeDuplicateRecords() {
   refreshRecords();
   updateSummary();
   alert(`✅ 清理完成：\n  保留 ${keepers.length} 筆\n  刪除 ${toDelete.length} 筆重複`);
+}
+
+// 清理重複的每日計時記錄（同員工同日同時段視為重複）
+function removeDuplicateDailyEntries() {
+  // 只檢查 hour type；依 empId + date + start + end 分組
+  const groups = {};
+  dailyEntries.forEach(d => {
+    if (d.type !== 'hour') return;
+    const key = `${d.empId}|${d.date}|${d.start || ''}|${d.end || ''}`;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(d);
+  });
+  let dupCount = 0;
+  Object.values(groups).forEach(arr => { if (arr.length > 1) dupCount += arr.length - 1; });
+  if (dupCount === 0) { alert('✅ 沒有重複記錄'); return; }
+  if (!confirm(`發現 ${dupCount} 筆重複計時記錄（同員工同日同時段）。\n\n將保留每組「工作內容最完整」或「最新」的 1 筆，刪除其餘。\n\n按「確定」繼續？此動作無法復原，建議先備份 JSON！`)) return;
+
+  const toDeleteIds = [];
+  const keepIds = new Set();
+  Object.values(groups).forEach(arr => {
+    if (arr.length === 1) { keepIds.add(arr[0]._id); return; }
+    // 優先保留 workContent 非空 > 最新
+    arr.sort((a, b) => {
+      const hasWcA = a.workContent ? 1 : 0;
+      const hasWcB = b.workContent ? 1 : 0;
+      if (hasWcA !== hasWcB) return hasWcB - hasWcA;
+      const ta = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const tb = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      return tb - ta;
+    });
+    keepIds.add(arr[0]._id);
+    arr.slice(1).forEach(d => toDeleteIds.push(d._id));
+  });
+
+  dailyEntries = dailyEntries.filter(d => d.type !== 'hour' || keepIds.has(d._id));
+  save(STORE.daily, dailyEntries);
+  toDeleteIds.forEach(id => cloudDelete('daily', id));
+  refreshDailyEntries();
+  refreshMonthlyDaily();
+  alert(`✅ 清理完成：刪除 ${toDeleteIds.length} 筆重複`);
 }
 
 async function clearAllData() {
