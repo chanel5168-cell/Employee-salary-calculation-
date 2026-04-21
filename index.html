@@ -2530,7 +2530,9 @@ function refreshMonthlyDaily() {
           info = `論件 · ${it.name || ''} × ${it.qty || 0} = ${formatMoney(it.subtotal || 0)}`;
         } else {
           const att = it.attType && it.attType !== 'normal' ? ` [${it.attType}]` : '';
-          info = `計時${att} · ${it.start || ''}~${it.end || ''} · ${it.hours || 0}小時 · ${it.workContent || ''} = ${formatMoney(it.subtotal || 0)}`;
+          const attOnlyBadge = it.attendanceOnly ? ' <span style="background:#e0e7ff; color:#4338ca; padding:1px 6px; border-radius:8px; font-size:10px;">📍 僅打卡</span>' : '';
+          const amountText = it.attendanceOnly ? '底薪含' : formatMoney(it.subtotal || 0);
+          info = `計時${att} · ${it.start || ''}~${it.end || ''} · ${it.hours || 0}小時 · ${it.workContent || ''} = ${amountText}${attOnlyBadge}`;
         }
         return `
           <tr style="background:#f8f9fa; font-size:12px;">
@@ -3143,12 +3145,13 @@ function refreshLeaveList() {
   const countEl = document.getElementById('leaveCount');
   if (!box) return;
   const baseDate = document.getElementById('leaveBaseDate').value;
-  countEl.textContent = employees.length;
-  if (employees.length === 0) {
-    box.innerHTML = '<div class="empty">尚無員工，請先到員工頁籤新增</div>';
+  const visible = getVisibleEmployees();
+  countEl.textContent = visible.length;
+  if (visible.length === 0) {
+    box.innerHTML = '<div class="empty">' + (currentUser && !isAdmin() ? '您的權限範圍內沒有員工資料' : '尚無員工，請先到員工頁籤新增') + '</div>';
     return;
   }
-  box.innerHTML = employees.map(e => {
+  box.innerHTML = visible.map(e => {
     const info = calcAnnualLeave(e.hireDate, baseDate);
     const used = parseFloat(e.leaveUsed) || 0;
     const isHourly = !!e.isHourly;
@@ -4409,6 +4412,24 @@ function editSalaryRecord(id) {
   document.getElementById('calcMonth').value = r.month;
   refreshEmpDropdown();
   document.getElementById('calcEmp').value = r.empId;
+  // ★ 偵測舊資料 hourIncome 是否來自「打卡記錄」(已修正前的錯誤)
+  const emp = employees.find(x => x._id === r.empId);
+  if (emp && !emp.isHourly && (r.hourIncome || 0) > 0) {
+    const monthEntries = dailyEntries.filter(d => d.empId === r.empId && d.date.startsWith(r.month));
+    const realHourIncome = monthEntries
+      .filter(d => d.type === 'hour' && !d.attendanceOnly && (!d.attType || d.attType === 'normal' || d.attType === '加班'))
+      .reduce((a,b) => a + (b.subtotal || 0), 0);
+    if (realHourIncome === 0 && r.hourIncome > 0) {
+      const ok = confirm(
+        `⚠ 偵測到此筆月薪記錄的「計時收入」NT$ ${formatMoney(r.hourIncome)} 可能是舊版錯誤累計（月薪打卡被計算成計時）。\n\n` +
+        `按「確定」→ 自動歸零並重算（建議）\n` +
+        `按「取消」→ 保留原值不動`
+      );
+      if (ok) {
+        r.hourIncome = 0;
+      }
+    }
+  }
   document.getElementById('workDays').value = r.workDays || '';
   document.getElementById('leaveDays').value = r.leaveDays || '';
   // 載入請假明細
