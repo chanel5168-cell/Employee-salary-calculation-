@@ -1360,7 +1360,8 @@ const DEFAULT_BONUS_CATS = [
   { _id: 'bc_default_1', name: '達標獎金', defaultAmount: 0 },
   { _id: 'bc_default_2', name: '全勤獎金', defaultAmount: 0 },
   { _id: 'bc_default_3', name: '交通津貼', defaultAmount: 0 },
-  { _id: 'bc_default_4', name: '伙食津貼', defaultAmount: 0 }
+  { _id: 'bc_default_4', name: '伙食津貼', defaultAmount: 0 },
+  { _id: 'bc_default_5', name: '禮金', defaultAmount: 0 }
 ];
 let bonusCategories = load(STORE.bonusCats, DEFAULT_BONUS_CATS);
 let currentDeductItems = [];
@@ -1447,13 +1448,34 @@ const WORKSPACE_ID = 'default';
 let db = null;
 let cloudReady = false;
 let suppressSubscription = false;
-const DATA_MIGRATION_VERSION = '2026-04-21-attendance-only-v9';
+const DATA_MIGRATION_VERSION = '2026-04-22-bonus-gift-v10';
 
 function mergeDefaultCategories() {
   // 只跑一次；已跑過則略過。這樣使用者刪除的預設不會被復活
   const done = localStorage.getItem('salary_defaults_migrated');
   if (done === DATA_MIGRATION_VERSION) return;
   let changed = false;
+
+  // v10: 獎金類別「本月寄建收入/記件收入/論件收入」類的名稱統一改為「禮金」
+  let bcRenamed = false;
+  bonusCategories.forEach(c => {
+    if (!c.name) return;
+    // 符合：含「寄建」「記件收入」「論件收入」「本月*收入」
+    if (c.name.includes('寄建') || c.name.includes('記件收入') || c.name.includes('論件收入')
+        || /本月.*收入/.test(c.name)) {
+      c.name = '禮金';
+      bcRenamed = true;
+      if (cloudReady) cloudSave('bonusCats', c);
+    }
+  });
+  // 確保「禮金」類別存在（如果沒有就加）
+  if (!bonusCategories.find(c => c.name === '禮金')) {
+    const giftCat = { _id: 'bc_default_5', name: '禮金', defaultAmount: 0 };
+    bonusCategories.push(giftCat);
+    if (cloudReady) cloudSave('bonusCats', giftCat);
+    bcRenamed = true;
+  }
+  if (bcRenamed) { save(STORE.bonusCats, bonusCategories); changed = true; }
 
   // v9: 把月薪制員工的「批次新增」「正常上班」計時記錄改為「僅打卡」
   //     避免與底薪重複發放
@@ -3922,7 +3944,12 @@ function refreshLeaveList() {
           </div>
          </div>`
       : '';
-    const entitledField = `<div style="font-weight:700; color:#1e40af; font-size:18px;">${entitled}</div>${isHourly && e.dailyHours > 0 ? `<div style="font-size:10px; color:#6b7280;">≈ ${Math.round(entitled * e.dailyHours * 10) / 10} 小時</div>` : ''}`;
+    // 統一 5 格樣式：同寬度、同高度、同輸入框大小
+    const cellBase = 'padding:8px 6px; border-radius:6px; text-align:center; display:flex; flex-direction:column; gap:3px; min-height:88px; justify-content:space-between;';
+    const labelStyle = 'font-size:11px; color:#6b7280; font-weight:600;';
+    const inputStyle = 'width:100%; box-sizing:border-box; padding:4px; text-align:center; font-weight:700; font-size:17px; border:1px solid; border-radius:4px; background:white; height:30px;';
+    const valueStyle = 'font-weight:700; font-size:17px; height:30px; display:flex; align-items:center; justify-content:center;';
+    const unitStyle = 'font-size:10px; color:#6b7280;';
     return `
       <div class="employee-item" style="flex-direction:column; align-items:stretch; gap:8px;">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
@@ -3934,31 +3961,30 @@ function refreshLeaveList() {
           剩餘 = <strong style="color:#6b21a8;">去年結轉 ${carryover}</strong> + <strong style="color:#1e40af;">應有 ${entitled}</strong> − <strong style="color:#92400e;">已休 ${used}</strong> − <strong style="color:#7c2d12;">補薪 ${compensated}</strong> = <strong style="color:#059669; font-size:15px;">${remaining} 天</strong>
         </div>
         <div style="display:grid; grid-template-columns: repeat(5, 1fr); gap:6px; font-size:13px;">
-          <div style="background:#faf5ff; padding:6px; border-radius:6px; text-align:center;">
-            <div style="color:#6b7280; font-size:10px;">去年結轉</div>
-            <input type="number" value="${e.leaveCarryover || ''}" placeholder="0" min="0" step="0.5" onchange="updateEmpLeaveCarryover('${e._id}', this.value)" style="width:100%; text-align:center; font-weight:700; color:#6b21a8; font-size:16px; border:1px solid #a855f7; border-radius:4px; background:white;">
-            <div style="font-size:10px; color:#6b7280;">天 (可改)</div>
+          <div style="${cellBase} background:#faf5ff;">
+            <div style="${labelStyle}">去年結轉</div>
+            <input type="number" value="${e.leaveCarryover || ''}" placeholder="0" min="0" step="0.5" onchange="updateEmpLeaveCarryover('${e._id}', this.value)" style="${inputStyle} color:#6b21a8; border-color:#a855f7;">
+            <div style="${unitStyle}">天 (可改)</div>
           </div>
-          <div style="background:#eff6ff; padding:6px; border-radius:6px; text-align:center;">
-            <div style="color:#6b7280; font-size:10px;">應有</div>
-            ${entitledField}
-            <div style="font-size:10px; color:#6b7280;">天</div>
+          <div style="${cellBase} background:#eff6ff;">
+            <div style="${labelStyle}">應有 (勞基法)</div>
+            <div style="${valueStyle} color:#1e40af;">${entitled}</div>
+            <div style="${unitStyle}">天${isHourly && e.dailyHours > 0 ? ` ≈${Math.round(entitled * e.dailyHours * 10) / 10}h` : ''}</div>
           </div>
-          <div style="background:#fef3c7; padding:6px; border-radius:6px; text-align:center;">
-            <div style="color:#6b7280; font-size:10px;">已休${autoUsedDays > 0 ? ' (自動)' : ''}</div>
-            <input type="number" value="${used || ''}" placeholder="0" min="0" step="0.5" onchange="updateEmpLeaveUsed('${e._id}', this.value)" style="width:100%; text-align:center; font-weight:700; color:#92400e; font-size:16px; border:1px solid #f59e0b; border-radius:4px; background:white;" ${autoUsedDays > 0 ? 'readonly title="依本年度出勤明細特休自動累計，去修改出勤明細"' : ''}>
-            <div style="font-size:10px; color:#6b7280;">天${autoUsedHours > 0 ? ` (${autoUsedHours}h)` : ''}</div>
+          <div style="${cellBase} background:#fef3c7;">
+            <div style="${labelStyle}">已休${autoUsedDays > 0 ? ' 🔗自動' : ''}</div>
+            <input type="number" value="${used || ''}" placeholder="0" min="0" step="0.5" onchange="updateEmpLeaveUsed('${e._id}', this.value)" style="${inputStyle} color:#92400e; border-color:#f59e0b;" ${autoUsedDays > 0 ? 'readonly title="依本年度出勤明細特休記錄自動累計"' : ''}>
+            <div style="${unitStyle}">天${autoUsedHours > 0 ? ` (${autoUsedHours}h)` : ''}</div>
           </div>
-          <div style="background:#fff7ed; padding:6px; border-radius:6px; text-align:center;">
-            <div style="color:#6b7280; font-size:10px;">補薪折算${autoCompensated > 0 ? ` (自動 ${autoCompensated})` : ''}</div>
-            <div style="font-weight:700; color:#7c2d12; font-size:16px;">${compensated}</div>
-            <input type="number" value="${e.leaveCompensated || ''}" placeholder="手動+" min="0" step="0.5" onchange="updateEmpLeaveCompensated('${e._id}', this.value)" style="width:100%; text-align:center; font-size:11px; border:1px solid #ea580c; border-radius:4px; background:white; margin-top:2px;" title="手動追加的補薪天數（系統已自動累計月薪記錄的特休折算）">
-            <div style="font-size:10px; color:#6b7280;">天</div>
+          <div style="${cellBase} background:#fff7ed;">
+            <div style="${labelStyle}">補薪折算${autoCompensated > 0 ? ` 🔗${autoCompensated}` : ''}</div>
+            <input type="number" value="${e.leaveCompensated || ''}" placeholder="手動追加" min="0" step="0.5" onchange="updateEmpLeaveCompensated('${e._id}', this.value)" style="${inputStyle} color:#7c2d12; border-color:#ea580c;" title="手動追加補薪天數（系統已自動累計月薪記錄）">
+            <div style="${unitStyle}">天 (合計 ${compensated})</div>
           </div>
-          <div style="background:#f0fdf4; padding:6px; border-radius:6px; text-align:center;">
-            <div style="color:#6b7280; font-size:10px;">剩餘</div>
-            <div style="font-weight:700; color:${remaining > 0 ? '#059669' : '#dc2626'}; font-size:18px;">${remaining}</div>
-            <div style="font-size:10px; color:#6b7280;">天</div>
+          <div style="${cellBase} background:#f0fdf4;">
+            <div style="${labelStyle}">剩餘</div>
+            <div style="${valueStyle} color:${remaining > 0 ? '#059669' : '#dc2626'};">${remaining}</div>
+            <div style="${unitStyle}">天</div>
           </div>
         </div>
         ${compDetailHtml}
@@ -6304,27 +6330,105 @@ async function exportProducts() {
     alert('匯出套件未載入，請檢查網路'); return;
   }
 
-  // 建立 Excel
-  const head = ['序號','品名','預設單價 NT$','有照片','照片檔名'];
+  // 選要統計的月份（預設當月）
+  const defMonth = (typeof productStatMonth !== 'undefined' && productStatMonth)
+    || (document.getElementById('calcMonth') || {}).value
+    || new Date().toISOString().slice(0, 7);
+  const month = prompt(`匯出哪個月份的生產統計？（格式 YYYY-MM；留空 = 不含統計）`, defMonth);
+  const hasStats = month && /^\d{4}-\d{2}$/.test(month);
+
+  // 統計每個產品當月的生產數量
+  const productStats = {};
+  if (hasStats) {
+    dailyEntries.forEach(d => {
+      if (d.type !== 'piece' || !d.date || !d.date.startsWith(month) || !d.name) return;
+      if (!productStats[d.name]) productStats[d.name] = { qty: 0, amount: 0, daysSet: new Set() };
+      productStats[d.name].qty += d.qty || 0;
+      productStats[d.name].amount += d.subtotal || 0;
+      productStats[d.name].daysSet.add(d.date);
+    });
+  }
+
+  // 建立 Excel - 產品清單（含月度統計）
+  const head = hasStats
+    ? ['序號', '品名', '預設單價 NT$', `${month} 生產數量`, `${month} 生產金額`, `${month} 生產天數`, '有照片', '照片檔名']
+    : ['序號', '品名', '預設單價 NT$', '有照片', '照片檔名'];
   const rows = [head];
   products.forEach((p, i) => {
     const hasPhoto = !!p.photo;
     const safe = (p.name || '').replace(/[\\/:*?"<>|]/g, '_');
-    rows.push([
-      i + 1,
-      p.name || '',
-      p.defaultPrice || 0,
-      hasPhoto ? '是' : '否',
-      hasPhoto ? `photos/${safe}.jpg` : ''
-    ]);
+    const st = productStats[p.name];
+    if (hasStats) {
+      rows.push([
+        i + 1,
+        p.name || '',
+        p.defaultPrice || 0,
+        st ? st.qty : 0,
+        st ? st.amount : 0,
+        st ? st.daysSet.size : 0,
+        hasPhoto ? '是' : '否',
+        hasPhoto ? `photos/${safe}.jpg` : ''
+      ]);
+    } else {
+      rows.push([
+        i + 1, p.name || '', p.defaultPrice || 0,
+        hasPhoto ? '是' : '否',
+        hasPhoto ? `photos/${safe}.jpg` : ''
+      ]);
+    }
   });
   rows.push([]);
-  rows.push(['', '總計產品數', products.length, '', '']);
+  if (hasStats) {
+    const totalQty = Object.values(productStats).reduce((a, s) => a + s.qty, 0);
+    const totalAmt = Object.values(productStats).reduce((a, s) => a + s.amount, 0);
+    rows.push(['', `【${month} 總計】`, '', totalQty, totalAmt, '', '', '']);
+  } else {
+    rows.push(['', '總計產品數', products.length, '', '']);
+  }
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{wch:6},{wch:25},{wch:14},{wch:10},{wch:30}];
+  ws['!cols'] = hasStats
+    ? [{wch:6},{wch:25},{wch:12},{wch:14},{wch:14},{wch:12},{wch:8},{wch:30}]
+    : [{wch:6},{wch:25},{wch:14},{wch:10},{wch:30}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '產品清單');
+
+  // 若有選月份 → 加一張「每日生產明細」工作表
+  if (hasStats) {
+    const [y, mm] = month.split('-').map(Number);
+    const daysInMonth = new Date(y, mm, 0).getDate();
+    // 依產品 × 日期統計
+    const byProdDate = {};
+    dailyEntries.forEach(d => {
+      if (d.type !== 'piece' || !d.date || !d.date.startsWith(month) || !d.name) return;
+      const k = d.name + '|' + d.date;
+      if (!byProdDate[k]) byProdDate[k] = { name: d.name, date: d.date, qty: 0, amount: 0 };
+      byProdDate[k].qty += d.qty || 0;
+      byProdDate[k].amount += d.subtotal || 0;
+    });
+
+    // 建表：列=產品，欄=日期
+    const dayHead = ['品名'];
+    for (let d = 1; d <= daysInMonth; d++) dayHead.push(String(d));
+    dayHead.push('月合計');
+    const dailyRows = [dayHead];
+    products.forEach(p => {
+      const row = [p.name];
+      let total = 0;
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = `${month}-${String(d).padStart(2, '0')}`;
+        const k = p.name + '|' + date;
+        const q = byProdDate[k] ? byProdDate[k].qty : 0;
+        row.push(q || '');
+        total += q;
+      }
+      row.push(total);
+      dailyRows.push(row);
+    });
+    const wsD = XLSX.utils.aoa_to_sheet(dailyRows);
+    wsD['!cols'] = [{wch:20}, ...Array(daysInMonth).fill({wch:5}), {wch:10}];
+    XLSX.utils.book_append_sheet(wb, wsD, `${month} 每日生產`);
+  }
 
   // 若沒有任何照片 → 只下載 Excel
   const hasAnyPhoto = products.some(p => p.photo);
