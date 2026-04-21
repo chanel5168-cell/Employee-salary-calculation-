@@ -225,10 +225,46 @@
 </style>
 </head>
 <body>
-<div class="container">
+
+<!-- 登入對話框 -->
+<div id="loginModal" style="position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9999; display:flex; align-items:center; justify-content:center; padding:16px;">
+  <div style="background:#fff; border-radius:12px; padding:24px; max-width:400px; width:100%; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+    <div style="text-align:center; margin-bottom:16px;">
+      <div style="font-size:32px; margin-bottom:8px;">🔐</div>
+      <h2 style="margin:0; color:#06C755;">員工薪資計算系統</h2>
+      <div style="color:#6b7280; font-size:13px; margin-top:4px;">請登入以使用系統</div>
+    </div>
+    <div class="form-group">
+      <label>帳號</label>
+      <input type="text" id="loginUsername" placeholder="admin 或自訂帳號" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>密碼</label>
+      <input type="password" id="loginPassword" placeholder="密碼" autocomplete="current-password" onkeydown="if(event.key==='Enter') doLogin()">
+    </div>
+    <div id="loginError" style="color:#ef4444; font-size:13px; min-height:20px; margin-bottom:8px;"></div>
+    <button class="btn btn-primary btn-block" onclick="doLogin()" style="font-size:16px;">登入</button>
+    <div style="margin-top:12px; padding:10px; background:#f3f4f6; border-radius:6px; font-size:12px; color:#374151; line-height:1.6;">
+      💡 內建管理者帳號：<strong>admin</strong><br>
+      密碼由管理者自行設定（初始為系統密碼）。<br>
+      其他使用者由管理者在「設定 → 使用者管理」建立。
+    </div>
+  </div>
+</div>
+
+<!-- 限權樣式 -->
+<style>
+  /* 員工角色：隱藏所有新增/刪除/編輯等操作 */
+  body.role-employee .hide-for-employee { display:none !important; }
+  /* 廠別主管也不能編輯員工基本資料 */
+  body.role-factory .hide-for-factory { display:none !important; }
+</style>
+
+<div class="container" id="appRoot" style="display:none;">
   <header>
     <h1>員工薪資計算系統</h1>
     <div class="user-info" id="userInfo">LINE LIFF 版 · 點選下方頁籤開始</div>
+    <div id="userInfoBar" style="background:rgba(255,255,255,0.15); padding:6px 10px; border-radius:6px; margin-top:6px; font-size:13px; display:none;"></div>
     <div id="syncStatus" style="font-size:11px; margin-top:6px; opacity:0.9;">☁ 初始化中…</div>
   </header>
 
@@ -910,29 +946,43 @@
       <div id="quickAttResult" style="display:none; margin-top:8px; padding:8px; background:#f0fdf4; border-radius:6px; font-size:12px;"></div>
     </div>
 
-    <!-- 批次新增整月出勤 (月薪制常用) -->
+    <!-- 批次新增整月出勤 (月薪/時薪皆可) -->
     <div class="card">
-      <h3>📋 批次新增整月出勤 (月薪制常用)</h3>
-      <div style="padding:8px; background:#fef3c7; border-radius:6px; font-size:12px; color:#92400e; margin-bottom:10px;">
-        適合固定上下班時間的月薪制員工 — 設定預設時間後，勾選有上班的日期一次建立。已有記錄的日期會自動停用勾選。
+      <h3>📋 批次新增整月出勤</h3>
+      <div style="padding:8px; background:#fef3c7; border-radius:6px; font-size:12px; color:#92400e; margin-bottom:10px; line-height:1.6;">
+        適合固定上下班時間的員工 — 設定預設時間後勾選日期一次建立。<br>
+        • <strong>月薪制</strong>：批次記錄會標為「僅打卡」，不會與底薪重複計算。<br>
+        • <strong>時薪制</strong>：批次記錄會用員工的時薪自動算出當日工資，可直接帶入計時收入。<br>
+        已有記錄的日期會自動停用勾選。
       </div>
+
+      <!-- 常用時段快速預設 -->
+      <div style="margin-bottom:8px; font-size:12px; color:#374151;">
+        快速套用：
+        <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('full')" style="padding:3px 8px; font-size:11px;">全天 08-17</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('morning')" style="padding:3px 8px; font-size:11px;">上午 08-12</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('afternoon')" style="padding:3px 8px; font-size:11px;">下午 13-17</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('3h_morning')" style="padding:3px 8px; font-size:11px;">3 小時 09-12</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('3h_afternoon')" style="padding:3px 8px; font-size:11px;">3 小時 14-17</button>
+      </div>
+
       <div class="form-row">
         <div class="form-group">
           <label>上班時間</label>
-          <input type="text" id="batchStart" value="08:00" placeholder="HH:MM" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this)">
+          <input type="text" id="batchStart" value="08:00" placeholder="HH:MM" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this); updateBatchPreview()">
         </div>
         <div class="form-group">
           <label>下班時間</label>
-          <input type="text" id="batchEnd" value="17:00" placeholder="HH:MM" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this)">
+          <input type="text" id="batchEnd" value="17:00" placeholder="HH:MM" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this); updateBatchPreview()">
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
           <label>休息 (分鐘)</label>
           <div style="display:flex; gap:4px;">
-            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('batchBreak').value=0" style="padding:4px 8px; font-size:11px;">無</button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('batchBreak').value=60" style="padding:4px 8px; font-size:11px;">1小時</button>
-            <input type="number" id="batchBreak" placeholder="分" value="60" min="0" step="5" style="flex:1;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('batchBreak').value=0; updateBatchPreview()" style="padding:4px 8px; font-size:11px;">無</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('batchBreak').value=60; updateBatchPreview()" style="padding:4px 8px; font-size:11px;">1小時</button>
+            <input type="number" id="batchBreak" placeholder="分" value="60" min="0" step="5" style="flex:1;" oninput="updateBatchPreview()">
           </div>
         </div>
         <div class="form-group">
@@ -942,6 +992,10 @@
           </select>
         </div>
       </div>
+
+      <!-- 預覽：每天工時與金額 -->
+      <div id="batchPreviewBox" style="padding:8px 10px; background:#eff6ff; border-left:3px solid #3b82f6; border-radius:4px; font-size:12px; color:#1e40af; margin-bottom:10px; display:none;"></div>
+
       <div style="display:flex; gap:6px; margin-bottom:8px;">
         <button type="button" class="btn btn-secondary btn-sm" onclick="batchCheckAll('weekday')" style="flex:1; font-size:12px;">☑ 全選平日</button>
         <button type="button" class="btn btn-secondary btn-sm" onclick="batchCheckAll('all')" style="flex:1; font-size:12px;">☑ 全選</button>
@@ -997,15 +1051,16 @@
       </div>
       <div class="btn-group">
         <button class="btn btn-secondary" onclick="backupData()">備份 JSON</button>
-        <button class="btn btn-secondary" onclick="document.getElementById('restoreFile').click()">還原備份</button>
-        <button class="btn btn-danger" onclick="clearAllData()">清除全部</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('restoreFile').click()">🔐 還原備份</button>
+        <button class="btn btn-danger" onclick="clearAllData()">🔐 清除全部</button>
       </div>
       <button class="btn btn-secondary btn-block" onclick="removeDuplicateRecords()" style="margin-top:8px;">🧹 清理重複的月薪記錄（同員工同月）</button>
       <button class="btn btn-secondary btn-block" onclick="removeDuplicateDailyEntries()" style="margin-top:8px;">🧹 清理重複的每日計時記錄（同員工同日同時段）</button>
-      <button class="btn btn-danger btn-block" onclick="wipeCloudOnly()" style="margin-top:8px; background:#c92a2a;">☁ 強制重設雲端資料（清除全部後仍殘留時使用）</button>
+      <button class="btn btn-danger btn-block" onclick="wipeCloudOnly()" style="margin-top:8px; background:#c92a2a;">🔐 ☁ 強制重設雲端資料（清除全部後仍殘留時使用）</button>
       <div style="padding:8px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; font-size:12px; color:#664d03; margin-top:6px;">
         💡 若按「清除全部」後，舊的每日記錄又自動跑回來，代表雲端還保留資料。<br>
-        請按上方「☁ 強制重設雲端資料」把 Firestore 也一併清空。
+        請按上方「☁ 強制重設雲端資料」把 Firestore 也一併清空。<br>
+        🔐 標示的按鈕需要管理者密碼（驗證後 10 分鐘內不再重問）。
       </div>
       <input type="file" id="restoreFile" style="display:none" accept=".json" onchange="restoreData(event)">
     </div>
@@ -1061,6 +1116,56 @@
 
   <!-- 設定 -->
   <div class="panel" id="panel-setup">
+    <!-- 使用者管理（admin 專用）-->
+    <div class="card" id="userManagerCard" style="display:none;">
+      <h3>👥 使用者管理</h3>
+      <div style="padding:8px; background:#eff6ff; border-radius:6px; font-size:12px; color:#1e40af; margin-bottom:10px; line-height:1.6;">
+        💡 為廠別主管或員工建立帳號，控制可看到的資料範圍：<br>
+        • <strong>管理者</strong>：可看所有資料、編輯員工/薪資<br>
+        • <strong>廠別主管</strong>：只看指定廠別的員工與薪資（可編輯）<br>
+        • <strong>員工</strong>：只看自己的薪資與出勤（唯讀）
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>帳號 *</label>
+          <input type="text" id="newUserUsername" placeholder="例: mary">
+        </div>
+        <div class="form-group">
+          <label>密碼 *</label>
+          <input type="text" id="newUserPassword" placeholder="設定密碼">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>姓名</label>
+          <input type="text" id="newUserDisplayName" placeholder="顯示名稱">
+        </div>
+        <div class="form-group">
+          <label>角色 *</label>
+          <select id="newUserRole" onchange="onUserRoleChange()">
+            <option value="factory">廠別主管</option>
+            <option value="employee">員工 (唯讀)</option>
+            <option value="admin">管理者</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" id="newUserWorkplaceRow">
+        <label>限定廠別 *</label>
+        <select id="newUserWorkplace"><option value="">-- 請選擇 --</option></select>
+      </div>
+      <div class="form-group" id="newUserEmpRow" style="display:none;">
+        <label>對應員工 *</label>
+        <select id="newUserEmp"><option value="">-- 請選擇 --</option></select>
+      </div>
+      <button class="btn btn-primary btn-block" onclick="addUser()">新增使用者</button>
+
+      <div style="margin-top:16px;">
+        <h4 style="margin:0 0 8px 0;">使用者清單</h4>
+        <div id="userListBox"><div style="text-align:center; padding:12px; color:#9ca3af; font-size:12px;">尚未建立使用者</div></div>
+      </div>
+    </div>
+
     <!-- LINE LIFF 設定（隱藏，管理者要用可以按「顯示 LIFF 設定」）-->
     <div style="text-align:right; margin-bottom:8px;">
       <button type="button" onclick="toggleLiffSettings()" style="background:none; border:1px solid #d1d5db; color:#6b7280; padding:4px 10px; border-radius:8px; font-size:11px; cursor:pointer;">🔧 管理者設定</button>
@@ -1133,7 +1238,9 @@ const STORE = {
   workplaces: 'salary_workplaces',
   holidays: 'salary_holidays',
   liffId: 'salary_liff_id',
-  rates: 'salary_rates'
+  rates: 'salary_rates',
+  users: 'salary_users',
+  currentUserId: 'salary_current_user_id'
 };
 
 function load(key, def) {
@@ -1146,6 +1253,8 @@ let employees = load(STORE.employees, []);
 let records = load(STORE.records, []);
 let dailyEntries = load(STORE.daily, []);
 let products = load(STORE.products, []);
+let users = load(STORE.users, []);
+let currentUser = null; // 登入後的使用者物件
 const DEFAULT_DEDUCT_CATS = [
   { _id: 'dc_default_1', name: '借支', defaultAmount: 0 },
   { _id: 'dc_default_2', name: '水電', defaultAmount: 0 },
@@ -1247,13 +1356,35 @@ const WORKSPACE_ID = 'default';
 let db = null;
 let cloudReady = false;
 let suppressSubscription = false;
-const DATA_MIGRATION_VERSION = '2026-04-20-cats-v8-semi-product-rename';
+const DATA_MIGRATION_VERSION = '2026-04-21-attendance-only-v9';
 
 function mergeDefaultCategories() {
   // 只跑一次；已跑過則略過。這樣使用者刪除的預設不會被復活
   const done = localStorage.getItem('salary_defaults_migrated');
   if (done === DATA_MIGRATION_VERSION) return;
   let changed = false;
+
+  // v9: 把月薪制員工的「批次新增」「正常上班」計時記錄改為「僅打卡」
+  //     避免與底薪重複發放
+  let deChanged = false;
+  dailyEntries.forEach(d => {
+    if (d.type !== 'hour') return;
+    if (d.attendanceOnly !== undefined) return; // 已有標記
+    const emp = employees.find(e => e._id === d.empId);
+    if (!emp) return;
+    const isMonthly = !emp.isHourly;
+    const isNormalAtt = !d.attType || d.attType === 'normal';
+    if (isMonthly && isNormalAtt && (d.note === '批次新增' || d.subtotal > 0)) {
+      d.attendanceOnly = true;
+      d.rate = 0;
+      d.subtotal = 0;
+      d.source = d.source || 'batch';
+      d.note = (d.note || '') + '（月薪僅打卡，不計薪）';
+      deChanged = true;
+      if (cloudReady) cloudSave('daily', d);
+    }
+  });
+  if (deChanged) { save(STORE.daily, dailyEntries); changed = true; }
 
   // v5+v8: 把舊的「打樣」「半製品製作」全部統一為「半成品加工」
   const renameMap = { '打樣': '半成品加工', '半製品製作': '半成品加工' };
@@ -1462,6 +1593,13 @@ function subscribeAll() {
     if (pm && pm.style.display === 'block') refreshProductManagerList();
   });
 
+  col('users').onSnapshot(snap => {
+    if (suppressSubscription) return;
+    users = snap.docs.map(d => d.data());
+    save(STORE.users, users);
+    refreshUserList();
+  });
+
   col('deductCats').onSnapshot(snap => {
     if (snap.docs.length > 0) {
       deductCategories = snap.docs.map(d => d.data());
@@ -1635,12 +1773,13 @@ document.querySelectorAll('.tab').forEach(t => {
 // ========= 員工管理 =========
 function refreshEmployeeList() {
   const box = document.getElementById('employeeList');
-  document.getElementById('empCount').textContent = employees.length;
-  if (employees.length === 0) {
-    box.innerHTML = '<div class="empty">尚無員工資料，請新增</div>';
+  const visible = getVisibleEmployees();
+  document.getElementById('empCount').textContent = visible.length;
+  if (visible.length === 0) {
+    box.innerHTML = '<div class="empty">' + (currentUser && !isAdmin() ? '您的權限範圍內沒有員工資料' : '尚無員工資料，請新增') + '</div>';
     return;
   }
-  box.innerHTML = employees.map(e => {
+  box.innerHTML = visible.map(e => {
     // 薪資顯示：時薪制凸顯時薪、月薪制凸顯月薪
     const shiftBadge = e.isShift ? ' <span class="badge" style="background:#ede9fe; color:#5b21b6;">排班制</span>' : '';
     const salaryInfo = e.isHourly
@@ -2118,7 +2257,7 @@ function refreshDailyEntries() {
     return;
   }
 
-  let list = dailyEntries.filter(d => d.date === date);
+  let list = getVisibleDailyEntries().filter(d => d.date === date);
   if (empId) list = list.filter(d => d.empId === empId);
 
   document.getElementById('dailyEntryCount').textContent = list.length;
@@ -2341,7 +2480,7 @@ function refreshMonthlyDaily() {
     return;
   }
 
-  let list = dailyEntries.filter(d => d.date.startsWith(month));
+  let list = getVisibleDailyEntries().filter(d => d.date.startsWith(month));
   if (empId) list = list.filter(d => d.empId === empId);
 
   if (list.length === 0) {
@@ -3180,8 +3319,9 @@ function updateLeavePayPreview() {
 
 // ========= 薪資計算 =========
 function refreshEmpDropdown() {
+  const visible = getVisibleEmployees();
   const opts = '<option value="">-- 請選擇員工 --</option>' +
-    employees.map(e => `<option value="${e._id}">${escapeHtml(e.name)} (${escapeHtml(e.id || '無編號')})</option>`).join('');
+    visible.map(e => `<option value="${e._id}">${escapeHtml(e.name)} (${escapeHtml(e.id || '無編號')})</option>`).join('');
   const calcSel = document.getElementById('calcEmp');
   const dailySel = document.getElementById('dailyEmp');
   const dailyFilter = document.getElementById('dailyEmpFilter');
@@ -3189,7 +3329,7 @@ function refreshEmpDropdown() {
   if (dailySel) dailySel.innerHTML = opts;
   if (dailyFilter) {
     dailyFilter.innerHTML = '<option value="">全部員工</option>' +
-      employees.map(e => `<option value="${e._id}">${escapeHtml(e.name)}</option>`).join('');
+      visible.map(e => `<option value="${e._id}">${escapeHtml(e.name)}</option>`).join('');
   }
   refreshProductList();
 }
@@ -3740,6 +3880,7 @@ function renderBatchAttendance() {
     bw.innerHTML = '<option value="">-- 選填 --</option>' +
       workContents.map(w => `<option value="${escapeHtml(w.name)}">${escapeHtml(w.name)}</option>`).join('');
   }
+  updateBatchPreview();
 }
 
 function batchCheckAll(mode) {
@@ -3750,6 +3891,51 @@ function batchCheckAll(mode) {
     else if (mode === 'all') cb.checked = true;
     else cb.checked = false;
   });
+}
+
+// 套用常用時段預設
+function applyBatchPreset(preset) {
+  const presets = {
+    'full':         { start: '08:00', end: '17:00', brk: 60 },
+    'morning':      { start: '08:00', end: '12:00', brk: 0 },
+    'afternoon':    { start: '13:00', end: '17:00', brk: 0 },
+    '3h_morning':   { start: '09:00', end: '12:00', brk: 0 },
+    '3h_afternoon': { start: '14:00', end: '17:00', brk: 0 }
+  };
+  const p = presets[preset];
+  if (!p) return;
+  document.getElementById('batchStart').value = p.start;
+  document.getElementById('batchEnd').value = p.end;
+  document.getElementById('batchBreak').value = p.brk;
+  updateBatchPreview();
+}
+
+// 預覽：當日工時 + 金額（時薪制顯示單日工資；月薪制顯示「僅打卡」）
+function updateBatchPreview() {
+  const box = document.getElementById('batchPreviewBox');
+  if (!box) return;
+  const empId = document.getElementById('calcEmp').value;
+  const emp = empId ? employees.find(e => e._id === empId) : null;
+  const start = document.getElementById('batchStart').value;
+  const end = document.getElementById('batchEnd').value;
+  const brk = parseFloat(document.getElementById('batchBreak').value) || 0;
+  if (!start || !end) { box.style.display = 'none'; return; }
+  const hours = calcHours(start, end, brk);
+  if (hours <= 0) { box.style.display = 'none'; return; }
+
+  if (!emp) {
+    box.innerHTML = `📐 每天工時：<strong>${hours} 小時</strong>（${start}-${end}，扣休息 ${brk} 分）`;
+    box.style.display = 'block';
+    return;
+  }
+  if (emp.isHourly) {
+    const rate = emp.hourlyRate || 0;
+    const daily = Math.round(hours * rate);
+    box.innerHTML = `📐 每天工時：<strong>${hours} 小時</strong> × 時薪 NT$ ${formatMoney(rate)} = <strong style="color:#059669;">NT$ ${formatMoney(daily)} / 天</strong>`;
+  } else {
+    box.innerHTML = `📐 每天工時：<strong>${hours} 小時</strong>（${emp.name} 為月薪制 → 批次記錄會標為「僅打卡」，不重複計薪）`;
+  }
+  box.style.display = 'block';
 }
 
 function batchSaveAttendance() {
@@ -3786,21 +3972,27 @@ function batchSaveAttendance() {
 
   if (!confirm(`將為 ${emp.name} 批次新增 ${datesToAdd.length} 天出勤：\n  ${start}-${end}（休息 ${brk} 分 = ${hours} 小時/天）\n\n繼續？`)) return;
 
+  // ★ 月薪制員工的「正常上班」批次出勤 → 標記為「僅打卡」
+  //   不算工資，避免與底薪重複。加班除外（加班費另計）。
+  const isMonthly = !emp.isHourly;
   let baseId = Date.now();
   let count = 0;
   datesToAdd.forEach(date => {
+    const attendanceOnly = isMonthly; // 月薪制 → 僅打卡
     const entry = {
       _id: 'd_' + (baseId + count),
       date, empId, empName: emp.name, empNo: emp.id,
       type: 'hour',
       start, end, breakMin: brk,
       hours: Math.round(hours * 100) / 100,
-      rate,
-      subtotal: Math.round(hours * rate * 100) / 100,
+      rate: attendanceOnly ? 0 : rate,
+      subtotal: attendanceOnly ? 0 : Math.round(hours * rate * 100) / 100,
       workContent: work,
       attType: 'normal',
       lateMinutes: 0,
-      note: '批次新增',
+      attendanceOnly, // ★ 月薪制打卡用
+      source: 'batch', // 來源: 批次新增
+      note: '批次新增' + (attendanceOnly ? '（月薪僅打卡，不計薪）' : ''),
       photo: null,
       createdAt: new Date().toISOString()
     };
@@ -3875,19 +4067,24 @@ function quickAddAttendance() {
   const rate = emp.hourlyRate || Math.round((emp.baseSalary || 0) / 30 / 8);
 
   const attType = document.getElementById('quickAttType').value || 'normal';
-  const isLeave = attType !== 'normal';
+  const isLeave = attType !== 'normal' && attType !== '加班';
+  // ★ 月薪制員工「正常上班」→ 僅打卡不計薪（底薪已含）
+  const isMonthly = !emp.isHourly;
+  const attendanceOnly = isMonthly && attType === 'normal';
   const entry = {
     _id: 'd_' + Date.now(),
     date, empId, empName: emp.name, empNo: emp.id,
     type: 'hour',
     start, end, breakMin: brk,
     hours: Math.round(hours * 100) / 100,
-    rate: isLeave ? 0 : rate,
-    subtotal: isLeave ? 0 : Math.round(hours * rate * 100) / 100,
+    rate: (isLeave || attendanceOnly) ? 0 : rate,
+    subtotal: (isLeave || attendanceOnly) ? 0 : Math.round(hours * rate * 100) / 100,
     workContent: work || attType,
     attType: attType,
     lateMinutes: late,
-    note: '',
+    attendanceOnly, // ★ 月薪制打卡用（不計薪）
+    source: 'quick', // 來源: 月薪頁快速新增
+    note: attendanceOnly ? '月薪僅打卡，不計薪' : '',
     photo: null,
     createdAt: new Date().toISOString()
   };
@@ -3948,14 +4145,19 @@ function updateMonthlyDailyHint() {
   if (!empId || !month || !hint) { if (hint) hint.style.display = 'none'; return; }
   const list = dailyEntries.filter(d => d.empId === empId && d.date.startsWith(month));
   if (list.length === 0) { hint.style.display = 'none'; return; }
-  const pieceTotal = list.filter(d => d.type === 'piece').reduce((a,b) => a + b.subtotal, 0);
-  const hourTotal = list.filter(d => d.type === 'hour').reduce((a,b) => a + b.subtotal, 0);
-  const qty = list.filter(d => d.type === 'piece').reduce((a,b) => a + (b.qty || 0), 0);
-  const hrs = list.filter(d => d.type === 'hour').reduce((a,b) => a + (b.hours || 0), 0);
+  // ★ 排除「僅打卡」記錄
+  const paidList = list.filter(d => !d.attendanceOnly);
+  const attOnlyList = list.filter(d => d.attendanceOnly);
+  const pieceTotal = paidList.filter(d => d.type === 'piece').reduce((a,b) => a + (b.subtotal || 0), 0);
+  const hourTotal = paidList.filter(d => d.type === 'hour').reduce((a,b) => a + (b.subtotal || 0), 0);
+  const qty = paidList.filter(d => d.type === 'piece').reduce((a,b) => a + (b.qty || 0), 0);
+  const hrs = paidList.filter(d => d.type === 'hour').reduce((a,b) => a + (b.hours || 0), 0);
+  const attDays = attOnlyList.length;
+  const attOnlyNote = attDays > 0 ? `<br><span style="color:#6b7280; font-size:11px;">📌 另有 ${attDays} 天月薪打卡記錄（不列入計時收入，底薪已含）</span>` : '';
   document.getElementById('monthlyDailyHintContent').innerHTML = `
     論件: ${qty} 個 · NT$ <strong>${formatMoney(pieceTotal)}</strong><br>
     計時: ${hrs.toFixed(2)} 小時 · NT$ <strong>${formatMoney(hourTotal)}</strong><br>
-    合計: NT$ <strong style="color:#1e40af;">${formatMoney(pieceTotal + hourTotal)}</strong>
+    合計: NT$ <strong style="color:#1e40af;">${formatMoney(pieceTotal + hourTotal)}</strong>${attOnlyNote}
   `;
   hint.style.display = 'block';
 }
@@ -3964,17 +4166,18 @@ function importDailyIncomes() {
   const empId = document.getElementById('calcEmp').value;
   const month = document.getElementById('calcMonth').value;
   if (!empId || !month) { alert('請先選擇員工與月份'); return; }
-  const list = dailyEntries.filter(d => d.empId === empId && d.date.startsWith(month));
-  const pieceTotal = list.filter(d => d.type === 'piece').reduce((a,b) => a + b.subtotal, 0);
+  // ★ 排除「僅打卡」的月薪制出勤記錄
+  const list = dailyEntries.filter(d => d.empId === empId && d.date.startsWith(month) && !d.attendanceOnly);
+  const pieceTotal = list.filter(d => d.type === 'piece').reduce((a,b) => a + (b.subtotal || 0), 0);
   // 計時收入僅計算正常上班與加班（不含特休/請假等）
   const hourTotal = list
     .filter(d => d.type === 'hour' && (!d.attType || d.attType === 'normal' || d.attType === '加班'))
-    .reduce((a,b) => a + b.subtotal, 0);
+    .reduce((a,b) => a + (b.subtotal || 0), 0);
   document.getElementById('pieceIncome').value = pieceTotal || '';
   document.getElementById('hourIncome').value = hourTotal || '';
   // 自動執行預覽計算，讓應發金額立即更新
   calculateAndPreview();
-  alert(`✅ 已帶入並計算：\n  論件 NT$ ${formatMoney(pieceTotal)}\n  計時 NT$ ${formatMoney(hourTotal)}\n\n應發合計已更新，請往下滑看結果。`);
+  alert(`✅ 已帶入並計算：\n  論件 NT$ ${formatMoney(pieceTotal)}\n  計時 NT$ ${formatMoney(hourTotal)}\n\n應發合計已更新，請往下滑看結果。\n\n(月薪制「僅打卡」記錄已自動排除，避免與底薪重複)`);
 }
 
 function onProductSelected() {
@@ -4280,7 +4483,8 @@ function resetRecordButtons() {
 function refreshRecords() {
   const month = document.getElementById('calcMonth').value;
   const box = document.getElementById('recordList');
-  const filter = month ? records.filter(r => r.month === month) : records;
+  const baseList = getVisibleRecords();
+  const filter = month ? baseList.filter(r => r.month === month) : baseList;
   document.getElementById('recCount').textContent = filter.length;
   if (filter.length === 0) {
     box.innerHTML = '<div class="empty">尚無記錄</div>';
@@ -4830,13 +5034,14 @@ function toggleSummaryDetail(month) {
 
 function updateSummary() {
   const box = document.getElementById('summaryBox');
-  if (records.length === 0) {
+  const visRecords = getVisibleRecords();
+  if (visRecords.length === 0) {
     box.innerHTML = '<div class="empty">尚無資料</div>';
     return;
   }
-  const months = [...new Set(records.map(r => r.month))].sort();
+  const months = [...new Set(visRecords.map(r => r.month))].sort();
   const rows = months.map(m => {
-    const ms = records.filter(r => r.month === m);
+    const ms = visRecords.filter(r => r.month === m);
     const g = ms.reduce((a,b) => a + (b.gross || 0), 0);
     const n = ms.reduce((a,b) => a + (b.net || 0), 0);
     const isOpen = !!summaryExpanded[m];
@@ -4889,6 +5094,10 @@ function backupData() {
 function restoreData(e) {
   const file = e.target.files[0];
   if (!file) return;
+  if (!requireAdmin('還原備份（將覆蓋目前所有資料）')) {
+    e.target.value = ''; // 清空 file input
+    return;
+  }
   const reader = new FileReader();
   reader.onload = ev => {
     try {
@@ -5007,8 +5216,9 @@ function removeDuplicateDailyEntries() {
 }
 
 async function clearAllData() {
-  if (!confirm('確定清除所有員工與薪資記錄？此動作無法復原！')) return;
-  if (!confirm('再次確認：資料將完全清除（包含雲端 Firestore）！')) return;
+  if (!requireAdmin('清除所有員工與薪資記錄（本地 + 雲端）')) return;
+  if (!confirm('⚠ 確定清除所有員工與薪資記錄？\n此動作將同時刪除本地與雲端資料，無法復原！\n\n建議先按「備份 JSON」保留一份！')) return;
+  if (!confirm('🚨 最終確認：按下確定後，所有員工、薪資記錄、每日記錄、產品清單將全部消失！')) return;
 
   // 先記下所有要刪除的雲端文件 ID
   const empIds = employees.map(e => e._id);
@@ -5066,8 +5276,9 @@ async function clearAllData() {
 // 單獨清除雲端（在「設定」頁提供按鈕，當本地清除完雲端又同步回來時使用）
 async function wipeCloudOnly() {
   if (!cloudReady) { alert('雲端尚未連線'); return; }
+  if (!requireAdmin('強制重設雲端 Firestore（將刪除所有員工、紀錄、產品文件）')) return;
   if (!confirm('⚠ 確定要強制清除雲端所有資料嗎？\n\n（員工、薪資記錄、每日記錄、產品）\n此動作無法復原！')) return;
-  if (!confirm('再次確認：將清空 Firestore 所有文件！')) return;
+  if (!confirm('🚨 最終確認：將清空 Firestore 所有文件，本地也會同步清空！')) return;
   try {
     suppressSubscription = true;
     const collectionsToWipe = ['employees', 'records', 'daily', 'products'];
@@ -5098,13 +5309,218 @@ async function wipeCloudOnly() {
   }
 }
 
+// ========= 管理者密碼統一驗證 =========
+const ADMIN_PASSWORD = '$$$Ps880229';
+// 驗證成功後 10 分鐘內不再重問（避免連續動作一直打密碼）
+let adminAuthUntil = 0;
+function requireAdmin(reason) {
+  // 已登入且角色為 admin → 直接通過
+  if (currentUser && currentUser.role === 'admin') return true;
+  const now = Date.now();
+  if (now < adminAuthUntil) return true;
+  const pw = prompt(`🔐 需要管理者密碼\n\n${reason || '此操作需管理者權限'}\n\n請輸入密碼：`);
+  if (pw === null) return false; // 使用者按取消
+  if (pw !== ADMIN_PASSWORD) {
+    alert('❌ 密碼錯誤，操作已取消');
+    return false;
+  }
+  adminAuthUntil = now + 10 * 60 * 1000;
+  return true;
+}
+
+// ========= 使用者權限系統 =========
+// 角色: 'admin' (全部) / 'factory' (限定廠別) / 'employee' (限定自己)
+function isAdmin() { return currentUser && currentUser.role === 'admin'; }
+function isFactoryRole() { return currentUser && currentUser.role === 'factory'; }
+function isEmployeeRole() { return currentUser && currentUser.role === 'employee'; }
+
+// 過濾員工列表 — 依登入者角色限制可見範圍
+function getVisibleEmployees() {
+  if (!currentUser || isAdmin()) return employees;
+  if (isFactoryRole()) return employees.filter(e => e.workplace === currentUser.workplace);
+  if (isEmployeeRole()) return employees.filter(e => e._id === currentUser.empId);
+  return [];
+}
+function getVisibleRecords() {
+  if (!currentUser || isAdmin()) return records;
+  const visibleIds = new Set(getVisibleEmployees().map(e => e._id));
+  return records.filter(r => visibleIds.has(r.empId));
+}
+function getVisibleDailyEntries() {
+  if (!currentUser || isAdmin()) return dailyEntries;
+  const visibleIds = new Set(getVisibleEmployees().map(e => e._id));
+  return dailyEntries.filter(d => visibleIds.has(d.empId));
+}
+// 是否有編輯權限（admin/factory 可寫；employee 唯讀）
+function canEdit() {
+  if (!currentUser) return false;
+  return currentUser.role !== 'employee';
+}
+
+// 登入
+function doLogin() {
+  const username = (document.getElementById('loginUsername').value || '').trim();
+  const password = document.getElementById('loginPassword').value || '';
+  if (!username || !password) {
+    document.getElementById('loginError').textContent = '請輸入帳號與密碼';
+    return;
+  }
+  // 內建管理者：admin / $$$Ps880229
+  if (username === 'admin' && password === ADMIN_PASSWORD) {
+    currentUser = { _id: 'admin', username: 'admin', role: 'admin', displayName: '系統管理者' };
+    save(STORE.currentUserId, currentUser._id);
+    onLoginSuccess();
+    return;
+  }
+  // 一般使用者
+  const u = users.find(x => x.username === username && x.password === password);
+  if (!u) {
+    document.getElementById('loginError').textContent = '❌ 帳號或密碼錯誤';
+    return;
+  }
+  currentUser = u;
+  save(STORE.currentUserId, u._id);
+  onLoginSuccess();
+}
+
+function onLoginSuccess() {
+  document.getElementById('loginModal').style.display = 'none';
+  document.getElementById('appRoot').style.display = 'block';
+  updateUserInfoBar();
+  applyPermissionUI();
+  // 重整所有列表以套用過濾
+  refreshEmployeeList();
+  refreshEmpDropdown();
+  refreshRecords();
+  refreshDailyEntries();
+  refreshMonthlyDaily();
+  updateSummary();
+}
+
+function doLogout() {
+  if (!confirm('確定要登出？')) return;
+  currentUser = null;
+  localStorage.removeItem(STORE.currentUserId);
+  document.getElementById('loginModal').style.display = 'flex';
+  document.getElementById('appRoot').style.display = 'none';
+  document.getElementById('loginUsername').value = '';
+  document.getElementById('loginPassword').value = '';
+  document.getElementById('loginError').textContent = '';
+}
+
+function updateUserInfoBar() {
+  const bar = document.getElementById('userInfoBar');
+  if (!bar) return;
+  if (!currentUser) { bar.style.display = 'none'; return; }
+  const roleLabel = isAdmin() ? '管理者' : isFactoryRole() ? `廠別主管 (${currentUser.workplace || ''})` : `員工 (僅看自己)`;
+  bar.innerHTML = `
+    👤 <strong>${escapeHtml(currentUser.displayName || currentUser.username)}</strong>
+    <span style="color:#6b7280; font-size:12px;">[${roleLabel}]</span>
+    <button class="btn btn-secondary btn-sm" onclick="doLogout()" style="margin-left:8px; padding:2px 10px; font-size:12px;">登出</button>
+  `;
+  bar.style.display = 'block';
+}
+
+// 依角色隱藏 / 鎖定不該看到的功能
+function applyPermissionUI() {
+  // 員工角色 → 不能編輯，隱藏新增/編輯/刪除按鈕（用 CSS class）
+  document.body.classList.toggle('role-employee', isEmployeeRole());
+  document.body.classList.toggle('role-factory', isFactoryRole());
+  document.body.classList.toggle('role-admin', isAdmin());
+  // 使用者管理卡片只有 admin 看得到
+  const um = document.getElementById('userManagerCard');
+  if (um) um.style.display = isAdmin() ? 'block' : 'none';
+}
+
+// ========= 使用者管理（admin 專用）=========
+function refreshUserList() {
+  const box = document.getElementById('userListBox');
+  if (!box) return;
+  if (users.length === 0) {
+    box.innerHTML = '<div style="text-align:center; padding:12px; color:#9ca3af; font-size:12px;">尚未建立使用者（內建 admin 帳號永遠可登入）</div>';
+    return;
+  }
+  box.innerHTML = '<table><thead><tr><th>帳號</th><th>姓名</th><th>角色</th><th>限定範圍</th><th>操作</th></tr></thead><tbody>' +
+    users.map(u => {
+      const roleText = u.role === 'admin' ? '管理者' : u.role === 'factory' ? '廠別主管' : '員工';
+      const scope = u.role === 'factory' ? (u.workplace || '-') : u.role === 'employee' ? (u.empName || u.empId || '-') : '全部';
+      return `<tr>
+        <td>${escapeHtml(u.username)}</td>
+        <td>${escapeHtml(u.displayName || '')}</td>
+        <td>${roleText}</td>
+        <td>${escapeHtml(scope)}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="deleteUser('${u._id}')" style="padding:2px 8px; font-size:11px;">刪除</button></td>
+      </tr>`;
+    }).join('') + '</tbody></table>';
+}
+
+function onUserRoleChange() {
+  const role = document.getElementById('newUserRole').value;
+  document.getElementById('newUserWorkplaceRow').style.display = role === 'factory' ? 'block' : 'none';
+  document.getElementById('newUserEmpRow').style.display = role === 'employee' ? 'block' : 'none';
+  // 同步下拉選單
+  if (role === 'factory') {
+    const sel = document.getElementById('newUserWorkplace');
+    sel.innerHTML = '<option value="">-- 請選擇 --</option>' +
+      workplaces.map(w => `<option value="${escapeHtml(w.name)}">${escapeHtml(w.name)}</option>`).join('');
+  }
+  if (role === 'employee') {
+    const sel = document.getElementById('newUserEmp');
+    sel.innerHTML = '<option value="">-- 請選擇 --</option>' +
+      employees.map(e => `<option value="${e._id}">${escapeHtml(e.id || '')} ${escapeHtml(e.name)}</option>`).join('');
+  }
+}
+
+function addUser() {
+  if (!requireAdmin('新增使用者')) return;
+  const username = (document.getElementById('newUserUsername').value || '').trim();
+  const password = (document.getElementById('newUserPassword').value || '').trim();
+  const displayName = (document.getElementById('newUserDisplayName').value || '').trim();
+  const role = document.getElementById('newUserRole').value;
+  if (!username || !password) { alert('請輸入帳號與密碼'); return; }
+  if (username === 'admin') { alert('admin 為內建保留帳號'); return; }
+  if (users.some(u => u.username === username)) { alert('此帳號已存在'); return; }
+  const u = { _id: 'usr_' + Date.now(), username, password, displayName, role };
+  if (role === 'factory') {
+    u.workplace = document.getElementById('newUserWorkplace').value;
+    if (!u.workplace) { alert('請選擇廠別'); return; }
+  }
+  if (role === 'employee') {
+    u.empId = document.getElementById('newUserEmp').value;
+    if (!u.empId) { alert('請選擇對應員工'); return; }
+    const emp = employees.find(e => e._id === u.empId);
+    u.empName = emp ? emp.name : '';
+  }
+  users.push(u);
+  save(STORE.users, users);
+  cloudSave('users', u);
+  refreshUserList();
+  // 清空表單
+  document.getElementById('newUserUsername').value = '';
+  document.getElementById('newUserPassword').value = '';
+  document.getElementById('newUserDisplayName').value = '';
+  document.getElementById('newUserRole').value = 'factory';
+  onUserRoleChange();
+  alert(`✅ 已新增使用者：${username}`);
+}
+
+function deleteUser(id) {
+  if (!requireAdmin('刪除使用者')) return;
+  const u = users.find(x => x._id === id);
+  if (!u) return;
+  if (!confirm(`確定刪除使用者「${u.username}」？`)) return;
+  users = users.filter(x => x._id !== id);
+  save(STORE.users, users);
+  cloudDelete('users', id);
+  refreshUserList();
+}
+
 // ========= LIFF =========
 function toggleLiffSettings() {
   const card = document.getElementById('liffSettingsCard');
   if (!card) return;
   if (card.style.display === 'none') {
-    const pw = prompt('請輸入管理者密碼');
-    if (pw !== '$$$Ps880229') { alert('密碼錯誤'); return; }
+    if (!requireAdmin('開啟 LIFF 設定')) return;
     card.style.display = 'block';
   } else {
     card.style.display = 'none';
@@ -5195,6 +5611,19 @@ function escapeHtml(s) {
 
 // ========= 初始化 =========
 function init() {
+  // 登入狀態恢復：若有儲存的 currentUserId → 自動登入
+  const savedUserId = load(STORE.currentUserId, null);
+  if (savedUserId === 'admin') {
+    currentUser = { _id: 'admin', username: 'admin', role: 'admin', displayName: '系統管理者' };
+  } else if (savedUserId) {
+    const u = users.find(x => x._id === savedUserId);
+    if (u) currentUser = u;
+  }
+  if (currentUser) {
+    document.getElementById('loginModal').style.display = 'none';
+    document.getElementById('appRoot').style.display = 'block';
+  }
+
   // 預設當月 / 當日
   const now = new Date();
   const m = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
@@ -5248,6 +5677,14 @@ function init() {
   renderLeaveItems();
   initLiff();
   initFirebase();
+
+  // 權限系統 UI 初始化
+  if (currentUser) {
+    updateUserInfoBar();
+    applyPermissionUI();
+  }
+  refreshUserList();
+  onUserRoleChange();
 }
 
 init();
