@@ -1204,10 +1204,12 @@
     <div class="card" id="userManagerCard" style="display:none;">
       <h3>👥 使用者管理</h3>
       <div style="padding:8px; background:#eff6ff; border-radius:6px; font-size:12px; color:#1e40af; margin-bottom:10px; line-height:1.6;">
-        💡 為廠別主管或員工建立帳號，控制可看到的資料範圍：<br>
-        • <strong>管理者</strong>：可看所有資料、編輯員工/薪資<br>
-        • <strong>廠別主管</strong>：只看指定廠別的員工與薪資（可編輯）<br>
-        • <strong>員工</strong>：只看自己的薪資與出勤（唯讀）
+        💡 為總管理者、管理者、廠別主管或員工建立帳號，控制可看到的資料範圍：<br>
+        • 👑 <strong>總管理者</strong>：最高權限，可管理所有帳號包含其他管理者<br>
+        • 🔧 <strong>管理者</strong>：可看所有資料、編輯員工/薪資，但不能修改總管理者<br>
+        • 🏭 <strong>廠別主管</strong>：只看指定廠別的員工與薪資（可編輯）<br>
+        • 👤 <strong>員工</strong>：只看自己的薪資與出勤（唯讀）<br>
+        <span style="color:#dc2626;">⚠ 只有較高權限者才能建立、編輯、刪除較低權限帳號。</span>
       </div>
 
       <div class="form-row">
@@ -1228,9 +1230,10 @@
         <div class="form-group">
           <label>角色 *</label>
           <select id="newUserRole" onchange="onUserRoleChange()">
-            <option value="factory">廠別主管</option>
-            <option value="employee">員工 (唯讀)</option>
-            <option value="admin">管理者</option>
+            <option value="factory">🏭 廠別主管</option>
+            <option value="employee">👤 員工 (唯讀)</option>
+            <option value="admin">🔧 管理者</option>
+            <option value="super">👑 總管理者 (最高權限)</option>
           </select>
         </div>
       </div>
@@ -1665,6 +1668,8 @@ function subscribeAll() {
     save(STORE.records, records);
     refreshRecords();
     updateSummary();
+    // ★ 月薪記錄變動 → 特休頁補薪折算要連動
+    if (typeof refreshLeaveList === 'function') refreshLeaveList();
   });
 
   col('daily').onSnapshot(snap => {
@@ -2530,6 +2535,29 @@ function refreshDailyEntries() {
 
 // 從月薪頁的出勤明細快速編輯
 // 強制依出勤明細重算月薪欄位（會覆蓋手動值）
+// ➕ 工時稽核發現缺漏 → 自動加入扣款項目
+function addShortageDeduction(amount, hours) {
+  if (!amount || amount <= 0) return;
+  // 檢查是否已有相同項目（避免重複加）
+  const existing = currentDeductItems.find(x => x.name && x.name.startsWith('出勤不足扣薪'));
+  if (existing) {
+    if (!confirm(`已有一筆「出勤不足扣薪」NT$ ${formatMoney(existing.amount)}。\n\n要覆蓋為 NT$ ${formatMoney(amount)}（缺 ${hours}h）嗎？`)) return;
+    existing.name = `出勤不足扣薪 (缺 ${hours}h)`;
+    existing.amount = amount;
+  } else {
+    currentDeductItems.push({
+      name: `出勤不足扣薪 (缺 ${hours}h)`,
+      amount: amount
+    });
+  }
+  renderDeductItems();
+  updateDeductTotal();
+  // 自動滾到扣款明細讓使用者看到
+  const el = document.getElementById('deductItems');
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  alert(`✅ 已在「其他扣款明細」加入一筆：出勤不足扣薪 NT$ ${formatMoney(amount)}\n\n記得按「💾 儲存記錄」存檔！`);
+}
+
 function forceRefillFromAttendance(workDays, leaveDays, ot1, ot2) {
   const wd = document.getElementById('workDays');
   const ld = document.getElementById('leaveDays');
@@ -2858,9 +2886,15 @@ function refreshMonthlyDaily() {
   const selectedEmp = empId ? employees.find(e => e._id === empId) : null;
   const isMonthlyEmp = selectedEmp && !selectedEmp.isHourly && selectedEmp.baseSalary > 0;
   const dailyWage = isMonthlyEmp ? Math.round(selectedEmp.baseSalary / 30) : 0;
-  const colspan = isMonthlyEmp ? 6 : 5;
+  // ★「全部員工」模式：累計所有月薪制員工的每日日薪合計，作為每日備用金
+  const visEmps = getVisibleEmployees();
+  const allMonthlyEmps = visEmps.filter(e => !e.isHourly && e.baseSalary > 0);
+  const allMonthlyDailySum = allMonthlyEmps.reduce((a, e) => a + Math.round(e.baseSalary / 30), 0);
+  // 是否顯示「月薪日薪」欄位：選特定月薪員工，或選「全部員工」但系統裡有月薪員工
+  const showWageCol = isMonthlyEmp || (!empId && allMonthlyDailySum > 0);
+  const colspan = showWageCol ? 6 : 5;
 
-  if (list.length === 0 && !isMonthlyEmp) {
+  if (list.length === 0 && !isMonthlyEmp && !(!empId && allMonthlyDailySum > 0)) {
     box.innerHTML = '<div class="empty">此月份沒有記錄</div>';
     return;
   }
@@ -2872,10 +2906,9 @@ function refreshMonthlyDaily() {
     byDate[d.date].push(d);
   });
 
-  // ★ 月薪制：顯示整月每一天（含休假日），以正確反映月薪總額
-  //   其他：僅顯示有記錄的日期
+  // ★ 顯示整月每一天（月薪制員工 或 全部員工模式）
   let dates;
-  if (isMonthlyEmp) {
+  if (showWageCol) {
     const [y, mm] = month.split('-').map(Number);
     const daysInMonth = new Date(y, mm, 0).getDate();
     dates = [];
@@ -2892,8 +2925,10 @@ function refreshMonthlyDaily() {
     // ★ 使用統一規則：月薪制正常上班不計入計時合計
     const dayPiece = items.filter(x => isPaidPieceEntry(x)).reduce((a,b) => a + (b.subtotal || 0), 0);
     const dayHour = items.filter(x => isPaidHourEntry(x, selectedEmp)).reduce((a,b) => a + (b.subtotal || 0), 0);
-    // 月薪制：每一天（含休假日）都給日薪，才能反映月薪本俸總額
-    const dayWage = isMonthlyEmp ? dailyWage : 0;
+    // 月薪制日薪：
+    //   選特定員工 → 該員工的 dailyWage
+    //   全部員工 → 所有月薪員工日薪加總
+    const dayWage = isMonthlyEmp ? dailyWage : (!empId ? allMonthlyDailySum : 0);
     const dayTotal = dayPiece + dayHour + dayWage;
     pieceTotal += dayPiece;
     hourTotal += dayHour;
@@ -2907,7 +2942,7 @@ function refreshMonthlyDaily() {
     const isWeekend = dow === 0 || dow === 6;
     const dayBgStyle = isHol ? 'background:#fef2f2;' : isWeekend ? 'background:#fff7ed;' : '';
     const dayLabel = isHol ? ' 🎌' : (dow === 0 ? ' (日)' : dow === 6 ? ' (六)' : '');
-    const wageCol = isMonthlyEmp ? `<td class="currency">${dayWage ? formatMoney(dayWage) : '—'}</td>` : '';
+    const wageCol = showWageCol ? `<td class="currency">${dayWage ? formatMoney(dayWage) : '—'}</td>` : '';
     const hasAnyEntry = items.length > 0;
 
     // 展開狀態 → 列出該日所有明細
@@ -2967,11 +3002,15 @@ function refreshMonthlyDaily() {
   }).join('');
 
   const grand = pieceTotal + hourTotal + wageTotal;
-  const wageHead = isMonthlyEmp ? `<th class="currency">月薪日薪</th>` : '';
-  const wageFoot = isMonthlyEmp ? `<td class="currency">${formatMoney(wageTotal)}</td>` : '';
-  const wageHint = isMonthlyEmp
-    ? `<div style="margin-top:4px; font-size:11px; color:#6b7280;">💡 此員工為月薪制（月薪 NT$ ${formatMoney(selectedEmp.baseSalary)}），每一天（含例假、國定假日）都分配日薪 NT$ ${formatMoney(dailyWage)}，月合計日薪 ≈ 月薪本俸。🎌 = 國定假日、淺橘底 = 週六日。</div>`
-    : '';
+  const wageHead = showWageCol ? `<th class="currency">月薪日薪</th>` : '';
+  const wageFoot = showWageCol ? `<td class="currency">${formatMoney(wageTotal)}</td>` : '';
+  let wageHint = '';
+  if (isMonthlyEmp) {
+    wageHint = `<div style="margin-top:4px; font-size:11px; color:#6b7280;">💡 此員工為月薪制（月薪 NT$ ${formatMoney(selectedEmp.baseSalary)}），每一天（含例假、國定假日）都分配日薪 NT$ ${formatMoney(dailyWage)}，月合計日薪 ≈ 月薪本俸。🎌 = 國定假日、淺橘底 = 週六日。</div>`;
+  } else if (!empId && allMonthlyDailySum > 0) {
+    const empListText = allMonthlyEmps.map(e => `${e.name} NT$${formatMoney(Math.round(e.baseSalary / 30))}`).join('、');
+    wageHint = `<div style="margin-top:4px; font-size:11px; color:#6b7280;">💡 <strong>全部員工模式</strong>：月薪日薪欄位為所有月薪制員工每日日薪加總 NT$ ${formatMoney(allMonthlyDailySum)}（${allMonthlyEmps.length} 位月薪員工：${empListText}）。此值可作為每日備用金參考。🎌 = 國定假日、淺橘底 = 週六日。</div>`;
+  }
 
   box.innerHTML = `
     <div style="padding:8px 10px; background:#eff6ff; border-left:3px solid #3b82f6; border-radius:4px; font-size:12px; color:#1e40af; margin-bottom:8px; line-height:1.6;">
@@ -3272,11 +3311,10 @@ function refreshMonthlyAttendance() {
 
     <!-- ★ 工時稽核摘要（僅月薪制員工）-->
     ${(() => {
-      // 時薪制不用稽核（按實際工時付薪）
       if (!empObj || empObj.isHourly) return '';
       const expectedHours = monthWorkdays * 8;
-      let normalHours = 0;    // 正常上班（底薪範圍內）
-      let leaveHours = 0;     // 請假（抵銷工時）
+      let normalHours = 0;
+      let leaveHours = 0;
       empEntries.forEach(d => {
         if (d.type !== 'hour') return;
         const type = d.attType || 'normal';
@@ -3287,18 +3325,30 @@ function refreshMonthlyAttendance() {
         const isWorkDay = dow !== 0 && dow !== 6 && !isHol;
         if (!isWorkDay) return;
         if (isLeave) leaveHours += h;
-        else if (type === 'normal') normalHours += h; // 加班、時薪加班不計（已另計薪）
+        else if (type === 'normal') normalHours += h;
       });
       const shortage = expectedHours - normalHours - leaveHours;
       const color = shortage > 0 ? '#dc2626' : '#059669';
       const label = shortage > 0
         ? `⚠ 工時缺漏 ${shortage.toFixed(1)}h（未請假）`
         : `✓ 工時足額`;
+      // 若有缺漏 → 計算建議扣薪（按比例）
+      let suggestedDeduct = 0;
+      let deductBtn = '';
+      if (shortage > 0 && expectedHours > 0 && empObj.baseSalary > 0) {
+        suggestedDeduct = Math.round(empObj.baseSalary * shortage / expectedHours);
+        deductBtn = `<div style="margin-top:6px;">
+          <button type="button" onclick="addShortageDeduction(${suggestedDeduct}, ${shortage.toFixed(1)})" class="btn btn-danger btn-sm" style="padding:4px 10px; font-size:12px;">
+            ➕ 自動加入「出勤不足扣薪」NT$ ${formatMoney(suggestedDeduct)}（缺 ${shortage.toFixed(1)}h × 底薪/${expectedHours}h）
+          </button>
+        </div>`;
+      }
       return `
       <div style="padding:10px 12px; background:${shortage > 0 ? '#fef2f2' : '#f0fdf4'}; border-left:4px solid ${color}; border-radius:6px; margin-bottom:8px; font-size:13px; line-height:1.6;">
         <strong style="color:${color};">📏 工時稽核（月薪制）</strong>（工作日 ${monthWorkdays} 天 × 8h = ${expectedHours}h）<br>
         正常上班 <strong>${normalHours.toFixed(1)}h</strong>｜請假 <strong>${leaveHours.toFixed(1)}h</strong>｜合計 <strong>${(normalHours + leaveHours).toFixed(1)}h</strong>｜<span style="color:${color}; font-weight:700;">${label}</span>
         <div style="font-size:11px; color:#6b7280; margin-top:4px;">💡 此檢查不含加班/時薪加班/論件（已另計薪）。正常上班 + 請假應 ≥ 應上班時數。</div>
+        ${deductBtn}
       </div>`;
     })()}
 
@@ -3833,9 +3883,25 @@ function refreshLeaveList() {
     const used = autoUsedDays > 0 ? autoUsedDays : manualUsed;
     // ★ 去年結轉剩餘 (使用者手動填，例如去年未休完延用)
     const carryover = parseFloat(e.leaveCarryover) || 0;
-    // ★ 補薪折算天數 (已發現金不再視為可休)
-    const compensated = parseFloat(e.leaveCompensated) || 0;
+    // ★ 補薪折算 — 從當年度已儲存的月薪記錄自動累計 leavePayDays
+    //   另加手動調整值
+    const autoCompensatedRecords = records
+      .filter(r => r.empId === e._id && r.month && r.month.startsWith(currentYear) && (r.leavePayDays || 0) > 0)
+      .sort((a, b) => a.month.localeCompare(b.month));
+    const autoCompensated = autoCompensatedRecords.reduce((a, b) => a + (b.leavePayDays || 0), 0);
+    const manualCompensated = parseFloat(e.leaveCompensated) || 0;
+    const compensated = autoCompensated + manualCompensated;
     const remaining = Math.round((carryover + entitled - used - compensated) * 100) / 100;
+
+    // 補薪明細（按月份列出）
+    const compDetailHtml = autoCompensatedRecords.length > 0
+      ? `<div style="padding:6px 10px; background:#fff7ed; border-left:3px solid #ea580c; border-radius:4px; font-size:11px; color:#7c2d12; margin-top:4px;">
+          📋 <strong>補薪明細</strong>：${autoCompensatedRecords.map(r => `${r.month.slice(5)} 折算 <strong>${r.leavePayDays}</strong> 天 (NT$ ${formatMoney(r.leavePayAmount || 0)})`).join('、')}${manualCompensated > 0 ? `、手動 ${manualCompensated} 天` : ''}
+          <br><span style="color:#9a3412;">合計已折算 ${compensated} 天（自動從月薪記錄累計，存一筆扣一筆）</span>
+        </div>`
+      : (manualCompensated > 0
+        ? `<div style="padding:6px 10px; background:#fff7ed; border-left:3px solid #ea580c; border-radius:4px; font-size:11px; color:#7c2d12; margin-top:4px;">📋 手動補薪 ${manualCompensated} 天</div>`
+        : '');
     const tierHint = !info.valid
       ? '<span style="color:#9ca3af;">未填到職日</span>'
       : info.totalMonths < 6
@@ -3884,8 +3950,9 @@ function refreshLeaveList() {
             <div style="font-size:10px; color:#6b7280;">天${autoUsedHours > 0 ? ` (${autoUsedHours}h)` : ''}</div>
           </div>
           <div style="background:#fff7ed; padding:6px; border-radius:6px; text-align:center;">
-            <div style="color:#6b7280; font-size:10px;">補薪折算</div>
-            <input type="number" value="${e.leaveCompensated || ''}" placeholder="0" min="0" step="0.5" onchange="updateEmpLeaveCompensated('${e._id}', this.value)" style="width:100%; text-align:center; font-weight:700; color:#7c2d12; font-size:16px; border:1px solid #ea580c; border-radius:4px; background:white;">
+            <div style="color:#6b7280; font-size:10px;">補薪折算${autoCompensated > 0 ? ` (自動 ${autoCompensated})` : ''}</div>
+            <div style="font-weight:700; color:#7c2d12; font-size:16px;">${compensated}</div>
+            <input type="number" value="${e.leaveCompensated || ''}" placeholder="手動+" min="0" step="0.5" onchange="updateEmpLeaveCompensated('${e._id}', this.value)" style="width:100%; text-align:center; font-size:11px; border:1px solid #ea580c; border-radius:4px; background:white; margin-top:2px;" title="手動追加的補薪天數（系統已自動累計月薪記錄的特休折算）">
             <div style="font-size:10px; color:#6b7280;">天</div>
           </div>
           <div style="background:#f0fdf4; padding:6px; border-radius:6px; text-align:center;">
@@ -3894,6 +3961,7 @@ function refreshLeaveList() {
             <div style="font-size:10px; color:#6b7280;">天</div>
           </div>
         </div>
+        ${compDetailHtml}
         ${e.hireDate ? `<div style="font-size:11px; color:#9ca3af; text-align:right;">到職日: ${e.hireDate}</div>` : ''}
       </div>
     `;
@@ -4149,6 +4217,11 @@ function removeProductPhoto(id) {
   refreshProductManagerList();
 }
 
+let productStatMonth = null; // null = 當月
+function switchProductStatMonth(m) {
+  productStatMonth = m || null;
+  refreshProductManagerList();
+}
 function refreshProductManagerList() {
   const box = document.getElementById('productManagerList');
   if (!box) return;
@@ -4156,7 +4229,28 @@ function refreshProductManagerList() {
     box.innerHTML = '<div style="text-align:center; padding:10px; color:#9ca3af; font-size:13px;">尚無產品，請新增</div>';
     return;
   }
-  box.innerHTML = products.map(p => {
+  // ★ 當月生產統計
+  const currentMonth = productStatMonth
+    || (document.getElementById('calcMonth') || {}).value
+    || (document.getElementById('dailyMonthFilter') || {}).value
+    || new Date().toISOString().slice(0, 7);
+  const productStats = {};
+  dailyEntries.forEach(d => {
+    if (d.type !== 'piece') return;
+    if (!d.date || !d.date.startsWith(currentMonth)) return;
+    if (!d.name) return;
+    if (!productStats[d.name]) productStats[d.name] = { qty: 0, amount: 0, days: new Set() };
+    productStats[d.name].qty += d.qty || 0;
+    productStats[d.name].amount += d.subtotal || 0;
+    productStats[d.name].days.add(d.date);
+  });
+  const monthSelector = `
+    <div style="padding:6px 8px; background:#eff6ff; border-radius:6px; font-size:12px; color:#1e40af; margin-bottom:8px; display:flex; align-items:center; gap:8px;">
+      📊 當月生產統計：
+      <input type="month" value="${currentMonth}" onchange="switchProductStatMonth(this.value)" style="flex:1; padding:3px 6px; font-size:12px;">
+    </div>
+  `;
+  const rowsHtml = products.map(p => {
     const photoBlock = p.photo
       ? `<img src="${p.photo}" onclick="viewPhotoSrc(this.src)" style="width:40px; height:40px; object-fit:cover; border-radius:6px; cursor:pointer; border:1px solid #e5e7eb;" title="點擊放大">
          <button type="button" onclick="removeProductPhoto('${p._id}')" title="移除照片" style="border:none; background:none; color:#ef4444; cursor:pointer; font-size:14px; padding:0 2px;">✕</button>`
@@ -4164,10 +4258,15 @@ function refreshProductManagerList() {
            📷 加照片
            <input type="file" accept="image/*" onchange="updateProductPhoto('${p._id}', this.files[0])" style="display:none;">
          </label>`;
+    const st = productStats[p.name];
+    const statBadge = st
+      ? `<span style="background:#d1fae5; color:#065f46; padding:2px 8px; border-radius:8px; font-size:11px; font-weight:700;" title="本月 ${st.days.size} 天生產 ${st.qty} 個，金額 NT$ ${formatMoney(st.amount)}">📦 ${st.qty} 個</span>`
+      : `<span style="background:#f3f4f6; color:#9ca3af; padding:2px 8px; border-radius:8px; font-size:11px;">本月 0</span>`;
     return `
       <div style="display:flex; align-items:center; gap:6px; padding:6px; background:white; border-radius:6px; margin-bottom:4px;">
         ${photoBlock}
         <div style="flex:1; font-weight:500;">${escapeHtml(p.name)}</div>
+        ${statBadge}
         <input type="number" value="${p.defaultPrice || ''}" placeholder="單價" min="0" step="0.01"
           onchange="updateProductPrice('${p._id}', this.value)"
           style="width:80px; padding:4px 8px; font-size:13px;">
@@ -4175,6 +4274,14 @@ function refreshProductManagerList() {
       </div>
     `;
   }).join('');
+  const totalQty = Object.values(productStats).reduce((a, s) => a + s.qty, 0);
+  const totalAmt = Object.values(productStats).reduce((a, s) => a + s.amount, 0);
+  const totalRow = totalQty > 0
+    ? `<div style="padding:8px 10px; background:#f0fdf4; border-left:3px solid #059669; border-radius:4px; margin-top:6px; font-size:13px; color:#065f46; font-weight:600;">
+        📊 ${currentMonth} 本月生產合計：<strong>${totalQty}</strong> 個 · NT$ <strong>${formatMoney(totalAmt)}</strong>
+      </div>`
+    : '';
+  box.innerHTML = monthSelector + rowsHtml + totalRow;
 }
 
 // ========= 扣款類別與項目 =========
@@ -5538,6 +5645,8 @@ function saveSalaryRecord() {
   alert(wasEditing ? '修改已儲存' : ('已儲存：' + emp.name + ' · ' + month));
   refreshRecords();
   updateSummary();
+  // ★ 特休頁補薪折算 連動（存月薪有特休折算時要更新剩餘）
+  if (typeof refreshLeaveList === 'function') refreshLeaveList();
 }
 
 function editSalaryRecord(id) {
@@ -5994,7 +6103,108 @@ function exportToExcel() {
     XLSX.utils.book_append_sheet(wb, wsEmp, '員工資料');
   }
 
-  // === 每日記錄工作表 ===
+  // === 論件計酬明細工作表（以員工為分類）===
+  const pieceData = dailyData.filter(d => d.type === 'piece');
+  if (pieceData.length > 0) {
+    const pieceHead = ['日期', '品名', '數量', '單價', '小計', '開始時間', '結束時間', '工時(小時)', '效率(個/時)', '工作內容', '備註', '照片檔名'];
+    const pieceRows = [];
+    // 依員工分組
+    const byEmp = {};
+    pieceData.forEach(d => {
+      const k = d.empId;
+      if (!byEmp[k]) byEmp[k] = { empName: d.empName, empNo: d.empNo || '', list: [] };
+      byEmp[k].list.push(d);
+    });
+    let grandQty = 0, grandAmt = 0;
+    Object.values(byEmp)
+      .sort((a, b) => (a.empNo || '').localeCompare(b.empNo || ''))
+      .forEach(grp => {
+        // 員工標題區塊
+        pieceRows.push([`◆ 員工：${grp.empName}（編號 ${grp.empNo || '-'}）`]);
+        pieceRows.push(pieceHead);
+        grp.list.sort((a, b) => a.date.localeCompare(b.date));
+        let empQty = 0, empAmt = 0;
+        grp.list.forEach(d => {
+          const hrs = d.workMinutes ? Math.round(d.workMinutes / 60 * 100) / 100 : '';
+          const eff = (d.workMinutes && d.qty) ? Math.round((d.qty / (d.workMinutes / 60)) * 10) / 10 : '';
+          pieceRows.push([
+            d.date,
+            d.name || '',
+            d.qty || 0,
+            d.price || 0,
+            d.subtotal || 0,
+            d.startTime || '',
+            d.endTime || '',
+            hrs, eff,
+            d.workContent || '',
+            d.note || '',
+            d.photo ? photoFileName(d) : ''
+          ]);
+          empQty += d.qty || 0;
+          empAmt += d.subtotal || 0;
+        });
+        pieceRows.push(['小計', '', empQty, '', empAmt]);
+        pieceRows.push([]);
+        grandQty += empQty;
+        grandAmt += empAmt;
+      });
+    pieceRows.push(['【全部合計】', '', grandQty, '', grandAmt]);
+
+    const wsP = XLSX.utils.aoa_to_sheet(pieceRows);
+    wsP['!cols'] = [{wch:12},{wch:16},{wch:8},{wch:10},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:16},{wch:20},{wch:30}];
+    XLSX.utils.book_append_sheet(wb, wsP, '論件計酬明細');
+  }
+
+  // === 計時計酬明細工作表（以員工為分類）===
+  const hourData = dailyData.filter(d => d.type === 'hour');
+  if (hourData.length > 0) {
+    const hourHead = ['日期', '出勤類型', '上班時間', '下班時間', '休息(分)', '遲到(分)', '工時(小時)', '時薪', '小計', '工作內容', '備註', '照片檔名'];
+    const hourRows = [];
+    const byEmpHr = {};
+    hourData.forEach(d => {
+      const k = d.empId;
+      if (!byEmpHr[k]) byEmpHr[k] = { empName: d.empName, empNo: d.empNo || '', list: [] };
+      byEmpHr[k].list.push(d);
+    });
+    let grandH = 0, grandHA = 0;
+    Object.values(byEmpHr)
+      .sort((a, b) => (a.empNo || '').localeCompare(b.empNo || ''))
+      .forEach(grp => {
+        hourRows.push([`◆ 員工：${grp.empName}（編號 ${grp.empNo || '-'}）`]);
+        hourRows.push(hourHead);
+        grp.list.sort((a, b) => a.date.localeCompare(b.date));
+        let empH = 0, empA = 0;
+        grp.list.forEach(d => {
+          hourRows.push([
+            d.date,
+            d.attType || 'normal',
+            d.start || '',
+            d.end || '',
+            d.breakMin || 0,
+            d.lateMinutes || 0,
+            d.hours || 0,
+            d.rate || 0,
+            d.subtotal || 0,
+            d.workContent || '',
+            d.note || '',
+            d.photo ? photoFileName(d) : ''
+          ]);
+          empH += d.hours || 0;
+          empA += d.subtotal || 0;
+        });
+        hourRows.push(['小計', '', '', '', '', '', Math.round(empH * 100) / 100, '', empA]);
+        hourRows.push([]);
+        grandH += empH;
+        grandHA += empA;
+      });
+    hourRows.push(['【全部合計】', '', '', '', '', '', Math.round(grandH * 100) / 100, '', grandHA]);
+
+    const wsH = XLSX.utils.aoa_to_sheet(hourRows);
+    wsH['!cols'] = [{wch:12},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:10},{wch:10},{wch:12},{wch:16},{wch:20},{wch:30}];
+    XLSX.utils.book_append_sheet(wb, wsH, '計時計酬明細');
+  }
+
+  // === 每日記錄工作表（合併）===
   if (dailyData.length > 0) {
     // 每日明細
     const dailyHead = ['日期','員工編號','姓名','類型','品名/時段','數量/時數','單價/時薪','小計','開始時間','結束時間','工時(小時)','效率(個/時)','工作內容','備註','照片檔名'];
@@ -6761,6 +6971,8 @@ function refreshAllDailyViews() {
   if (typeof updateMonthlyDailyHint === 'function') updateMonthlyDailyHint();
   if (typeof updateLateHint === 'function') updateLateHint();
   if (typeof renderBatchAttendance === 'function') renderBatchAttendance();
+  // ★ 特休列表 已休天數需連動（依 dailyEntries 當年度特休累計）
+  if (typeof refreshLeaveList === 'function') refreshLeaveList();
 }
 
 // ========= 計薪判斷統一函式 =========
@@ -6797,7 +7009,8 @@ function isPaidPieceEntry(d) {
 
 // ========= 使用者權限系統 =========
 // 角色: 'admin' (全部) / 'factory' (限定廠別) / 'employee' (限定自己)
-function isAdmin() { return currentUser && currentUser.role === 'admin'; }
+function isSuperAdmin() { return currentUser && currentUser.role === 'super'; }
+function isAdmin() { return currentUser && (currentUser.role === 'admin' || currentUser.role === 'super'); }
 function isFactoryRole() { return currentUser && currentUser.role === 'factory'; }
 function isEmployeeRole() { return currentUser && currentUser.role === 'employee'; }
 
@@ -6838,7 +7051,7 @@ function doLogin() {
   }
   // 內建管理者：admin / $$$Ps880229
   if (username === 'admin' && password === ADMIN_PASSWORD) {
-    currentUser = { _id: 'admin', username: 'admin', role: 'admin', displayName: '系統管理者' };
+    currentUser = { _id: 'admin', username: 'admin', role: 'super', displayName: '總管理者' };
     save(STORE.currentUserId, currentUser._id);
     onLoginSuccess();
     return;
@@ -6928,9 +7141,15 @@ function refreshUserList() {
     box.innerHTML = '<div style="text-align:center; padding:12px; color:#9ca3af; font-size:12px;">尚未建立使用者（內建 admin 帳號永遠可登入）</div>';
     return;
   }
+  // 角色權重：super > admin > factory > employee
+  const roleWeight = { super: 4, admin: 3, factory: 2, employee: 1 };
+  const roleLabels = { super: '👑 總管理者', admin: '🔧 管理者', factory: '🏭 廠別主管', employee: '👤 員工' };
+  const currentWeight = currentUser ? (roleWeight[currentUser.role] || 0) : 0;
+  // 依權重降序排列
+  const sorted = [...users].sort((a, b) => (roleWeight[b.role] || 0) - (roleWeight[a.role] || 0));
   box.innerHTML = '<table><thead><tr><th>帳號</th><th>姓名</th><th>角色</th><th>限定範圍</th><th>操作</th></tr></thead><tbody>' +
-    users.map(u => {
-      const roleText = u.role === 'admin' ? '管理者' : u.role === 'factory' ? '廠別主管' : '員工';
+    sorted.map(u => {
+      const roleText = roleLabels[u.role] || u.role;
       let scope = '全部';
       if (u.role === 'factory') {
         const wps = getUserWorkplaces(u);
@@ -6939,15 +7158,18 @@ function refreshUserList() {
         scope = u.empName || u.empId || '-';
       }
       const isEditing = editingUserId === u._id;
+      // 只有「角色權重 <= 當前使用者」才能編輯/刪除（admin 不能改 super）
+      const canModify = (roleWeight[u.role] || 0) < currentWeight || (roleWeight[u.role] || 0) === currentWeight && u._id === currentUser._id;
+      const actionBtns = canModify
+        ? `<button class="btn btn-secondary btn-sm" onclick="editUser('${u._id}')" style="padding:2px 8px; font-size:11px;">✏️ 變更</button>
+           <button class="btn btn-danger btn-sm" onclick="deleteUser('${u._id}')" style="padding:2px 8px; font-size:11px;">刪除</button>`
+        : `<span style="font-size:11px; color:#9ca3af;">🔒 權限不足</span>`;
       return `<tr ${isEditing ? 'style="background:#fffbeb;"' : ''}>
         <td>${escapeHtml(u.username)}${isEditing ? ' <span class="badge" style="background:#fef3c7;color:#92400e;">編輯中</span>' : ''}</td>
         <td>${escapeHtml(u.displayName || '')}</td>
         <td>${roleText}</td>
         <td>${escapeHtml(scope)}</td>
-        <td>
-          <button class="btn btn-secondary btn-sm" onclick="editUser('${u._id}')" style="padding:2px 8px; font-size:11px;">✏️ 變更</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteUser('${u._id}')" style="padding:2px 8px; font-size:11px;">刪除</button>
-        </td>
+        <td>${actionBtns}</td>
       </tr>`;
     }).join('') + '</tbody></table>';
 }
@@ -7029,6 +7251,22 @@ function saveUser() {
   const password = (document.getElementById('newUserPassword').value || '').trim();
   const displayName = (document.getElementById('newUserDisplayName').value || '').trim();
   const role = document.getElementById('newUserRole').value;
+  // ★ 權限階層檢查：不能建立 / 編輯比自己權限高的帳號
+  const roleWeight = { super: 4, admin: 3, factory: 2, employee: 1 };
+  const currentWeight = currentUser ? (roleWeight[currentUser.role] || 0) : 0;
+  const targetWeight = roleWeight[role] || 0;
+  if (targetWeight > currentWeight) {
+    alert(`⚠ 權限不足：您目前是「${currentUser.role === 'admin' ? '管理者' : currentUser.role}」，無法建立 / 編輯角色「${role === 'super' ? '總管理者' : role}」的帳號。\n\n請由「總管理者」建立。`);
+    return;
+  }
+  // 若在編輯既有使用者，也要檢查對方權限
+  if (editingUserId) {
+    const existing = users.find(u => u._id === editingUserId);
+    if (existing && (roleWeight[existing.role] || 0) > currentWeight) {
+      alert('⚠ 權限不足：無法修改比您高權限的帳號');
+      return;
+    }
+  }
   if (!username || !password) { alert('請輸入帳號與密碼'); return; }
   if (username === 'admin') { alert('admin 為內建保留帳號'); return; }
   // 帳號重複檢查（編輯時排除自己）
@@ -7088,6 +7326,14 @@ function deleteUser(id) {
   const u = users.find(x => x._id === id);
   if (!u) return;
   if (currentUser && u._id === currentUser._id) { alert('不能刪除目前登入的使用者，請先登出'); return; }
+  // ★ 權限檢查：不能刪除比自己權限高的帳號
+  const roleWeight = { super: 4, admin: 3, factory: 2, employee: 1 };
+  const currentWeight = roleWeight[currentUser.role] || 0;
+  const targetWeight = roleWeight[u.role] || 0;
+  if (targetWeight > currentWeight) {
+    alert('⚠ 權限不足：無法刪除比您高權限的帳號');
+    return;
+  }
   if (!confirm(`確定刪除使用者「${u.username}」？`)) return;
   users = users.filter(x => x._id !== id);
   save(STORE.users, users);
@@ -7195,7 +7441,7 @@ function init() {
   // 登入狀態恢復：若有儲存的 currentUserId → 自動登入
   const savedUserId = load(STORE.currentUserId, null);
   if (savedUserId === 'admin') {
-    currentUser = { _id: 'admin', username: 'admin', role: 'admin', displayName: '系統管理者' };
+    currentUser = { _id: 'admin', username: 'admin', role: 'super', displayName: '總管理者' };
   } else if (savedUserId) {
     const u = users.find(x => x._id === savedUserId);
     if (u) currentUser = u;
