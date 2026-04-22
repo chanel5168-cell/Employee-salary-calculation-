@@ -272,17 +272,6 @@
   <!-- 🔔 Firestore 規則到期倒數提醒（只對管理者顯示） -->
   <div id="firestoreExpiryBanner" style="display:none; margin-bottom:12px; padding:12px 14px; border-radius:10px; cursor:pointer; font-size:13px; line-height:1.5; box-shadow:0 2px 4px rgba(0,0,0,0.08);" onclick="showFirestoreRulesHowto()"></div>
 
-  <!-- 🪗 全頁摺疊快捷鈕（浮動） -->
-  <div style="position:sticky; top:10px; z-index:100; display:flex; justify-content:flex-end; gap:6px; margin-bottom:8px; pointer-events:none;">
-    <button type="button" onclick="collapseAllInActivePanel('hide')" title="全部收起"
-      style="pointer-events:auto; background:#06C755; color:white; border:none; padding:6px 12px; border-radius:20px; font-size:12px; font-weight:700; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.15); font-family:inherit;">
-      ⬆ 全部收起
-    </button>
-    <button type="button" onclick="collapseAllInActivePanel('show')" title="全部展開"
-      style="pointer-events:auto; background:white; color:#06C755; border:1px solid #06C755; padding:6px 12px; border-radius:20px; font-size:12px; font-weight:700; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.15); font-family:inherit;">
-      ⬇ 全部展開
-    </button>
-  </div>
 
   <div class="tabs">
     <div class="tab active" data-panel="employees">員工</div>
@@ -2535,6 +2524,8 @@ document.querySelectorAll('.tab').forEach(t => {
       refreshDailyEntries();
       refreshMonthlyDaily();
     }
+    // 切換頁籤時確保所有卡片都有摺疊按鈕（包含動態新加的）
+    setTimeout(() => { if (typeof enableAutoCollapse === 'function') enableAutoCollapse(); }, 100);
   });
 });
 
@@ -6942,7 +6933,7 @@ function showSalarySaveSuccess(rec, emp, wasEditing) {
 
         <!-- 公司抬頭 -->
         <div style="text-align:center; padding:16px 0; border-top:3px solid ${BRAND_GOLD}; border-bottom:3px solid ${BRAND_GOLD}; margin-bottom:16px; background: linear-gradient(180deg, transparent 0%, #fef9ee 100%);">
-          <div style="font-size:22px; font-weight:900; color:${BRAND_NAVY}; letter-spacing:3px;">陽基五金有限公司</div>
+          <div style="font-size:22px; font-weight:900; color:${BRAND_NAVY}; letter-spacing:3px;">暘基五金有限公司</div>
           <div style="font-size:11px; color:#64748b; letter-spacing:2px; margin-top:2px;">YANG JI HARDWARE CO., LTD.</div>
           <div style="margin-top:8px; padding-top:8px; border-top:1px dashed ${BRAND_GOLD};">
             <div style="font-size:18px; font-weight:700; color:${BRAND_GOLD};">⚙ 員工薪資單 ⚙</div>
@@ -9359,10 +9350,19 @@ function init() {
   if (typeof refreshEntitlementList === 'function') refreshEntitlementList();
   // 自動清理 30 天前舊照片（管理者角色、每 24 小時最多跑一次）
   maybeAutoCleanupPhotos();
-  // ★ 全頁自動摺疊系統
-  setTimeout(() => {
-    if (typeof enableAutoCollapse === 'function') enableAutoCollapse();
-  }, 200);
+  // ★ 全頁自動摺疊系統（多次呼叫 + MutationObserver 確保所有卡片都處理）
+  const runCollapse = () => { if (typeof enableAutoCollapse === 'function') enableAutoCollapse(); };
+  setTimeout(runCollapse, 200);
+  setTimeout(runCollapse, 800);
+  setTimeout(runCollapse, 2000);
+  // 監視新卡片加入（例如動態產生的內容）
+  try {
+    const observer = new MutationObserver(() => {
+      clearTimeout(window.__collapseDebounce);
+      window.__collapseDebounce = setTimeout(runCollapse, 300);
+    });
+    document.querySelectorAll('.panel').forEach(p => observer.observe(p, { childList: true, subtree: true }));
+  } catch (e) { console.warn('MutationObserver 失敗:', e); }
 }
 
 init();
@@ -9705,10 +9705,12 @@ function toggleCard(bodyId, toggleId) {
 // ========= 🪗 全頁自動摺疊系統（所有頁籤通用）=========
 // 自動處理 .panel > .card，讓每張卡片的 h3 標題可點擊展開/收起
 function enableAutoCollapse() {
-  // 處理所有層級的 .card（包含巢狀）
+  // 處理所有層級的 .card（包含巢狀）+ 每次呼叫時掃描所有 panel
   document.querySelectorAll('.panel .card').forEach(card => {
     if (card.dataset.autoCollapsified) return;
-    const h3 = card.querySelector(':scope > h3');
+    // 嘗試找直接子元素的 h3 或 h4
+    let h3 = card.querySelector(':scope > h3');
+    if (!h3) h3 = card.querySelector(':scope > h4');
     if (!h3) return;
     // 跳過已經手動設定 onclick 的卡片（例：特休頁手動摺疊的卡片）
     if (h3.getAttribute('onclick')) { card.dataset.autoCollapsified = '1'; return; }
