@@ -1468,9 +1468,9 @@
     <div class="card">
       <h3 style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleCard('leaveInfoBody', 'leaveInfoToggle')">
         <span>🌴 特休管理（法規說明）</span>
-        <span id="leaveInfoToggle" style="font-size:12px; color:#3b82f6; background:#eff6ff; padding:3px 10px; border-radius:12px; border:1px solid #3b82f6;">收起 ▲</span>
+        <span id="leaveInfoToggle" style="font-size:12px; color:#3b82f6; background:#eff6ff; padding:3px 10px; border-radius:12px; border:1px solid #3b82f6;">展開 ▼</span>
       </h3>
-      <div id="leaveInfoBody">
+      <div id="leaveInfoBody" style="display:none;">
 
       <div class="alert alert-info" style="background:#dbeafe; border-left-color:#3b82f6;">
         <div style="font-weight:700; color:#1e40af; margin-bottom:6px;">📘 月薪制（勞基法 §38）</div>
@@ -1554,9 +1554,9 @@
     <div class="card">
       <h3 style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleCard('leaveListBody', 'leaveListToggle')">
         <span>員工特休清單 <span class="badge" id="leaveCount">0</span></span>
-        <span id="leaveListToggle" style="font-size:12px; color:#3b82f6; background:#eff6ff; padding:3px 10px; border-radius:12px; border:1px solid #3b82f6;">收起 ▲</span>
+        <span id="leaveListToggle" style="font-size:12px; color:#3b82f6; background:#eff6ff; padding:3px 10px; border-radius:12px; border:1px solid #3b82f6;">展開 ▼</span>
       </h3>
-      <div id="leaveListBody">
+      <div id="leaveListBody" style="display:none;">
         <div id="leaveList"></div>
       </div>
     </div>
@@ -1565,9 +1565,9 @@
     <div class="card" style="border:2px solid #f59e0b;">
       <h3 style="color:#92400e; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleCard('entBody', 'entToggle')">
         <span>🎉 特別假額度追蹤（婚/喪/產/陪產/家庭照顧）</span>
-        <span id="entToggle" style="font-size:12px; color:#92400e; background:#fef3c7; padding:3px 10px; border-radius:12px; border:1px solid #f59e0b;">收起 ▲</span>
+        <span id="entToggle" style="font-size:12px; color:#92400e; background:#fef3c7; padding:3px 10px; border-radius:12px; border:1px solid #f59e0b;">展開 ▼</span>
       </h3>
-      <div id="entBody">
+      <div id="entBody" style="display:none;">
       <div style="padding:10px 12px; background:#fef3c7; border-radius:8px; font-size:12px; color:#78350f; line-height:1.8; margin-bottom:12px;">
         ⚠ <strong>避免漏掉有期限的假</strong>：員工結婚、喪事、分娩時建立一筆額度，系統會倒數到期日，自動從每日頁的請假記錄扣除，避免過期忘記請而被罰。
       </div>
@@ -6872,11 +6872,195 @@ function saveSalaryRecord() {
   renderBonusItems();
   renderLeaveItems();
   document.getElementById('calcResult').style.display = 'none';
-  alert(wasEditing ? '修改已儲存' : ('已儲存：' + emp.name + ' · ' + month));
+  // ✅ 綠色成功提示 + 薪資單預覽
+  showSalarySaveSuccess(rec, emp, wasEditing);
   refreshRecords();
   updateSummary();
   // ★ 特休頁補薪折算 連動（存月薪有特休折算時要更新剩餘）
   if (typeof refreshLeaveList === 'function') refreshLeaveList();
+}
+
+// ✅ 儲存成功 - 綠色成功彈窗 + 薪資單預覽
+function showSalarySaveSuccess(rec, emp, wasEditing) {
+  // 移除舊的提示
+  const existing = document.getElementById('saveSuccessModal');
+  if (existing) existing.remove();
+
+  const deductDetail = (rec.deductItems && rec.deductItems.length > 0)
+    ? rec.deductItems.map(x => `<div style="display:flex; justify-content:space-between; padding:2px 0; font-size:12px;"><span>・${escapeHtml(x.name)}</span><span>- NT$ ${formatMoney(x.amount)}</span></div>`).join('')
+    : '';
+  const bonusDetail = (rec.bonusItems && rec.bonusItems.length > 0)
+    ? rec.bonusItems.map(x => `<div style="display:flex; justify-content:space-between; padding:2px 0; font-size:12px;"><span>・${escapeHtml(x.name)}</span><span>+ NT$ ${formatMoney(x.amount)}</span></div>`).join('')
+    : '';
+  const leaveDetail = (rec.leaveItems && rec.leaveItems.length > 0)
+    ? rec.leaveItems.map(x => `<div style="display:flex; justify-content:space-between; padding:2px 0; font-size:12px;"><span>・${escapeHtml(x.categoryName)} ${x.days || 0} 天 ${x.hours ? x.hours + ' 時' : ''}</span><span></span></div>`).join('')
+    : '';
+
+  const modal = document.createElement('div');
+  modal.id = 'saveSuccessModal';
+  modal.style.cssText = `
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    z-index: 9999; display: flex; align-items: center; justify-content: center;
+    padding: 20px; overflow-y: auto;
+    animation: fadeIn 0.3s;
+  `;
+  modal.onclick = (e) => { if (e.target === modal) closeSalarySaveSuccess(); };
+
+  modal.innerHTML = `
+    <style>
+      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+      @keyframes checkPop { 0% { transform: scale(0); } 60% { transform: scale(1.2); } 100% { transform: scale(1); } }
+    </style>
+    <div style="background: white; border-radius: 16px; max-width: 520px; width: 100%; max-height: 92vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);">
+      <!-- 綠色成功頂部 -->
+      <div style="background: linear-gradient(135deg, #06C755 0%, #059669 100%); color: white; padding: 24px; border-radius: 16px 16px 0 0; text-align: center; position: relative;">
+        <div style="width: 72px; height: 72px; background: white; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 10px; animation: checkPop 0.6s ease-out;">
+          <span style="font-size: 48px;">✓</span>
+        </div>
+        <h2 style="font-size: 22px; margin: 0 0 4px 0;">${wasEditing ? '已更新' : '已儲存'}！</h2>
+        <div style="font-size: 13px; opacity: 0.95;">${escapeHtml(emp.name)} · ${escapeHtml(rec.month)} 月薪記錄</div>
+      </div>
+
+      <!-- 薪資單預覽 -->
+      <div id="salarySlipContent" style="padding: 20px 24px; font-size: 14px; line-height: 1.7;">
+        <div style="text-align: center; padding-bottom: 10px; border-bottom: 2px solid #06C755; margin-bottom: 12px;">
+          <div style="font-size: 18px; font-weight: 700; color: #111827;">💼 ${escapeHtml(rec.month)} 月薪資單</div>
+          <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">員工：${escapeHtml(emp.name)}${emp.id ? ' (' + escapeHtml(emp.id) + ')' : ''}${emp.workplace ? ' · ' + escapeHtml(emp.workplace) : ''}</div>
+        </div>
+
+        <!-- 應發項目 -->
+        <div style="font-weight: 700; color: #059669; margin-bottom: 6px;">📈 應發項目</div>
+        ${rec.base > 0 ? `<div style="display:flex; justify-content:space-between; padding:3px 0;"><span>底薪</span><span>NT$ ${formatMoney(rec.base)}</span></div>` : ''}
+        ${rec.pieceIncome ? `<div style="display:flex; justify-content:space-between; padding:3px 0;"><span>論件收入</span><span>NT$ ${formatMoney(rec.pieceIncome)}</span></div>` : ''}
+        ${rec.hourIncome ? `<div style="display:flex; justify-content:space-between; padding:3px 0;"><span>計時收入</span><span>NT$ ${formatMoney(rec.hourIncome)}</span></div>` : ''}
+        ${rec.otPay1 ? `<div style="display:flex; justify-content:space-between; padding:3px 0;"><span>平日加班 (${rec.ot1 || 0}h × 1.34)</span><span>NT$ ${formatMoney(rec.otPay1)}</span></div>` : ''}
+        ${rec.otPay2 ? `<div style="display:flex; justify-content:space-between; padding:3px 0;"><span>假日加班 (${rec.ot2 || 0}h × 1.67)</span><span>NT$ ${formatMoney(rec.otPay2)}</span></div>` : ''}
+        ${rec.leavePayAmount ? `<div style="display:flex; justify-content:space-between; padding:3px 0;"><span>特休折算 (${rec.leavePayDays || 0}天)</span><span>NT$ ${formatMoney(rec.leavePayAmount)}</span></div>` : ''}
+        ${rec.bonus ? `<div style="display:flex; justify-content:space-between; padding:3px 0; font-weight:600;"><span>獎金合計</span><span>NT$ ${formatMoney(rec.bonus)}</span></div>${bonusDetail}` : ''}
+        ${leaveDetail ? `<div style="margin-top:4px; font-size:12px; color:#6b7280; padding:6px 8px; background:#f9fafb; border-radius:6px;">${leaveDetail}</div>` : ''}
+
+        <div style="display:flex; justify-content:space-between; padding:8px 0; margin-top:6px; border-top:1px dashed #e5e7eb; border-bottom:1px dashed #e5e7eb; font-weight:700;">
+          <span>應發合計</span>
+          <span style="color:#059669; font-size:16px;">NT$ ${formatMoney(rec.gross || 0)}</span>
+        </div>
+
+        <!-- 扣除項目 -->
+        <div style="font-weight: 700; color: #dc2626; margin: 14px 0 6px;">📉 扣除項目</div>
+        ${rec.laborIns ? `<div style="display:flex; justify-content:space-between; padding:3px 0;"><span>勞保</span><span>- NT$ ${formatMoney(rec.laborIns)}</span></div>` : ''}
+        ${rec.healthIns ? `<div style="display:flex; justify-content:space-between; padding:3px 0;"><span>健保${rec.dependents ? '（眷口 ' + rec.dependents + '）' : ''}</span><span>- NT$ ${formatMoney(rec.healthIns)}</span></div>` : ''}
+        ${rec.pensionSelf ? `<div style="display:flex; justify-content:space-between; padding:3px 0;"><span>自提勞退 (${rec.pensionSelfRate || 0}%)</span><span>- NT$ ${formatMoney(rec.pensionSelf)}</span></div>` : ''}
+        ${rec.leaveDeduct ? `<div style="display:flex; justify-content:space-between; padding:3px 0;"><span>請假扣款</span><span>- NT$ ${formatMoney(rec.leaveDeduct)}</span></div>` : ''}
+        ${rec.otherDeduct ? `<div style="display:flex; justify-content:space-between; padding:3px 0; font-weight:600;"><span>其他扣款合計</span><span>- NT$ ${formatMoney(rec.otherDeduct)}</span></div>${deductDetail}` : ''}
+
+        <!-- 實發金額（大字顯示）-->
+        <div style="margin-top:16px; padding:14px; background:linear-gradient(135deg, #d1fae5 0%, #fef3c7 100%); border-radius:10px; text-align:center;">
+          <div style="font-size:12px; color:#065f46; margin-bottom:2px;">實發金額</div>
+          <div style="font-size:30px; font-weight:900; color:#059669;">NT$ ${formatMoney(rec.net || 0)}</div>
+        </div>
+
+        ${rec.note ? `<div style="margin-top:12px; padding:8px 10px; background:#f3f4f6; border-radius:6px; font-size:12px; color:#4b5563;">📝 備註：${escapeHtml(rec.note)}</div>` : ''}
+
+        <div style="margin-top:14px; text-align:center; font-size:11px; color:#9ca3af;">
+          儲存時間：${new Date().toLocaleString('zh-TW')}
+        </div>
+      </div>
+
+      <!-- 底部操作按鈕 -->
+      <div style="padding: 14px 24px 20px; border-top: 1px solid #e5e7eb; display: flex; gap: 8px; flex-wrap: wrap;">
+        <button onclick="printSalarySlip()" style="flex:1; padding: 10px; background: #06C755; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer;">🖨 列印薪資單</button>
+        <button onclick="closeSalarySaveSuccess()" style="flex:1; padding: 10px; background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">✓ 關閉</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  // 10 秒後自動消失
+  setTimeout(() => {
+    const m = document.getElementById('saveSuccessModal');
+    if (m) m.style.opacity = '0';
+    setTimeout(() => { const m2 = document.getElementById('saveSuccessModal'); if (m2) m2.remove(); }, 500);
+  }, 15000);
+}
+
+function closeSalarySaveSuccess() {
+  const modal = document.getElementById('saveSuccessModal');
+  if (modal) modal.remove();
+}
+
+function printSalarySlip() {
+  const content = document.getElementById('salarySlipContent');
+  if (!content) return;
+  const printWin = window.open('', '_blank');
+  printWin.document.write(`
+    <!DOCTYPE html>
+    <html lang="zh-Hant">
+    <head>
+      <meta charset="UTF-8">
+      <title>薪資單</title>
+      <style>
+        body { font-family: "Microsoft JhengHei", sans-serif; padding: 30px; font-size: 14px; line-height: 1.7; color: #1f2937; }
+        @page { size: A4; margin: 20mm; }
+        @media print { body { padding: 0; } }
+      </style>
+    </head>
+    <body>
+      ${content.innerHTML}
+      <script>window.onload = () => { setTimeout(() => window.print(), 300); };<\/script>
+    </body>
+    </html>
+  `);
+  printWin.document.close();
+}
+
+// ✅ 自動載入既有月薪記錄：選員工 + 月份後，若已有儲存過的記錄就自動帶入
+function autoLoadExistingRecord() {
+  const empId = document.getElementById('calcEmp').value;
+  const month = document.getElementById('calcMonth').value;
+  if (!empId || !month) return;
+  // 若正在編輯某筆記錄且是同一筆，不重複處理
+  if (editingRecordId) {
+    const curr = records.find(x => x._id === editingRecordId);
+    if (curr && curr.empId === empId && curr.month === month) return;
+  }
+  // 找該員工該月的已儲存記錄
+  const existing = records.find(r => r.empId === empId && r.month === month);
+  if (existing) {
+    // 靜默載入（不彈窗詢問，因為切換員工就自動帶入）
+    editSalaryRecord(existing._id);
+    // 顯示藍色提示條
+    showAutoLoadHint(existing);
+  } else {
+    // 若之前在編輯，切換到沒記錄的員工/月份 → 清掉編輯狀態
+    if (editingRecordId) {
+      editingRecordId = null;
+      if (typeof cancelEdit === 'function') cancelEdit();
+    }
+  }
+}
+
+function showAutoLoadHint(rec) {
+  // 找個地方顯示「已自動帶入」訊息
+  let hint = document.getElementById('autoLoadHint');
+  if (!hint) {
+    hint = document.createElement('div');
+    hint.id = 'autoLoadHint';
+    hint.style.cssText = 'padding:10px 14px; background:#dbeafe; border-left:4px solid #3b82f6; border-radius:8px; margin:10px 0; font-size:13px; color:#1e40af;';
+    const monthlyAtt = document.getElementById('monthlyAttendance');
+    if (monthlyAtt && monthlyAtt.parentNode) {
+      monthlyAtt.parentNode.parentNode.insertBefore(hint, monthlyAtt.parentNode.nextSibling);
+    }
+  }
+  const updatedAt = rec.updatedAt || rec.createdAt || '';
+  const updatedStr = updatedAt ? new Date(updatedAt).toLocaleString('zh-TW') : '';
+  hint.innerHTML = `
+    ✅ <strong>已自動帶入 ${escapeHtml(rec.empName)} 的 ${escapeHtml(rec.month)} 月薪記錄</strong>
+    <span style="font-size:12px; opacity:0.85;">（上次更新：${updatedStr || '—'}｜實發 NT$ ${formatMoney(rec.net || 0)}）</span><br>
+    <span style="font-size:12px;">💡 修改後按「💾 儲存記錄」會覆蓋舊的記錄。若要重算，按「🔄 從出勤明細自動帶入」。</span>
+    <button type="button" onclick="this.parentElement.style.display='none'" style="float:right; background:white; border:1px solid #3b82f6; color:#3b82f6; padding:2px 10px; border-radius:12px; font-size:11px; cursor:pointer;">✕ 關閉</button>
+  `;
+  hint.style.display = 'block';
+  setTimeout(() => { hint.style.display = 'none'; }, 10000);
 }
 
 function editSalaryRecord(id) {
@@ -9060,8 +9244,8 @@ function init() {
       if (el) delete el.dataset.userEdited;
     });
   }
-  document.getElementById('calcMonth').addEventListener('change', () => { resetAutoFillFlags(); refreshRecords(); updateMonthlyDailyHint(); });
-  document.getElementById('calcEmp').addEventListener('change', () => { resetAutoFillFlags(); updateMonthlyDailyHint(); });
+  document.getElementById('calcMonth').addEventListener('change', () => { resetAutoFillFlags(); refreshRecords(); updateMonthlyDailyHint(); autoLoadExistingRecord(); });
+  document.getElementById('calcEmp').addEventListener('change', () => { resetAutoFillFlags(); updateMonthlyDailyHint(); autoLoadExistingRecord(); });
   document.getElementById('dailyDate').addEventListener('change', refreshDailyEntries);
   document.getElementById('dailyEmp').addEventListener('change', () => {
     refreshDailyEntries();
@@ -9476,24 +9660,40 @@ function enableAutoCollapse() {
     }
     card.appendChild(wrapper);
 
-    // 加三角形指示符
-    if (!h3.querySelector('.auto-collapse-ind')) {
-      const ind = document.createElement('span');
-      ind.className = 'auto-collapse-ind';
-      ind.style.cssText = 'float:right; font-size:12px; color:#6b7280; font-weight:normal; user-select:none;';
-      ind.textContent = '▲';
-      h3.appendChild(ind);
-    }
+    // 把 h3 改造成 flex 佈局，右側放明顯的「收起/展開」chip
+    h3.style.display = 'flex';
+    h3.style.justifyContent = 'space-between';
+    h3.style.alignItems = 'center';
     h3.style.cursor = 'pointer';
     h3.style.userSelect = 'none';
+    h3.style.gap = '8px';
 
-    // 點 h3 切換（但不要攔截 h3 內的按鈕）
+    // 若 h3 裡的原內容還沒被包起來，包成 span 方便 flex 對齊
+    if (!h3.querySelector(':scope > .h3-title-text')) {
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'h3-title-text';
+      titleSpan.style.flex = '1';
+      // 搬所有原本的子節點
+      while (h3.firstChild) titleSpan.appendChild(h3.firstChild);
+      h3.appendChild(titleSpan);
+    }
+
+    // 加明顯的「收起/展開」chip（跟特休管理一樣樣式）
+    if (!h3.querySelector('.auto-collapse-btn')) {
+      const btn = document.createElement('span');
+      btn.className = 'auto-collapse-btn';
+      btn.style.cssText = 'flex-shrink:0; font-size:12px; color:#3b82f6; background:#eff6ff; padding:3px 10px; border-radius:12px; border:1px solid #3b82f6; font-weight:normal; white-space:nowrap;';
+      btn.textContent = '收起 ▲';
+      h3.appendChild(btn);
+    }
+
+    // 點 h3 切換（但不要攔截 h3 內的實體按鈕）
     h3.addEventListener('click', (e) => {
       if (e.target.closest('button')) return;
       const hidden = wrapper.style.display === 'none';
       wrapper.style.display = hidden ? '' : 'none';
-      const ind = h3.querySelector('.auto-collapse-ind');
-      if (ind) ind.textContent = hidden ? '▲' : '▼';
+      const btn = h3.querySelector('.auto-collapse-btn');
+      if (btn) btn.textContent = hidden ? '收起 ▲' : '展開 ▼';
     });
   });
 }
@@ -9507,18 +9707,19 @@ function collapseAllInActivePanel(action) {
     toggleAllLeaveCards(action);
     return;
   }
-  active.querySelectorAll(':scope > .card').forEach(card => {
+  // 處理所有層級的卡片（含巢狀）
+  active.querySelectorAll('.card').forEach(card => {
     const wrapper = card.querySelector(':scope > .card-body-auto');
     if (!wrapper) return;
     const h3 = card.querySelector(':scope > h3');
     if (action === 'hide') {
       wrapper.style.display = 'none';
-      const ind = h3 && h3.querySelector('.auto-collapse-ind');
-      if (ind) ind.textContent = '▼';
+      const btn = h3 && h3.querySelector('.auto-collapse-btn');
+      if (btn) btn.textContent = '展開 ▼';
     } else {
       wrapper.style.display = '';
-      const ind = h3 && h3.querySelector('.auto-collapse-ind');
-      if (ind) ind.textContent = '▲';
+      const btn = h3 && h3.querySelector('.auto-collapse-btn');
+      if (btn) btn.textContent = '收起 ▲';
     }
   });
   active.scrollIntoView({ behavior: 'smooth', block: 'start' });
