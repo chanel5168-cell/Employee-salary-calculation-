@@ -6880,107 +6880,172 @@ function saveSalaryRecord() {
   if (typeof refreshLeaveList === 'function') refreshLeaveList();
 }
 
-// ✅ 儲存成功 - 綠色成功彈窗 + 薪資單預覽
+// ✅ 儲存成功 - 陽基五金品牌風格薪資單（深藍 + 金）
 function showSalarySaveSuccess(rec, emp, wasEditing) {
-  // 移除舊的提示
   const existing = document.getElementById('saveSuccessModal');
   if (existing) existing.remove();
 
   const deductDetail = (rec.deductItems && rec.deductItems.length > 0)
-    ? rec.deductItems.map(x => `<div style="display:flex; justify-content:space-between; padding:2px 0; font-size:12px;"><span>・${escapeHtml(x.name)}</span><span>- NT$ ${formatMoney(x.amount)}</span></div>`).join('')
+    ? rec.deductItems.map(x => `<tr><td style="padding:3px 8px; font-size:12px; color:#475569;">&nbsp;&nbsp;・${escapeHtml(x.name)}</td><td style="padding:3px 8px; font-size:12px; color:#475569; text-align:right;">- NT$ ${formatMoney(x.amount)}</td></tr>`).join('')
     : '';
   const bonusDetail = (rec.bonusItems && rec.bonusItems.length > 0)
-    ? rec.bonusItems.map(x => `<div style="display:flex; justify-content:space-between; padding:2px 0; font-size:12px;"><span>・${escapeHtml(x.name)}</span><span>+ NT$ ${formatMoney(x.amount)}</span></div>`).join('')
+    ? rec.bonusItems.map(x => `<tr><td style="padding:3px 8px; font-size:12px; color:#475569;">&nbsp;&nbsp;・${escapeHtml(x.name)}</td><td style="padding:3px 8px; font-size:12px; color:#475569; text-align:right;">+ NT$ ${formatMoney(x.amount)}</td></tr>`).join('')
     : '';
   const leaveDetail = (rec.leaveItems && rec.leaveItems.length > 0)
-    ? rec.leaveItems.map(x => `<div style="display:flex; justify-content:space-between; padding:2px 0; font-size:12px;"><span>・${escapeHtml(x.categoryName)} ${x.days || 0} 天 ${x.hours ? x.hours + ' 時' : ''}</span><span></span></div>`).join('')
+    ? rec.leaveItems.map(x => `<tr><td style="padding:3px 8px; font-size:12px; color:#475569;">&nbsp;&nbsp;・${escapeHtml(x.categoryName)} ${x.days || 0} 天 ${x.hours ? x.hours + ' 時' : ''}</td><td></td></tr>`).join('')
     : '';
 
   const modal = document.createElement('div');
   modal.id = 'saveSuccessModal';
   modal.style.cssText = `
-    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    position: fixed; inset: 0; background: rgba(15,23,42,0.7);
     z-index: 9999; display: flex; align-items: center; justify-content: center;
     padding: 20px; overflow-y: auto;
     animation: fadeIn 0.3s;
   `;
   modal.onclick = (e) => { if (e.target === modal) closeSalarySaveSuccess(); };
 
+  // 品牌顏色定義
+  const BRAND_NAVY = '#1a2a4a';
+  const BRAND_GOLD = '#c9a95c';
+  const BRAND_GOLD_LIGHT = '#e8d5a5';
+
   modal.innerHTML = `
     <style>
       @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
       @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-      @keyframes checkPop { 0% { transform: scale(0); } 60% { transform: scale(1.2); } 100% { transform: scale(1); } }
+      @keyframes checkPop { 0% { transform: scale(0) rotate(-45deg); } 60% { transform: scale(1.2) rotate(0); } 100% { transform: scale(1); } }
+      @keyframes spinGear { from { transform: rotate(0); } to { transform: rotate(360deg); } }
     </style>
-    <div style="background: white; border-radius: 16px; max-width: 520px; width: 100%; max-height: 92vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);">
-      <!-- 綠色成功頂部 -->
-      <div style="background: linear-gradient(135deg, #06C755 0%, #059669 100%); color: white; padding: 24px; border-radius: 16px 16px 0 0; text-align: center; position: relative;">
-        <div style="width: 72px; height: 72px; background: white; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 10px; animation: checkPop 0.6s ease-out;">
-          <span style="font-size: 48px;">✓</span>
+    <div style="background: white; border-radius: 12px; max-width: 560px; width: 100%; max-height: 92vh; overflow-y: auto; box-shadow: 0 25px 70px rgba(0,0,0,0.5); animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); border: 3px solid ${BRAND_GOLD};">
+
+      <!-- 深藍 + 金 頂部 Banner（陽基五金風格）-->
+      <div style="background: linear-gradient(135deg, ${BRAND_NAVY} 0%, #0f1a36 100%); color: white; padding: 22px 24px; border-radius: 8px 8px 0 0; text-align: center; position: relative; overflow: hidden;">
+        <!-- 裝飾齒輪 -->
+        <div style="position:absolute; top:-30px; right:-30px; width:120px; height:120px; opacity:0.1; animation: spinGear 20s linear infinite;">
+          <svg viewBox="0 0 100 100" fill="${BRAND_GOLD}"><path d="M50 10 L60 30 L80 30 L90 50 L80 70 L60 70 L50 90 L40 70 L20 70 L10 50 L20 30 L40 30 Z M50 35 A15 15 0 1 0 50 65 A15 15 0 1 0 50 35 Z"/></svg>
         </div>
-        <h2 style="font-size: 22px; margin: 0 0 4px 0;">${wasEditing ? '已更新' : '已儲存'}！</h2>
-        <div style="font-size: 13px; opacity: 0.95;">${escapeHtml(emp.name)} · ${escapeHtml(rec.month)} 月薪記錄</div>
+        <div style="position:absolute; bottom:-20px; left:-20px; width:80px; height:80px; opacity:0.08; animation: spinGear 15s linear infinite reverse;">
+          <svg viewBox="0 0 100 100" fill="${BRAND_GOLD}"><path d="M50 10 L60 30 L80 30 L90 50 L80 70 L60 70 L50 90 L40 70 L20 70 L10 50 L20 30 L40 30 Z M50 35 A15 15 0 1 0 50 65 A15 15 0 1 0 50 35 Z"/></svg>
+        </div>
+
+        <!-- 成功勾勾 -->
+        <div style="width:64px; height:64px; background:${BRAND_GOLD}; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; margin-bottom:10px; animation: checkPop 0.6s ease-out; box-shadow: 0 4px 12px rgba(201, 169, 92, 0.4);">
+          <span style="font-size:38px; color:${BRAND_NAVY}; font-weight:900;">✓</span>
+        </div>
+        <h2 style="font-size: 20px; margin: 0 0 4px 0; letter-spacing:2px;">${wasEditing ? '薪資記錄已更新' : '薪資記錄已儲存'}</h2>
+        <div style="font-size: 12px; color:${BRAND_GOLD_LIGHT}; letter-spacing:1px;">${escapeHtml(emp.name)} · ${escapeHtml(rec.month)}</div>
       </div>
 
-      <!-- 薪資單預覽 -->
-      <div id="salarySlipContent" style="padding: 20px 24px; font-size: 14px; line-height: 1.7;">
-        <div style="text-align: center; padding-bottom: 10px; border-bottom: 2px solid #06C755; margin-bottom: 12px;">
-          <div style="font-size: 18px; font-weight: 700; color: #111827;">💼 ${escapeHtml(rec.month)} 月薪資單</div>
-          <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">員工：${escapeHtml(emp.name)}${emp.id ? ' (' + escapeHtml(emp.id) + ')' : ''}${emp.workplace ? ' · ' + escapeHtml(emp.workplace) : ''}</div>
+      <!-- 薪資單本體 -->
+      <div id="salarySlipContent" style="padding: 24px; font-size: 14px; line-height: 1.7; color: ${BRAND_NAVY};">
+
+        <!-- 公司抬頭 -->
+        <div style="text-align:center; padding:16px 0; border-top:3px solid ${BRAND_GOLD}; border-bottom:3px solid ${BRAND_GOLD}; margin-bottom:16px; background: linear-gradient(180deg, transparent 0%, #fef9ee 100%);">
+          <div style="font-size:22px; font-weight:900; color:${BRAND_NAVY}; letter-spacing:3px;">陽基五金有限公司</div>
+          <div style="font-size:11px; color:#64748b; letter-spacing:2px; margin-top:2px;">YANG JI HARDWARE CO., LTD.</div>
+          <div style="margin-top:8px; padding-top:8px; border-top:1px dashed ${BRAND_GOLD};">
+            <div style="font-size:18px; font-weight:700; color:${BRAND_GOLD};">⚙ 員工薪資單 ⚙</div>
+            <div style="font-size:12px; color:#64748b; margin-top:2px;">Employee Pay Slip · ${escapeHtml(rec.month)}</div>
+          </div>
         </div>
 
-        <!-- 應發項目 -->
-        <div style="font-weight: 700; color: #059669; margin-bottom: 6px;">📈 應發項目</div>
-        ${rec.base > 0 ? `<div style="display:flex; justify-content:space-between; padding:3px 0;"><span>底薪</span><span>NT$ ${formatMoney(rec.base)}</span></div>` : ''}
-        ${rec.pieceIncome ? `<div style="display:flex; justify-content:space-between; padding:3px 0;"><span>論件收入</span><span>NT$ ${formatMoney(rec.pieceIncome)}</span></div>` : ''}
-        ${rec.hourIncome ? `<div style="display:flex; justify-content:space-between; padding:3px 0;"><span>計時收入</span><span>NT$ ${formatMoney(rec.hourIncome)}</span></div>` : ''}
-        ${rec.otPay1 ? `<div style="display:flex; justify-content:space-between; padding:3px 0;"><span>平日加班 (${rec.ot1 || 0}h × 1.34)</span><span>NT$ ${formatMoney(rec.otPay1)}</span></div>` : ''}
-        ${rec.otPay2 ? `<div style="display:flex; justify-content:space-between; padding:3px 0;"><span>假日加班 (${rec.ot2 || 0}h × 1.67)</span><span>NT$ ${formatMoney(rec.otPay2)}</span></div>` : ''}
-        ${rec.leavePayAmount ? `<div style="display:flex; justify-content:space-between; padding:3px 0;"><span>特休折算 (${rec.leavePayDays || 0}天)</span><span>NT$ ${formatMoney(rec.leavePayAmount)}</span></div>` : ''}
-        ${rec.bonus ? `<div style="display:flex; justify-content:space-between; padding:3px 0; font-weight:600;"><span>獎金合計</span><span>NT$ ${formatMoney(rec.bonus)}</span></div>${bonusDetail}` : ''}
-        ${leaveDetail ? `<div style="margin-top:4px; font-size:12px; color:#6b7280; padding:6px 8px; background:#f9fafb; border-radius:6px;">${leaveDetail}</div>` : ''}
+        <!-- 員工基本資訊 -->
+        <table style="width:100%; font-size:13px; margin-bottom:14px;">
+          <tr>
+            <td style="padding:4px 8px; background:#f1f5f9; border-left:3px solid ${BRAND_GOLD}; font-weight:700; width:25%;">員工姓名</td>
+            <td style="padding:4px 8px; color:${BRAND_NAVY}; font-weight:600;">${escapeHtml(emp.name)}</td>
+            <td style="padding:4px 8px; background:#f1f5f9; border-left:3px solid ${BRAND_GOLD}; font-weight:700; width:25%;">員工編號</td>
+            <td style="padding:4px 8px; color:${BRAND_NAVY};">${escapeHtml(emp.id || '-')}</td>
+          </tr>
+          <tr>
+            <td style="padding:4px 8px; background:#f1f5f9; border-left:3px solid ${BRAND_GOLD}; font-weight:700;">職稱</td>
+            <td style="padding:4px 8px; color:${BRAND_NAVY};">${escapeHtml(emp.title || '-')}</td>
+            <td style="padding:4px 8px; background:#f1f5f9; border-left:3px solid ${BRAND_GOLD}; font-weight:700;">廠別</td>
+            <td style="padding:4px 8px; color:${BRAND_NAVY};">${escapeHtml(emp.workplace || '-')}</td>
+          </tr>
+        </table>
 
-        <div style="display:flex; justify-content:space-between; padding:8px 0; margin-top:6px; border-top:1px dashed #e5e7eb; border-bottom:1px dashed #e5e7eb; font-weight:700;">
-          <span>應發合計</span>
-          <span style="color:#059669; font-size:16px;">NT$ ${formatMoney(rec.gross || 0)}</span>
+        <!-- 應發項目 -->
+        <div style="background: linear-gradient(90deg, ${BRAND_NAVY} 0%, transparent 100%); color:white; padding:6px 12px; margin:12px 0 8px; font-weight:700; font-size:14px; letter-spacing:1px;">
+          ▌ 應 發 項 目
+        </div>
+        <table style="width:100%; font-size:13px;">
+          ${rec.base > 0 ? `<tr><td style="padding:3px 8px;">底薪</td><td style="padding:3px 8px; text-align:right;">NT$ ${formatMoney(rec.base)}</td></tr>` : ''}
+          ${rec.pieceIncome ? `<tr><td style="padding:3px 8px;">論件收入</td><td style="padding:3px 8px; text-align:right;">NT$ ${formatMoney(rec.pieceIncome)}</td></tr>` : ''}
+          ${rec.hourIncome ? `<tr><td style="padding:3px 8px;">計時收入</td><td style="padding:3px 8px; text-align:right;">NT$ ${formatMoney(rec.hourIncome)}</td></tr>` : ''}
+          ${rec.otPay1 ? `<tr><td style="padding:3px 8px;">平日加班 (${rec.ot1 || 0}h × 1.34)</td><td style="padding:3px 8px; text-align:right;">NT$ ${formatMoney(rec.otPay1)}</td></tr>` : ''}
+          ${rec.otPay2 ? `<tr><td style="padding:3px 8px;">假日加班 (${rec.ot2 || 0}h × 1.67)</td><td style="padding:3px 8px; text-align:right;">NT$ ${formatMoney(rec.otPay2)}</td></tr>` : ''}
+          ${rec.leavePayAmount ? `<tr><td style="padding:3px 8px;">特休折算 (${rec.leavePayDays || 0}天)</td><td style="padding:3px 8px; text-align:right;">NT$ ${formatMoney(rec.leavePayAmount)}</td></tr>` : ''}
+          ${rec.bonus ? `<tr><td style="padding:3px 8px; font-weight:600;">獎金合計</td><td style="padding:3px 8px; text-align:right; font-weight:600;">NT$ ${formatMoney(rec.bonus)}</td></tr>${bonusDetail}` : ''}
+          ${leaveDetail}
+        </table>
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; margin-top:6px; background: ${BRAND_NAVY}; color:${BRAND_GOLD}; border-radius:4px; font-weight:700;">
+          <span>應發合計 Gross</span>
+          <span style="font-size:16px;">NT$ ${formatMoney(rec.gross || 0)}</span>
         </div>
 
         <!-- 扣除項目 -->
-        <div style="font-weight: 700; color: #dc2626; margin: 14px 0 6px;">📉 扣除項目</div>
-        ${rec.laborIns ? `<div style="display:flex; justify-content:space-between; padding:3px 0;"><span>勞保</span><span>- NT$ ${formatMoney(rec.laborIns)}</span></div>` : ''}
-        ${rec.healthIns ? `<div style="display:flex; justify-content:space-between; padding:3px 0;"><span>健保${rec.dependents ? '（眷口 ' + rec.dependents + '）' : ''}</span><span>- NT$ ${formatMoney(rec.healthIns)}</span></div>` : ''}
-        ${rec.pensionSelf ? `<div style="display:flex; justify-content:space-between; padding:3px 0;"><span>自提勞退 (${rec.pensionSelfRate || 0}%)</span><span>- NT$ ${formatMoney(rec.pensionSelf)}</span></div>` : ''}
-        ${rec.leaveDeduct ? `<div style="display:flex; justify-content:space-between; padding:3px 0;"><span>請假扣款</span><span>- NT$ ${formatMoney(rec.leaveDeduct)}</span></div>` : ''}
-        ${rec.otherDeduct ? `<div style="display:flex; justify-content:space-between; padding:3px 0; font-weight:600;"><span>其他扣款合計</span><span>- NT$ ${formatMoney(rec.otherDeduct)}</span></div>${deductDetail}` : ''}
+        <div style="background: linear-gradient(90deg, #991b1b 0%, transparent 100%); color:white; padding:6px 12px; margin:16px 0 8px; font-weight:700; font-size:14px; letter-spacing:1px;">
+          ▌ 扣 除 項 目
+        </div>
+        <table style="width:100%; font-size:13px;">
+          ${rec.laborIns ? `<tr><td style="padding:3px 8px;">勞保</td><td style="padding:3px 8px; text-align:right; color:#991b1b;">- NT$ ${formatMoney(rec.laborIns)}</td></tr>` : ''}
+          ${rec.healthIns ? `<tr><td style="padding:3px 8px;">健保${rec.dependents ? '（眷口 ' + rec.dependents + '）' : ''}</td><td style="padding:3px 8px; text-align:right; color:#991b1b;">- NT$ ${formatMoney(rec.healthIns)}</td></tr>` : ''}
+          ${rec.pensionSelf ? `<tr><td style="padding:3px 8px;">自提勞退 (${rec.pensionSelfRate || 0}%)</td><td style="padding:3px 8px; text-align:right; color:#991b1b;">- NT$ ${formatMoney(rec.pensionSelf)}</td></tr>` : ''}
+          ${rec.leaveDeduct ? `<tr><td style="padding:3px 8px;">請假扣款</td><td style="padding:3px 8px; text-align:right; color:#991b1b;">- NT$ ${formatMoney(rec.leaveDeduct)}</td></tr>` : ''}
+          ${rec.otherDeduct ? `<tr><td style="padding:3px 8px; font-weight:600;">其他扣款合計</td><td style="padding:3px 8px; text-align:right; font-weight:600; color:#991b1b;">- NT$ ${formatMoney(rec.otherDeduct)}</td></tr>${deductDetail}` : ''}
+        </table>
 
-        <!-- 實發金額（大字顯示）-->
-        <div style="margin-top:16px; padding:14px; background:linear-gradient(135deg, #d1fae5 0%, #fef3c7 100%); border-radius:10px; text-align:center;">
-          <div style="font-size:12px; color:#065f46; margin-bottom:2px;">實發金額</div>
-          <div style="font-size:30px; font-weight:900; color:#059669;">NT$ ${formatMoney(rec.net || 0)}</div>
+        <!-- 實發金額 - 金色邊框突顯 -->
+        <div style="margin-top:18px; padding:16px; background: linear-gradient(135deg, #fef9ee 0%, #fef3c7 100%); border:3px double ${BRAND_GOLD}; border-radius:8px; text-align:center; position:relative;">
+          <div style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:white; padding:0 12px; font-size:11px; color:${BRAND_NAVY}; letter-spacing:2px;">實 發 金 額</div>
+          <div style="font-size:32px; font-weight:900; color:${BRAND_NAVY}; letter-spacing:2px; margin-top:4px;">
+            NT$ ${formatMoney(rec.net || 0)}
+          </div>
+          <div style="font-size:11px; color:#64748b; margin-top:2px; letter-spacing:1px;">NET SALARY</div>
         </div>
 
-        ${rec.note ? `<div style="margin-top:12px; padding:8px 10px; background:#f3f4f6; border-radius:6px; font-size:12px; color:#4b5563;">📝 備註：${escapeHtml(rec.note)}</div>` : ''}
+        ${rec.note ? `<div style="margin-top:12px; padding:8px 10px; background:#f8fafc; border-left:3px solid ${BRAND_GOLD}; font-size:12px; color:#475569;">📝 備註：${escapeHtml(rec.note)}</div>` : ''}
 
-        <div style="margin-top:14px; text-align:center; font-size:11px; color:#9ca3af;">
-          儲存時間：${new Date().toLocaleString('zh-TW')}
+        <!-- 簽章區 -->
+        <table style="width:100%; margin-top:18px; font-size:12px;">
+          <tr>
+            <td style="width:33%; padding:10px 8px; text-align:center; border:1px solid #e2e8f0; height:60px; background:#fafbfc;">
+              <div style="color:#64748b; font-size:10px; margin-bottom:30px;">員工簽收</div>
+            </td>
+            <td style="width:33%; padding:10px 8px; text-align:center; border:1px solid #e2e8f0; height:60px; background:#fafbfc;">
+              <div style="color:#64748b; font-size:10px; margin-bottom:30px;">會計主管</div>
+            </td>
+            <td style="width:33%; padding:10px 8px; text-align:center; border:1px solid #e2e8f0; height:60px; background:#fafbfc;">
+              <div style="color:#64748b; font-size:10px; margin-bottom:30px;">公司印章</div>
+            </td>
+          </tr>
+        </table>
+
+        <!-- 頁尾公司資訊 -->
+        <div style="margin-top:16px; padding-top:12px; border-top:2px solid ${BRAND_GOLD}; text-align:center; font-size:10px; color:#64748b; line-height:1.6;">
+          <div style="color:${BRAND_NAVY}; font-weight:700; letter-spacing:1px;">⚙ 穩 固 久 遠 · 品 質 至 上 ⚙</div>
+          <div style="margin-top:4px;">彰化縣伸港鄉定興村定興路53號</div>
+          <div>E-mail: yang.ji.hardware@gmail.com · 統編: 83273097</div>
+          <div style="margin-top:6px; color:#94a3b8; font-size:9px;">列印時間：${new Date().toLocaleString('zh-TW')}</div>
         </div>
       </div>
 
       <!-- 底部操作按鈕 -->
-      <div style="padding: 14px 24px 20px; border-top: 1px solid #e5e7eb; display: flex; gap: 8px; flex-wrap: wrap;">
-        <button onclick="printSalarySlip()" style="flex:1; padding: 10px; background: #06C755; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer;">🖨 列印薪資單</button>
-        <button onclick="closeSalarySaveSuccess()" style="flex:1; padding: 10px; background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">✓ 關閉</button>
+      <div style="padding: 14px 24px 20px; border-top: 2px solid ${BRAND_GOLD}; display: flex; gap: 8px; flex-wrap: wrap; background: #fafbfc;">
+        <button onclick="printSalarySlip()" style="flex:1; padding: 12px; background: ${BRAND_NAVY}; color: ${BRAND_GOLD}; border: 2px solid ${BRAND_GOLD}; border-radius: 6px; font-size: 14px; font-weight: 700; cursor: pointer; letter-spacing:1px;">🖨 列 印 薪 資 單</button>
+        <button onclick="closeSalarySaveSuccess()" style="flex:0 0 100px; padding: 12px; background: white; color: ${BRAND_NAVY}; border: 2px solid ${BRAND_NAVY}; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer;">關 閉</button>
       </div>
     </div>
   `;
   document.body.appendChild(modal);
 
-  // 10 秒後自動消失
   setTimeout(() => {
     const m = document.getElementById('saveSuccessModal');
     if (m) m.style.opacity = '0';
     setTimeout(() => { const m2 = document.getElementById('saveSuccessModal'); if (m2) m2.remove(); }, 500);
-  }, 15000);
+  }, 20000);
 }
 
 function closeSalarySaveSuccess() {
