@@ -380,6 +380,37 @@
           <span>此員工為「排班制」員工 <span style="font-size:11px; color:#6b7280;">(例假國定假日照班表不加倍)</span></span>
         </label>
       </div>
+
+      <!-- ⚖ 勞基法合規相關選項 -->
+      <div class="form-group" style="background:#fef3c7; padding:12px 14px; border-radius:8px; border:1px dashed #f59e0b;">
+        <div style="font-weight:700; color:#92400e; margin-bottom:8px; font-size:13px;">⚖ 勞基法合規設定（影響工時稽核的上限）</div>
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="empOtAgreement" style="width:auto;">
+          <span>✅ <strong>已簽勞資會議同意書</strong> <span style="font-size:11px; color:#78350f;">(加班上限 46h → 54h/月 · 勞基法 §32)</span></span>
+        </label>
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-top:6px;">
+          <input type="checkbox" id="empResponsibilitySystem" style="width:auto;">
+          <span>👔 <strong>責任制員工</strong>（§84-1） <span style="font-size:11px; color:#78350f;">(須報勞動局核備 · 不受工時限制)</span></span>
+        </label>
+        <div style="margin-top:8px;">
+          <label style="font-size:12px; color:#78350f;">變形工時</label>
+          <select id="empFlexibleHours" style="padding:6px 10px; border-radius:6px; border:1px solid #d4a56f; background:white;">
+            <option value="">無（一般 8h/天、40h/週）</option>
+            <option value="2week">二週變形（每日 ≤10h，2 週 ≤84h）</option>
+            <option value="4week">四週變形（每日 ≤10h，平均週 ≤40h）</option>
+            <option value="8week">八週變形（製造業、平均週 ≤40h）</option>
+          </select>
+        </div>
+        <div style="margin-top:8px;">
+          <label style="font-size:12px; color:#78350f;">合約類型</label>
+          <select id="empContractType" style="padding:6px 10px; border-radius:6px; border:1px solid #d4a56f; background:white;">
+            <option value="fulltime">正職（全職）</option>
+            <option value="parttime">兼職（部分工時）</option>
+            <option value="outsource">外包 / 承攬（無工時限制）</option>
+            <option value="intern">實習生</option>
+          </select>
+        </div>
+      </div>
       <div class="form-group" id="empHourlyOnly" style="display:none;">
         <div class="form-row">
           <div class="form-group" style="margin-bottom:0;">
@@ -699,6 +730,12 @@
 
     <!-- 🚨 工時缺漏警示橫幅（選了員工且月薪制才可能顯示） -->
     <div id="shortageWarningBanner" style="display:none;"></div>
+
+    <!-- ⚖ 勞基法風險檢查 -->
+    <div class="card" id="laborAuditCard" style="display:none; border:2px solid #f59e0b;">
+      <h3 style="color:#92400e;">⚖ 勞基法風險檢查 <span style="font-size:12px; color:#6b7280; font-weight:normal;">(§30 §32 §34 §36)</span></h3>
+      <div id="laborAuditContent"></div>
+    </div>
 
     <!-- ① 本月出勤明細（提前顯示）-->
     <div class="card">
@@ -1173,6 +1210,17 @@
     <div class="card">
       <h3>加班時數 TOP 10（所選月份）</h3>
       <div style="position:relative; height:280px;"><canvas id="chartOvertime"></canvas></div>
+    </div>
+
+    <!-- ⚖ 勞基法稽核報表 -->
+    <div class="card" style="border:2px solid #f59e0b;">
+      <h3 style="color:#92400e;">⚖ 勞基法稽核報表（選月份內所有員工）</h3>
+      <div id="laborAuditSummary" style="margin-bottom:10px;"></div>
+      <div style="margin-bottom:10px;">
+        <button class="btn btn-primary" onclick="refreshLaborAuditSummary()">🔍 檢查全部員工</button>
+        <button class="btn btn-secondary" onclick="exportLaborAuditExcel()" style="background:#f59e0b; color:white;">📥 匯出稽核 Excel</button>
+      </div>
+      <div id="laborAuditResult"></div>
     </div>
 
     <!-- 明細表 -->
@@ -2444,6 +2492,10 @@ function saveEmployee() {
     isShift: document.getElementById('empIsShift').checked,
     weeklyHours: parseFloat(document.getElementById('empWeeklyHours').value) || 0,
     dailyHours: parseFloat(document.getElementById('empDailyHours').value) || 0,
+    otAgreement: document.getElementById('empOtAgreement').checked,
+    responsibilitySystem: document.getElementById('empResponsibilitySystem').checked,
+    flexibleHours: document.getElementById('empFlexibleHours').value || '',
+    contractType: document.getElementById('empContractType').value || 'fulltime',
     insuredSalary: parseFloat(document.getElementById('empInsuredSalary').value) || 0,
     dependents: parseFloat(document.getElementById('empDependents').value) || 0,
     pensionSelf: parseFloat(document.getElementById('empPensionSelf').value) || 0,
@@ -2480,6 +2532,10 @@ function editEmployee(id) {
   document.getElementById('empIsShift').checked = !!e.isShift;
   document.getElementById('empWeeklyHours').value = e.weeklyHours || '';
   document.getElementById('empDailyHours').value = e.dailyHours || '';
+  document.getElementById('empOtAgreement').checked = !!e.otAgreement;
+  document.getElementById('empResponsibilitySystem').checked = !!e.responsibilitySystem;
+  document.getElementById('empFlexibleHours').value = e.flexibleHours || '';
+  document.getElementById('empContractType').value = e.contractType || 'fulltime';
   document.getElementById('empInsuredSalary').value = e.insuredSalary || '';
   document.getElementById('empDependents').value = e.dependents || '';
   document.getElementById('empPensionSelf').value = e.pensionSelf || '';
@@ -2504,6 +2560,10 @@ function clearEmpForm() {
     .forEach(id => document.getElementById(id).value = '');
   document.getElementById('empIsHourly').checked = false;
   document.getElementById('empIsShift').checked = false;
+  document.getElementById('empOtAgreement').checked = false;
+  document.getElementById('empResponsibilitySystem').checked = false;
+  document.getElementById('empFlexibleHours').value = '';
+  document.getElementById('empContractType').value = 'fulltime';
   document.getElementById('empWorkplace').value = '';
   document.getElementById('empLeaveHint').style.display = 'none';
 }
@@ -4424,6 +4484,264 @@ function refreshLeaveList() {
   }).join('');
 }
 
+function refreshLaborAuditCard() {
+  const card = document.getElementById('laborAuditCard');
+  const content = document.getElementById('laborAuditContent');
+  if (!card || !content) return;
+  const empId = document.getElementById('calcEmp').value;
+  const month = document.getElementById('calcMonth').value;
+  if (!empId || !month) { card.style.display = 'none'; return; }
+
+  const result = auditLaborLaw(empId, month);
+  const emp = employees.find(e => e._id === empId);
+
+  // 承攬/外包跳過
+  if (result.skipped) {
+    card.style.display = 'block';
+    content.innerHTML = `
+      <div style="padding:12px; background:#f3f4f6; border-radius:8px; font-size:13px; color:#374151;">
+        ℹ️ <strong>${escapeHtml(emp.name)}</strong> 為「${escapeHtml(result.reason)}」— 不進行勞基法工時稽核
+      </div>`;
+    return;
+  }
+
+  // 責任制員工註解
+  let respNote = '';
+  if (result.isResponsibility) {
+    respNote = `
+      <div style="padding:10px 12px; background:#e0f2fe; border-left:4px solid #0284c7; border-radius:6px; font-size:12px; color:#075985; margin-bottom:10px;">
+        👔 <strong>${escapeHtml(emp.name)} 為責任制（§84-1）員工</strong>：不受單日/月加班上限約束，但仍受 §34 換班間隔、§36 7休1、§49 女工夜間保護
+      </div>`;
+  }
+
+  const totalIssues = result.violations.length + result.warnings.length;
+  if (totalIssues === 0) {
+    card.style.display = 'block';
+    content.innerHTML = respNote + `
+      <div style="padding:14px 16px; background:#d1fae5; border-left:4px solid #059669; border-radius:8px; color:#065f46; font-size:14px;">
+        ✅ <strong>${escapeHtml(emp.name)} 本月工時符合勞基法規定</strong><br>
+        <span style="font-size:12px; opacity:0.85;">已檢查：單日工時、月加班、7休1、換班間隔、週工時</span>
+      </div>`;
+    return;
+  }
+
+  card.style.display = 'block';
+  let html = respNote;
+  if (result.violations.length > 0) {
+    html += `<div style="padding:12px 14px; background:#fee2e2; border-left:4px solid #dc2626; border-radius:8px; margin-bottom:10px;">
+      <div style="font-weight:700; color:#991b1b; margin-bottom:8px;">🚨 違規 ${result.violations.length} 項（可能被罰 2~100 萬）</div>
+      ${result.violations.map(v => `
+        <div style="background:white; padding:8px 10px; border-radius:6px; margin-bottom:6px; font-size:13px;">
+          <div style="font-weight:700; color:#991b1b;">⛔ ${escapeHtml(v.rule)}</div>
+          <div style="font-size:12px; color:#7f1d1d; margin-top:2px;">${escapeHtml(v.detail)}</div>
+          <div style="font-size:11px; color:#991b1b; margin-top:2px;">📅 ${escapeHtml(v.date)}｜⚖ ${escapeHtml(v.law)}</div>
+        </div>`).join('')}
+    </div>`;
+  }
+  if (result.warnings.length > 0) {
+    html += `<div style="padding:12px 14px; background:#fef3c7; border-left:4px solid #f59e0b; border-radius:8px;">
+      <div style="font-weight:700; color:#92400e; margin-bottom:8px;">⚠ 注意 ${result.warnings.length} 項（建議留意）</div>
+      ${result.warnings.map(w => `
+        <div style="background:white; padding:8px 10px; border-radius:6px; margin-bottom:6px; font-size:13px;">
+          <div style="font-weight:700; color:#92400e;">🟡 ${escapeHtml(w.rule)}</div>
+          <div style="font-size:12px; color:#78350f; margin-top:2px;">${escapeHtml(w.detail)}</div>
+          <div style="font-size:11px; color:#92400e; margin-top:2px;">📅 ${escapeHtml(w.date)}｜⚖ ${escapeHtml(w.law)}</div>
+        </div>`).join('')}
+    </div>`;
+  }
+  html += `<div style="margin-top:10px; padding:10px 12px; background:#f0f9ff; border-radius:6px; font-size:11px; color:#075985; line-height:1.7;">
+    💡 <strong>調整建議</strong>：<br>
+    • 讓員工簽「勞資會議同意書」→ 月加班上限 46h → 54h（員工頁勾選「已簽勞資會議同意書」）<br>
+    • 月薪制若為特定職位（管理職等），可申請「責任制 §84-1」核備<br>
+    • 超時工作可改簽兼職合約分散時數<br>
+    • 製造業可啟用「八週變形工時」增加彈性
+  </div>`;
+  content.innerHTML = html;
+}
+
+// ========= ⚖ 勞基法工時稽核（§30 §32 §34 §35 §36 §47 §49）=========
+function auditLaborLaw(empId, month) {
+  const emp = employees.find(e => e._id === empId);
+  if (!emp) return { violations: [], warnings: [], skipped: false };
+
+  // 承攬/外包不受勞基法約束
+  if (emp.contractType === 'outsource') {
+    return { violations: [], warnings: [], skipped: true, reason: '承攬/外包合約不適用勞基法' };
+  }
+  // 責任制（§84-1）不受工時限制，但仍受其他保護
+  const isResponsibility = !!emp.responsibilitySystem;
+
+  const violations = [];
+  const warnings = [];
+
+  // 取得當月所有計時記錄
+  const entries = dailyEntries.filter(d =>
+    d.empId === empId &&
+    d.date.startsWith(month) &&
+    d.type === 'hour'
+  ).sort((a, b) => a.date.localeCompare(b.date));
+
+  // 按日期分組
+  const byDate = {};
+  entries.forEach(d => {
+    if (!byDate[d.date]) byDate[d.date] = [];
+    byDate[d.date].push(d);
+  });
+
+  // ========== 檢查 1: 單日工時 > 12 小時（§32）==========
+  if (!isResponsibility) {
+    Object.keys(byDate).forEach(date => {
+      const workEntries = byDate[date].filter(d => {
+        const t = d.attType || 'normal';
+        return t === 'normal' || t === '加班' || t === '時薪加班';
+      });
+      const totalHrs = workEntries.reduce((s, d) => s + (d.hours || 0), 0);
+      const dailyLimit = (emp.flexibleHours === '2week' || emp.flexibleHours === '4week') ? 10 : 8;
+      const dailyMax = dailyLimit + 4; // 正常 + OT 4h = 最多 12h
+      if (totalHrs > dailyMax) {
+        violations.push({
+          date, severity: 'high',
+          rule: `單日工時超過 ${dailyMax}h`,
+          detail: `實際 ${totalHrs}h（正常 ${dailyLimit}h + OT 最多 4h）`,
+          law: '勞基法 §32'
+        });
+      }
+    });
+  }
+
+  // ========== 檢查 2: 月加班時數超限（§32）==========
+  if (!isResponsibility) {
+    let monthlyOT = 0;
+    entries.forEach(d => {
+      const t = d.attType || 'normal';
+      if (t === '加班' || t === '時薪加班') monthlyOT += (d.hours || 0);
+      // 平日/假日加班欄位也要考慮
+      monthlyOT += (d.ot1 || 0) + (d.ot2 || 0);
+    });
+    const otLimit = emp.otAgreement ? 54 : 46;
+    if (monthlyOT > otLimit) {
+      violations.push({
+        date: `${month} 整月`, severity: 'high',
+        rule: `月加班超過 ${otLimit}h ${emp.otAgreement ? '(已簽勞資會議同意)' : '(法定預設)'}`,
+        detail: `實際 ${monthlyOT.toFixed(1)}h · 超出 ${(monthlyOT - otLimit).toFixed(1)}h`,
+        law: '勞基法 §32'
+      });
+    } else if (monthlyOT > otLimit - 10) {
+      warnings.push({
+        date: `${month} 整月`, severity: 'medium',
+        rule: `月加班接近上限`,
+        detail: `實際 ${monthlyOT.toFixed(1)}h / 上限 ${otLimit}h`,
+        law: '勞基法 §32'
+      });
+    }
+  }
+
+  // ========== 檢查 3: 7 休 1（連續上班超過 6 天）（§36）==========
+  if (emp.contractType !== 'parttime' && !isResponsibility) {
+    const [y, m] = month.split('-').map(Number);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const workedDates = new Set();
+    Object.keys(byDate).forEach(date => {
+      const hasWork = byDate[date].some(d => {
+        const t = d.attType || 'normal';
+        return t === 'normal' || t === '加班' || t === '時薪加班';
+      });
+      if (hasWork) workedDates.add(date);
+    });
+    let consecutive = 0;
+    let startDate = null;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = `${month}-${String(day).padStart(2, '0')}`;
+      if (workedDates.has(date)) {
+        if (consecutive === 0) startDate = date;
+        consecutive++;
+        if (consecutive > 6) {
+          violations.push({
+            date, severity: 'high',
+            rule: `連續上班超過 6 天（違反 7 休 1）`,
+            detail: `從 ${startDate} 起連續 ${consecutive} 天上班`,
+            law: '勞基法 §36'
+          });
+          break; // 只報一次
+        }
+      } else {
+        consecutive = 0;
+      }
+    }
+  }
+
+  // ========== 檢查 4: 換班間隔不足 11 小時（§34）==========
+  if (!isResponsibility && emp.isShift) {
+    const sortedDates = Object.keys(byDate).sort();
+    for (let i = 1; i < sortedDates.length; i++) {
+      const prevDate = sortedDates[i - 1];
+      const currDate = sortedDates[i];
+      // 僅檢查相鄰日
+      const daysBetween = Math.round((new Date(currDate) - new Date(prevDate)) / (86400000));
+      if (daysBetween !== 1) continue;
+
+      let prevEnd = null, currStart = null;
+      byDate[prevDate].forEach(d => {
+        if (d.endTime) {
+          const [h, mi] = d.endTime.split(':').map(Number);
+          const [sh, sm] = (d.startTime || '00:00').split(':').map(Number);
+          const crossDay = (h * 60 + mi) < (sh * 60 + sm);
+          const end = new Date(prevDate + 'T00:00:00');
+          if (crossDay) end.setDate(end.getDate() + 1);
+          end.setHours(h, mi);
+          if (!prevEnd || end > prevEnd) prevEnd = end;
+        }
+      });
+      byDate[currDate].forEach(d => {
+        if (d.startTime) {
+          const [h, mi] = d.startTime.split(':').map(Number);
+          const start = new Date(currDate + 'T00:00:00');
+          start.setHours(h, mi);
+          if (!currStart || start < currStart) currStart = start;
+        }
+      });
+      if (prevEnd && currStart) {
+        const gap = (currStart - prevEnd) / 3600000;
+        if (gap < 11 && gap > 0) {
+          warnings.push({
+            date: currDate, severity: 'medium',
+            rule: `換班間隔不足 11h（實際 ${gap.toFixed(1)}h）`,
+            detail: `前一班 ${prevDate} 結束 → ${currDate} 開始`,
+            law: '勞基法 §34'
+          });
+        }
+      }
+    }
+  }
+
+  // ========== 檢查 5: 每週工時超過 40 小時（§30）==========
+  if (!isResponsibility && emp.flexibleHours === '') {
+    // 週數計算（該月第幾週）
+    const weekHours = {};
+    Object.keys(byDate).forEach(date => {
+      const d = new Date(date);
+      const weekNum = Math.ceil(d.getDate() / 7);
+      const weekKey = `${month}-W${weekNum}`;
+      const normalHrs = byDate[date]
+        .filter(e => (e.attType || 'normal') === 'normal')
+        .reduce((s, e) => s + (e.hours || 0), 0);
+      weekHours[weekKey] = (weekHours[weekKey] || 0) + normalHrs;
+    });
+    Object.keys(weekHours).forEach(wk => {
+      if (weekHours[wk] > 40) {
+        warnings.push({
+          date: wk, severity: 'medium',
+          rule: `週正常工時超過 40h`,
+          detail: `實際 ${weekHours[wk].toFixed(1)}h`,
+          law: '勞基法 §30'
+        });
+      }
+    });
+  }
+
+  return { violations, warnings, skipped: false, isResponsibility, contractType: emp.contractType || 'fulltime' };
+}
+
 // ========= 🎉 特別假額度追蹤（婚、喪、產、陪產、家庭照顧）=========
 // 依法律預設天數與期限
 const ENTITLEMENT_PRESETS = {
@@ -5768,6 +6086,7 @@ function updateMonthlyDailyHint() {
   updateDailyRateHint();
   updateLateHint();
   refreshMonthlyAttendance();
+  if (typeof refreshLaborAuditCard === 'function') refreshLaborAuditCard();
   renderBatchAttendance();
   // ★ 自動從出勤明細帶入請假（若尚未手動填）
   if (typeof autoFillLeaveSilent === 'function') autoFillLeaveSilent();
@@ -8738,6 +9057,147 @@ function toggleLeaveReference() {
     box.style.display = 'none';
     toggle.textContent = '展開 ▼';
   }
+}
+
+// ========= ⚖ 分析頁：整月勞基法稽核報表 =========
+function refreshLaborAuditSummary() {
+  const result = document.getElementById('laborAuditResult');
+  const summary = document.getElementById('laborAuditSummary');
+  if (!result || !summary) return;
+
+  const month = document.getElementById('analyticsMonth').value;
+  const scope = getAnalyticsScope();
+
+  if (!month) {
+    summary.innerHTML = '<div style="padding:10px; background:#fef3c7; border-radius:6px; font-size:13px; color:#92400e;">⚠ 請先選擇月份</div>';
+    result.innerHTML = '';
+    return;
+  }
+
+  const visibleEmps = getVisibleEmployees().filter(e => scope.wps.includes(e.workplace || ''));
+  if (visibleEmps.length === 0) {
+    result.innerHTML = '<div style="padding:16px; text-align:center; color:#9ca3af;">範圍內無員工資料</div>';
+    return;
+  }
+
+  // 依員工稽核
+  const audits = visibleEmps.map(emp => ({
+    emp, ...auditLaborLaw(emp._id, month)
+  }));
+
+  const totalViolations = audits.reduce((s, a) => s + a.violations.length, 0);
+  const totalWarnings = audits.reduce((s, a) => s + a.warnings.length, 0);
+  const cleanCount = audits.filter(a => !a.skipped && a.violations.length === 0 && a.warnings.length === 0).length;
+  const skippedCount = audits.filter(a => a.skipped).length;
+
+  summary.innerHTML = `
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:8px;">
+      <div style="padding:10px; background:#d1fae5; border-radius:8px; text-align:center;">
+        <div style="font-size:11px; color:#065f46;">符合規定</div>
+        <div style="font-size:22px; font-weight:900; color:#065f46;">${cleanCount}</div>
+      </div>
+      <div style="padding:10px; background:#fef3c7; border-radius:8px; text-align:center;">
+        <div style="font-size:11px; color:#92400e;">警示</div>
+        <div style="font-size:22px; font-weight:900; color:#92400e;">${totalWarnings}</div>
+      </div>
+      <div style="padding:10px; background:#fee2e2; border-radius:8px; text-align:center;">
+        <div style="font-size:11px; color:#991b1b;">違規</div>
+        <div style="font-size:22px; font-weight:900; color:#991b1b;">${totalViolations}</div>
+      </div>
+      <div style="padding:10px; background:#f3f4f6; border-radius:8px; text-align:center;">
+        <div style="font-size:11px; color:#6b7280;">跳過(外包)</div>
+        <div style="font-size:22px; font-weight:900; color:#6b7280;">${skippedCount}</div>
+      </div>
+    </div>`;
+
+  // 排序：違規多的在最前面
+  audits.sort((a, b) => b.violations.length - a.violations.length);
+
+  result.innerHTML = audits.map(a => {
+    if (a.skipped) {
+      return `<div style="padding:10px 12px; background:#f3f4f6; border-radius:8px; margin-bottom:6px; font-size:13px;">
+        <strong>${escapeHtml(a.emp.name)}</strong> <span style="color:#6b7280;">· ${escapeHtml(a.reason)}</span>
+      </div>`;
+    }
+    const totalIssues = a.violations.length + a.warnings.length;
+    if (totalIssues === 0) {
+      return `<div style="padding:10px 12px; background:#f0fdf4; border-left:3px solid #059669; border-radius:6px; margin-bottom:6px; font-size:13px; color:#065f46;">
+        ✅ <strong>${escapeHtml(a.emp.name)}</strong> · 符合勞基法 ${a.isResponsibility ? '(責任制)' : ''}
+      </div>`;
+    }
+    const color = a.violations.length > 0 ? '#dc2626' : '#f59e0b';
+    const bg = a.violations.length > 0 ? '#fee2e2' : '#fef3c7';
+    return `<div style="padding:10px 12px; background:${bg}; border-left:3px solid ${color}; border-radius:6px; margin-bottom:6px; font-size:13px;">
+      <div style="font-weight:700; color:${color};">
+        ${a.violations.length > 0 ? '🚨' : '⚠'} ${escapeHtml(a.emp.name)}
+        · 違規 ${a.violations.length}｜警示 ${a.warnings.length}
+        ${a.isResponsibility ? ' <span style="font-size:11px; background:white; padding:2px 6px; border-radius:10px;">責任制</span>' : ''}
+      </div>
+      <div style="font-size:12px; color:${color}; margin-top:4px;">
+        ${[...a.violations, ...a.warnings].slice(0, 3).map(v => `• ${escapeHtml(v.rule)} <span style="opacity:0.7;">(${escapeHtml(v.law)})</span>`).join('<br>')}
+        ${totalIssues > 3 ? `<br>... 另有 ${totalIssues - 3} 項` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function exportLaborAuditExcel() {
+  const month = document.getElementById('analyticsMonth').value;
+  if (!month) { alert('請先選擇月份'); return; }
+  if (isEmployeeRole()) { alert('員工角色無匯出權限'); return; }
+
+  const scope = getAnalyticsScope();
+  const visibleEmps = getVisibleEmployees().filter(e => scope.wps.includes(e.workplace || ''));
+  const audits = visibleEmps.map(emp => ({ emp, ...auditLaborLaw(emp._id, month) }));
+
+  const wb = XLSX.utils.book_new();
+
+  // 摘要頁
+  const sumRows = [
+    ['⚖ 勞基法稽核報表'],
+    ['月份', month],
+    ['廠別範圍', scope.label],
+    ['匯出時間', new Date().toLocaleString('zh-TW')],
+    ['員工總數', audits.length],
+    ['符合規定', audits.filter(a => !a.skipped && a.violations.length === 0 && a.warnings.length === 0).length],
+    ['有警示', audits.filter(a => a.warnings.length > 0 && a.violations.length === 0).length],
+    ['有違規', audits.filter(a => a.violations.length > 0).length],
+    ['跳過(外包)', audits.filter(a => a.skipped).length],
+    [],
+    ['員工姓名', '廠別', '合約類型', '責任制', '違規數', '警示數', '狀態']
+  ];
+  audits.forEach(a => {
+    const contractMap = { fulltime: '正職', parttime: '兼職', outsource: '外包', intern: '實習生' };
+    const status = a.skipped ? '跳過' :
+                   (a.violations.length > 0 ? '🚨 違規' :
+                   (a.warnings.length > 0 ? '⚠ 警示' : '✅ 符合'));
+    sumRows.push([
+      a.emp.name, a.emp.workplace || '',
+      contractMap[a.emp.contractType || 'fulltime'] || '正職',
+      a.isResponsibility ? '是' : '',
+      a.violations.length, a.warnings.length, status
+    ]);
+  });
+  const wsSum = XLSX.utils.aoa_to_sheet(sumRows);
+  wsSum['!cols'] = [{wch:14},{wch:14},{wch:10},{wch:8},{wch:8},{wch:8},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, wsSum, '摘要');
+
+  // 違規詳情頁
+  const detailRows = [['員工', '廠別', '項目', '說明', '日期', '法條']];
+  audits.forEach(a => {
+    [...a.violations, ...a.warnings].forEach(v => {
+      detailRows.push([
+        a.emp.name, a.emp.workplace || '',
+        v.rule, v.detail, v.date, v.law
+      ]);
+    });
+  });
+  if (detailRows.length === 1) detailRows.push(['（無違規或警示項目）']);
+  const wsDet = XLSX.utils.aoa_to_sheet(detailRows);
+  wsDet['!cols'] = [{wch:12},{wch:14},{wch:24},{wch:30},{wch:14},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, wsDet, '違規詳情');
+
+  XLSX.writeFile(wb, `勞基法稽核_${month}_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 // ========= 🔔 Firestore 規則到期提醒 =========
