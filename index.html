@@ -4866,21 +4866,34 @@ function deleteEntitlement(id) {
 }
 
 // 從 dailyEntries 計算某員工某假別在有效期內已用天數
+// ✅ 修正：每日記錄存的是「小時數」(d.hours)，所以要除以 8 轉成「天數」
 function calculateEntitlementUsed(ent) {
   const deadline = new Date(ent.triggerDate);
   deadline.setDate(deadline.getDate() + ent.deadlineDays);
   const deadlineStr = deadline.toISOString().slice(0, 10);
-  // 匹配假別名稱（處理子類別）
-  const matchNames = [ent.leaveType];
-  if (ent.leaveType.startsWith('喪假-')) matchNames.push('喪假');
-  if (ent.leaveType.startsWith('流產假-')) matchNames.push('流產假');
+  // 匹配假別名稱（處理子類別，系統記錄只存簡單名稱）
+  const matchNames = new Set();
+  matchNames.add(ent.leaveType);            // 原始：例 '喪假-父母配偶'
+  // 加入不含子分類的簡稱（這是系統實際儲存的 attType）
+  if (ent.leaveType.startsWith('喪假-')) matchNames.add('喪假');
+  if (ent.leaveType.startsWith('流產假-')) matchNames.add('流產假');
+  if (ent.leaveType.includes('產假') && !ent.leaveType.includes('陪')) { matchNames.add('產假'); }
+  if (ent.leaveType === '陪產假') matchNames.add('陪產假');
+  if (ent.leaveType === '婚假') matchNames.add('婚假');
+  if (ent.leaveType === '家庭照顧假') matchNames.add('家庭照顧假');
+  if (ent.leaveType === '產檢假') matchNames.add('產檢假');
+
   // 從 dailyEntries 找該員工在觸發日~到期日之間的該類別請假
-  const used = dailyEntries
+  const totalHours = dailyEntries
     .filter(d => d.empId === ent.empId)
-    .filter(d => d.type === 'hour' && (matchNames.includes(d.attType) || matchNames.includes(d.leaveCategoryName)))
+    .filter(d => d.type === 'hour')
+    .filter(d => matchNames.has(d.attType) || matchNames.has(d.workContent))
     .filter(d => d.date >= ent.triggerDate && d.date <= deadlineStr)
-    .reduce((sum, d) => sum + (parseFloat(d.days) || parseFloat(d.leaveDays) || 0), 0);
-  return Math.round(used * 10) / 10;
+    .reduce((sum, d) => sum + (parseFloat(d.hours) || 0), 0);
+
+  // 轉換小時為天（8 小時 = 1 天）
+  const usedDays = totalHours / 8;
+  return Math.round(usedDays * 10) / 10;
 }
 
 function getEntitlementStatus(ent) {
@@ -7505,14 +7518,25 @@ async function exportProducts() {
 
 // 🌴 特休稽核表：勞保局格式（每員工列出每筆特休、累計、剩餘）
 function exportAnnualLeaveAudit() {
-  if (currentUser && currentUser.role === 'employee') {
-    alert('⚠ 員工無權匯出特休稽核表。');
-    return;
-  }
-  const visEmployees = getVisibleEmployees();
-  if (visEmployees.length === 0) { alert('沒有員工資料'); return; }
-  const wb = XLSX.utils.book_new();
-  const today = new Date().toISOString().slice(0, 10);
+  try {
+    if (currentUser && currentUser.role === 'employee') {
+      alert('⚠ 員工無權匯出特休稽核表。');
+      return;
+    }
+    if (typeof XLSX === 'undefined') {
+      alert('⚠ Excel 套件 (XLSX) 載入失敗！\n\n請檢查網路連線，或按 Ctrl+F5 強制重新整理頁面。');
+      return;
+    }
+    const visEmployees = getVisibleEmployees();
+    if (visEmployees.length === 0) { alert('沒有員工資料'); return; }
+    // 檢查有多少員工有到職日
+    const empsWithHireDate = visEmployees.filter(e => e.hireDate && !isNaN(new Date(e.hireDate).getTime()));
+    if (empsWithHireDate.length === 0) {
+      alert('⚠ 目前沒有任何員工填寫「到職日」！\n\n特休稽核表需要到職日才能計算年資。\n請到「員工」頁為員工填寫到職日後再試一次。');
+      return;
+    }
+    const wb = XLSX.utils.book_new();
+    const today = new Date().toISOString().slice(0, 10);
 
   // 1. 摘要表（所有員工的特休總覽）
   const summaryRows = [
@@ -7643,12 +7667,24 @@ function exportAnnualLeaveAudit() {
 
     const sheet = XLSX.utils.aoa_to_sheet(rows);
     sheet['!cols'] = [{wch:12},{wch:14},{wch:8},{wch:8},{wch:10},{wch:10},{wch:10},{wch:10},{wch:20}];
-    // Sheet 名稱：員工編號_姓名（避免特殊字元）
-    const sheetName = `${emp.id || ''}_${emp.name}`.replace(/[\\/?\*\[\]]/g, '_').slice(0, 31);
-    XLSX.utils.book_append_sheet(wb, sheet, sheetName);
+    // Sheet 名稱：員工編號_姓名（嚴格過濾 Excel 禁用字元，並避免重複與空值）
+    let rawName = `${emp.id || ''}_${emp.name || 'noname'}`;
+    // Excel 不允許的字元：: \ / ? * [ ]，還有空白、#、% 也可能有問題
+    let sheetName = rawName.replace(/[\\\/\?\*\[\]\:]/g, '_').trim().slice(0, 28);
+    if (!sheetName) sheetName = '員工' + Math.floor(Math.random() * 1000);
+    // 避免重複 sheet 名稱
+    let finalName = sheetName, suffix = 1;
+    while (wb.SheetNames.includes(finalName)) {
+      finalName = sheetName + '_' + (++suffix);
+    }
+    XLSX.utils.book_append_sheet(wb, sheet, finalName);
   });
 
   XLSX.writeFile(wb, `特休稽核表_${today}.xlsx`);
+  } catch (err) {
+    console.error('特休稽核匯出失敗:', err);
+    alert('❌ 特休稽核表匯出失敗：\n\n' + err.message + '\n\n已在 Console 留下錯誤訊息（按 F12 查看）。\n\n建議檢查：\n1. 員工資料是否完整\n2. 員工到職日是否填寫\n3. 按 Ctrl+F5 重整後再試');
+  }
 }
 
 async function exportPhotosZip() {
@@ -8138,6 +8174,8 @@ function refreshAllDailyViews() {
   if (typeof renderBatchAttendance === 'function') renderBatchAttendance();
   // ★ 特休列表 已休天數需連動（依 dailyEntries 當年度特休累計）
   if (typeof refreshLeaveList === 'function') refreshLeaveList();
+  // ★ 特別假額度追蹤 已用天數要即時連動（如婚假/喪假/產假等）
+  if (typeof refreshEntitlementList === 'function') refreshEntitlementList();
 }
 
 // ========= 計薪判斷統一函式 =========
