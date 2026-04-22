@@ -1419,6 +1419,77 @@
       <h3>員工特休清單 <span class="badge" id="leaveCount">0</span></h3>
       <div id="leaveList"></div>
     </div>
+
+    <!-- ===== 特別假額度追蹤（婚假、喪假、產假等有期限的假）===== -->
+    <div class="card" style="border:2px solid #f59e0b;">
+      <h3 style="color:#92400e;">🎉 特別假額度追蹤（婚/喪/產/陪產/家庭照顧）</h3>
+      <div style="padding:10px 12px; background:#fef3c7; border-radius:8px; font-size:12px; color:#78350f; line-height:1.8; margin-bottom:12px;">
+        ⚠ <strong>避免漏掉有期限的假</strong>：員工結婚、喪事、分娩時建立一筆額度，系統會倒數到期日，自動從每日頁的請假記錄扣除，避免過期忘記請而被罰。
+      </div>
+
+      <!-- 新增表單 -->
+      <div style="background:#fffbeb; padding:14px; border-radius:10px; border:1px dashed #f59e0b; margin-bottom:14px;">
+        <div style="font-weight:700; color:#92400e; margin-bottom:10px; font-size:14px;">➕ 新增特別假額度</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>員工 *</label>
+            <select id="entEmpId"><option value="">-- 請選擇 --</option></select>
+          </div>
+          <div class="form-group">
+            <label>假別 *</label>
+            <select id="entType" onchange="onEntitlementTypeChange()">
+              <option value="">-- 請選擇 --</option>
+              <option value="婚假">💍 婚假（8 天 / 3 個月內）</option>
+              <option value="喪假-父母配偶">🕊 喪假 - 父母/配偶（8 天 / 100 日內）</option>
+              <option value="喪假-祖父母子女">🕊 喪假 - 祖父母/子女/配偶父母（6 天 / 100 日內）</option>
+              <option value="喪假-兄弟姊妹">🕊 喪假 - 曾祖父母/兄弟姊妹（3 天 / 100 日內）</option>
+              <option value="產假">🤱 產假（56 天 / 分娩前後）</option>
+              <option value="流產假-3月以上">🤱 流產假 - 3 個月以上（28 天）</option>
+              <option value="流產假-2~3月">🤱 流產假 - 2~3 個月（7 天）</option>
+              <option value="流產假-未滿2月">🤱 流產假 - 未滿 2 個月（5 天）</option>
+              <option value="陪產假">👨‍🍼 陪產檢及陪產假（7 天 / 15 日內）</option>
+              <option value="產檢假">🩺 產檢假（7 天 / 孕期內）</option>
+              <option value="家庭照顧假">👨‍👩‍👧‍👦 家庭照顧假（7 天 / 全年）</option>
+              <option value="公傷病假">🩹 公傷病假（依實際需要）</option>
+              <option value="其他">✏ 其他（手動設定）</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>觸發日 * <span style="font-size:11px; color:#6b7280;">（登記結婚日/喪親日/預產期）</span></label>
+            <input type="date" id="entTriggerDate">
+          </div>
+          <div class="form-group">
+            <label>可用天數 * <span style="font-size:11px; color:#6b7280;">（自動帶入，可修改）</span></label>
+            <input type="number" id="entTotalDays" min="0" step="0.5" placeholder="例: 8">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>期限天數 <span style="font-size:11px; color:#6b7280;">（幾天內要請完）</span></label>
+            <input type="number" id="entDeadlineDays" min="1" placeholder="例: 90">
+          </div>
+          <div class="form-group">
+            <label>備註</label>
+            <input type="text" id="entNote" placeholder="例: 婚禮 5/10-5/11，預計 7 月蜜月 5 天">
+          </div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-secondary" id="entCancelBtn" onclick="cancelEntitlementEdit()" style="display:none;">取消編輯</button>
+          <button class="btn btn-primary btn-block" id="entPrimaryBtn" onclick="saveEntitlement()">➕ 新增額度</button>
+        </div>
+      </div>
+
+      <!-- 額度清單 -->
+      <div style="margin-top:8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <div style="font-weight:700; font-size:14px;">目前追蹤中 <span class="badge" id="entCount" style="background:#fef3c7;color:#92400e;">0</span></div>
+          <div style="font-size:11px; color:#6b7280;">🟢 進行中 · 🟡 即將到期 · 🔴 已過期 · ✔ 已用完</div>
+        </div>
+        <div id="entList"></div>
+      </div>
+    </div>
   </div>
 
   <!-- 設定 -->
@@ -1554,7 +1625,8 @@ const STORE = {
   liffId: 'salary_liff_id',
   rates: 'salary_rates',
   users: 'salary_users',
-  currentUserId: 'salary_current_user_id'
+  currentUserId: 'salary_current_user_id',
+  leaveEntitlements: 'salary_leave_entitlements'
 };
 
 function load(key, def) {
@@ -1568,6 +1640,7 @@ let records = load(STORE.records, []);
 let dailyEntries = load(STORE.daily, []);
 let products = load(STORE.products, []);
 let users = load(STORE.users, []);
+let leaveEntitlements = load(STORE.leaveEntitlements, []);  // 特別假額度
 let currentUser = null; // 登入後的使用者物件
 const DEFAULT_DEDUCT_CATS = [
   { _id: 'dc_default_1', name: '借支', defaultAmount: 0 },
@@ -1867,7 +1940,7 @@ async function migrateAndSubscribe() {
     }
 
     setSyncStatus('檢查同步狀態…', 'syncing');
-    const [nEmp, nRec, nDaily, nProd, nDc, nBc, nWc, nLc, nWp] = await Promise.all([
+    const [nEmp, nRec, nDaily, nProd, nDc, nBc, nWc, nLc, nWp, nEnt] = await Promise.all([
       syncMissing('employees', employees),
       syncMissing('records', records),
       syncMissing('daily', dailyEntries),
@@ -1876,13 +1949,14 @@ async function migrateAndSubscribe() {
       syncMissing('bonusCats', bonusCategories),
       syncMissing('workContents', workContents),
       syncMissing('leaveCats', leaveCategories),
-      syncMissing('workplaces', workplaces)
+      syncMissing('workplaces', workplaces),
+      syncMissing('leaveEntitlements', leaveEntitlements)
     ]);
     // 費率若雲端沒有也要補
     const rSnap = await ws().collection('config').doc('rates').get();
     if (!rSnap.exists) await ws().collection('config').doc('rates').set(rates);
 
-    const totalSynced = nEmp + nRec + nDaily + nProd + nDc + nBc + nWc + nLc + nWp;
+    const totalSynced = nEmp + nRec + nDaily + nProd + nDc + nBc + nWc + nLc + nWp + nEnt;
     if (totalSynced > 0) {
       setSyncStatus(`已補傳 ${totalSynced} 筆遺漏記錄`, 'syncing');
     }
@@ -1933,6 +2007,14 @@ function subscribeAll() {
     refreshProductList();
     const pm = document.getElementById('productManager');
     if (pm && pm.style.display === 'block') refreshProductManagerList();
+  });
+
+  // 🎉 特別假額度同步
+  col('leaveEntitlements').onSnapshot(snap => {
+    if (suppressSubscription) return;
+    leaveEntitlements = snap.docs.map(d => d.data());
+    save(STORE.leaveEntitlements, leaveEntitlements);
+    if (typeof refreshEntitlementList === 'function') refreshEntitlementList();
   });
 
   col('users').onSnapshot(snap => {
@@ -2135,17 +2217,19 @@ async function broadcastClear(reason) {
 
 function wipeLocalSilently() {
   suppressSubscription = true;
-  employees = []; records = []; dailyEntries = []; products = [];
+  employees = []; records = []; dailyEntries = []; products = []; leaveEntitlements = [];
   save(STORE.employees, []);
   save(STORE.records, []);
   save(STORE.daily, []);
   save(STORE.products, []);
+  save(STORE.leaveEntitlements, []);
   refreshEmployeeList && refreshEmployeeList();
   refreshEmpDropdown && refreshEmpDropdown();
   refreshRecords && refreshRecords();
   refreshDailyEntries && refreshDailyEntries();
   refreshMonthlyDaily && refreshMonthlyDaily();
   updateSummary && updateSummary();
+  if (typeof refreshEntitlementList === 'function') refreshEntitlementList();
   setTimeout(() => { suppressSubscription = false; }, 500);
 }
 
@@ -2284,7 +2368,7 @@ document.querySelectorAll('.tab').forEach(t => {
     document.getElementById('panel-' + t.dataset.panel).classList.add('active');
     if (t.dataset.panel === 'export') updateSummary();
     if (t.dataset.panel === 'calc') refreshEmpDropdown();
-    if (t.dataset.panel === 'leave') refreshLeaveList();
+    if (t.dataset.panel === 'leave') { refreshLeaveList(); refreshEntitlementEmpDropdown(); refreshEntitlementList(); }
     if (t.dataset.panel === 'setup') refreshHolidayList();
     if (t.dataset.panel === 'analytics') initAnalyticsPanel();
     if (t.dataset.panel === 'daily') {
@@ -4305,6 +4389,228 @@ function refreshLeaveList() {
         ${e.hireDate ? `<div style="font-size:11px; color:#9ca3af; text-align:right;">到職日: ${e.hireDate}</div>` : ''}
       </div>
     `;
+  }).join('');
+}
+
+// ========= 🎉 特別假額度追蹤（婚、喪、產、陪產、家庭照顧）=========
+// 依法律預設天數與期限
+const ENTITLEMENT_PRESETS = {
+  '婚假':                { totalDays: 8,  deadlineDays: 90,  source: '勞工請假規則 §2，3 個月內（可延 1 年）' },
+  '喪假-父母配偶':        { totalDays: 8,  deadlineDays: 100, source: '勞工請假規則 §3，100 日內' },
+  '喪假-祖父母子女':      { totalDays: 6,  deadlineDays: 100, source: '勞工請假規則 §3，100 日內' },
+  '喪假-兄弟姊妹':        { totalDays: 3,  deadlineDays: 100, source: '勞工請假規則 §3（含曾祖父母），100 日內' },
+  '產假':                { totalDays: 56, deadlineDays: 180, source: '勞基法 §50' },
+  '流產假-3月以上':       { totalDays: 28, deadlineDays: 60,  source: '性別工作平等法 §15' },
+  '流產假-2~3月':         { totalDays: 7,  deadlineDays: 30,  source: '性別工作平等法 §15' },
+  '流產假-未滿2月':       { totalDays: 5,  deadlineDays: 30,  source: '性別工作平等法 §15' },
+  '陪產假':              { totalDays: 7,  deadlineDays: 15,  source: '性別工作平等法 §15' },
+  '產檢假':              { totalDays: 7,  deadlineDays: 280, source: '性別工作平等法 §15' },
+  '家庭照顧假':           { totalDays: 7,  deadlineDays: 365, source: '性別工作平等法 §20' },
+  '公傷病假':             { totalDays: 0,  deadlineDays: 0,   source: '勞基法 §59，依實際需要' },
+  '其他':                { totalDays: 0,  deadlineDays: 0,   source: '' }
+};
+
+let editingEntitlementId = null;
+
+function onEntitlementTypeChange() {
+  const type = document.getElementById('entType').value;
+  const preset = ENTITLEMENT_PRESETS[type];
+  if (preset) {
+    if (preset.totalDays > 0) document.getElementById('entTotalDays').value = preset.totalDays;
+    if (preset.deadlineDays > 0) document.getElementById('entDeadlineDays').value = preset.deadlineDays;
+  }
+}
+
+function refreshEntitlementEmpDropdown() {
+  const sel = document.getElementById('entEmpId');
+  if (!sel) return;
+  const visible = getVisibleEmployees();
+  sel.innerHTML = '<option value="">-- 請選擇 --</option>' +
+    visible.map(e => `<option value="${e._id}">${escapeHtml(e.id || '')} ${escapeHtml(e.name)}</option>`).join('');
+}
+
+function saveEntitlement() {
+  const empId = document.getElementById('entEmpId').value;
+  const type = document.getElementById('entType').value;
+  const triggerDate = document.getElementById('entTriggerDate').value;
+  const totalDays = parseFloat(document.getElementById('entTotalDays').value) || 0;
+  const deadlineDays = parseInt(document.getElementById('entDeadlineDays').value) || 0;
+  const note = document.getElementById('entNote').value.trim();
+
+  if (!empId) { alert('請選擇員工'); return; }
+  if (!type) { alert('請選擇假別'); return; }
+  if (!triggerDate) { alert('請填觸發日'); return; }
+  if (totalDays <= 0) { alert('可用天數要 > 0'); return; }
+
+  const emp = employees.find(e => e._id === empId);
+  const empName = emp ? emp.name : '';
+  const preset = ENTITLEMENT_PRESETS[type] || {};
+
+  const ent = editingEntitlementId
+    ? { ...leaveEntitlements.find(x => x._id === editingEntitlementId) }
+    : { _id: 'ent_' + Date.now() };
+  ent.empId = empId;
+  ent.empName = empName;
+  ent.leaveType = type;
+  ent.triggerDate = triggerDate;
+  ent.totalDays = totalDays;
+  ent.deadlineDays = deadlineDays;
+  ent.note = note;
+  ent.source = preset.source || '';
+  if (!ent.createdAt) ent.createdAt = new Date().toISOString();
+
+  if (editingEntitlementId) {
+    leaveEntitlements = leaveEntitlements.map(x => x._id === editingEntitlementId ? ent : x);
+  } else {
+    leaveEntitlements.push(ent);
+  }
+  save(STORE.leaveEntitlements, leaveEntitlements);
+  cloudSave('leaveEntitlements', ent);
+  clearEntitlementForm();
+  refreshEntitlementList();
+  alert(editingEntitlementId ? '✅ 已更新額度' : `✅ 已新增 ${empName} 的 ${type}`);
+  editingEntitlementId = null;
+  document.getElementById('entPrimaryBtn').textContent = '➕ 新增額度';
+  document.getElementById('entCancelBtn').style.display = 'none';
+}
+
+function editEntitlement(id) {
+  const ent = leaveEntitlements.find(x => x._id === id);
+  if (!ent) return;
+  editingEntitlementId = id;
+  document.getElementById('entEmpId').value = ent.empId;
+  document.getElementById('entType').value = ent.leaveType;
+  document.getElementById('entTriggerDate').value = ent.triggerDate;
+  document.getElementById('entTotalDays').value = ent.totalDays;
+  document.getElementById('entDeadlineDays').value = ent.deadlineDays;
+  document.getElementById('entNote').value = ent.note || '';
+  document.getElementById('entPrimaryBtn').textContent = '💾 更新額度';
+  document.getElementById('entCancelBtn').style.display = 'inline-block';
+  document.querySelector('#panel-leave .card:last-child').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function cancelEntitlementEdit() {
+  editingEntitlementId = null;
+  clearEntitlementForm();
+  document.getElementById('entPrimaryBtn').textContent = '➕ 新增額度';
+  document.getElementById('entCancelBtn').style.display = 'none';
+}
+
+function clearEntitlementForm() {
+  document.getElementById('entEmpId').value = '';
+  document.getElementById('entType').value = '';
+  document.getElementById('entTriggerDate').value = '';
+  document.getElementById('entTotalDays').value = '';
+  document.getElementById('entDeadlineDays').value = '';
+  document.getElementById('entNote').value = '';
+}
+
+function deleteEntitlement(id) {
+  const ent = leaveEntitlements.find(x => x._id === id);
+  if (!ent) return;
+  if (!confirm(`確定刪除 ${ent.empName} 的 ${ent.leaveType} 額度記錄？`)) return;
+  leaveEntitlements = leaveEntitlements.filter(x => x._id !== id);
+  save(STORE.leaveEntitlements, leaveEntitlements);
+  cloudDelete('leaveEntitlements', id);
+  refreshEntitlementList();
+}
+
+// 從 dailyEntries 計算某員工某假別在有效期內已用天數
+function calculateEntitlementUsed(ent) {
+  const deadline = new Date(ent.triggerDate);
+  deadline.setDate(deadline.getDate() + ent.deadlineDays);
+  const deadlineStr = deadline.toISOString().slice(0, 10);
+  // 匹配假別名稱（處理子類別）
+  const matchNames = [ent.leaveType];
+  if (ent.leaveType.startsWith('喪假-')) matchNames.push('喪假');
+  if (ent.leaveType.startsWith('流產假-')) matchNames.push('流產假');
+  // 從 dailyEntries 找該員工在觸發日~到期日之間的該類別請假
+  const used = dailyEntries
+    .filter(d => d.empId === ent.empId)
+    .filter(d => d.type === 'hour' && (matchNames.includes(d.attType) || matchNames.includes(d.leaveCategoryName)))
+    .filter(d => d.date >= ent.triggerDate && d.date <= deadlineStr)
+    .reduce((sum, d) => sum + (parseFloat(d.days) || parseFloat(d.leaveDays) || 0), 0);
+  return Math.round(used * 10) / 10;
+}
+
+function getEntitlementStatus(ent) {
+  const used = calculateEntitlementUsed(ent);
+  const remaining = Math.max(0, ent.totalDays - used);
+  const deadline = new Date(ent.triggerDate);
+  deadline.setDate(deadline.getDate() + ent.deadlineDays);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const daysLeft = Math.ceil((deadline.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
+
+  let statusCode, statusText, statusColor, statusBg;
+  if (remaining <= 0) {
+    statusCode = 'completed'; statusText = '✔ 已用完'; statusColor = '#6b7280'; statusBg = '#f3f4f6';
+  } else if (daysLeft < 0) {
+    statusCode = 'expired'; statusText = '🔴 已過期'; statusColor = '#991b1b'; statusBg = '#fee2e2';
+  } else if (daysLeft <= 7) {
+    statusCode = 'expiring-soon'; statusText = '🚨 即將到期'; statusColor = '#991b1b'; statusBg = '#fee2e2';
+  } else if (daysLeft <= 14) {
+    statusCode = 'expiring'; statusText = '🟡 即將到期'; statusColor = '#92400e'; statusBg = '#fef3c7';
+  } else {
+    statusCode = 'active'; statusText = '🟢 進行中'; statusColor = '#065f46'; statusBg = '#d1fae5';
+  }
+
+  return { used, remaining, daysLeft, deadlineStr: deadline.toISOString().slice(0, 10), statusCode, statusText, statusColor, statusBg };
+}
+
+function refreshEntitlementList() {
+  const box = document.getElementById('entList');
+  const countEl = document.getElementById('entCount');
+  if (!box) return;
+
+  // 權限過濾：廠別主管只看負責廠別的員工，總管理者/管理者看全部
+  const visibleIds = new Set(getVisibleEmployees().map(e => e._id));
+  const visible = leaveEntitlements.filter(ent => visibleIds.has(ent.empId));
+
+  if (countEl) countEl.textContent = visible.length;
+
+  if (visible.length === 0) {
+    box.innerHTML = '<div class="empty" style="padding:24px; text-align:center; color:#9ca3af; font-size:13px;">尚無特別假額度記錄。員工有結婚、喪事、分娩等情況時請新增。</div>';
+    return;
+  }
+
+  // 依到期日排序（越快到期越前面）
+  const sorted = [...visible].sort((a, b) => {
+    const sa = getEntitlementStatus(a), sb = getEntitlementStatus(b);
+    return sa.daysLeft - sb.daysLeft;
+  });
+
+  box.innerHTML = sorted.map(ent => {
+    const s = getEntitlementStatus(ent);
+    const progressPct = ent.totalDays > 0 ? Math.min(100, (s.used / ent.totalDays) * 100) : 0;
+    return `
+      <div style="background:${s.statusBg}; border:1px solid ${s.statusColor}33; border-radius:10px; padding:12px 14px; margin-bottom:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:6px;">
+          <div style="flex:1; min-width:200px;">
+            <div style="font-weight:700; color:${s.statusColor}; font-size:14px;">
+              ${escapeHtml(ent.empName)} · ${escapeHtml(ent.leaveType)}
+              <span style="font-size:11px; padding:2px 8px; border-radius:10px; background:white; color:${s.statusColor}; margin-left:4px;">${s.statusText}</span>
+            </div>
+            <div style="font-size:12px; color:${s.statusColor}; opacity:0.8; margin-top:3px;">
+              觸發：${ent.triggerDate} · 到期：${s.deadlineStr} (${s.daysLeft >= 0 ? '還剩 ' + s.daysLeft + ' 天' : '已過期 ' + (-s.daysLeft) + ' 天'})
+            </div>
+          </div>
+          <div>
+            <button class="btn btn-secondary btn-sm" onclick="editEntitlement('${ent._id}')" style="padding:2px 8px; font-size:11px;">✏️</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteEntitlement('${ent._id}')" style="padding:2px 8px; font-size:11px;">🗑</button>
+          </div>
+        </div>
+        <div style="margin-top:10px;">
+          <div style="display:flex; justify-content:space-between; font-size:12px; color:${s.statusColor}; margin-bottom:4px;">
+            <span>已用 ${s.used} 天 / 總 ${ent.totalDays} 天</span>
+            <span style="font-weight:700;">剩餘 ${s.remaining} 天</span>
+          </div>
+          <div style="height:8px; background:rgba(255,255,255,0.6); border-radius:4px; overflow:hidden;">
+            <div style="height:100%; background:${s.statusColor}; width:${progressPct}%; transition:width 0.3s;"></div>
+          </div>
+        </div>
+        ${ent.note ? `<div style="margin-top:8px; font-size:12px; color:${s.statusColor}; background:rgba(255,255,255,0.5); padding:6px 8px; border-radius:6px;">📝 ${escapeHtml(ent.note)}</div>` : ''}
+        ${ent.source ? `<div style="margin-top:4px; font-size:11px; color:${s.statusColor}; opacity:0.7;">⚖ ${escapeHtml(ent.source)}</div>` : ''}
+      </div>`;
   }).join('');
 }
 
@@ -7053,7 +7359,7 @@ function updateSummary() {
 
 // ========= 備份 =========
 function backupData() {
-  const blob = new Blob([JSON.stringify({ employees, records, dailyEntries, products, deductCategories, bonusCategories, workContents, leaveCategories, workplaces, rates }, null, 2)],
+  const blob = new Blob([JSON.stringify({ employees, records, dailyEntries, products, deductCategories, bonusCategories, workContents, leaveCategories, workplaces, rates, leaveEntitlements }, null, 2)],
     { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -7084,6 +7390,7 @@ function restoreData(e) {
       if (data.leaveCategories) leaveCategories = data.leaveCategories;
       if (data.workplaces) workplaces = data.workplaces;
       if (data.rates) rates = data.rates;
+      if (data.leaveEntitlements) leaveEntitlements = data.leaveEntitlements;
       save(STORE.employees, employees);
       save(STORE.records, records);
       save(STORE.daily, dailyEntries);
@@ -7093,12 +7400,14 @@ function restoreData(e) {
       save(STORE.workContents, workContents);
       save(STORE.leaveCats, leaveCategories);
       save(STORE.rates, rates);
+      save(STORE.leaveEntitlements, leaveEntitlements);
       refreshEmployeeList();
       refreshEmpDropdown();
       refreshRecords();
       refreshDailyEntries();
       refreshMonthlyDaily();
       refreshProductList();
+      if (typeof refreshEntitlementList === 'function') refreshEntitlementList();
       alert('還原成功');
     } catch (err) {
       alert('檔案格式錯誤');
@@ -7318,13 +7627,15 @@ async function clearAllData() {
   const recIds = records.map(r => r._id);
   const dailyIds = dailyEntries.map(d => d._id);
   const prodIds = products.map(p => p._id);
+  const entIds = leaveEntitlements.map(e => e._id);
 
   // 清空本地
-  employees = []; records = []; dailyEntries = []; products = [];
+  employees = []; records = []; dailyEntries = []; products = []; leaveEntitlements = [];
   save(STORE.employees, []);
   save(STORE.records, []);
   save(STORE.daily, []);
   save(STORE.products, []);
+  save(STORE.leaveEntitlements, []);
   refreshEmployeeList();
   refreshEmpDropdown();
   refreshRecords();
@@ -7332,6 +7643,7 @@ async function clearAllData() {
   refreshMonthlyDaily();
   refreshProductList();
   updateSummary();
+  if (typeof refreshEntitlementList === 'function') refreshEntitlementList();
 
   // 同步刪除雲端
   if (cloudReady) {
@@ -7342,11 +7654,12 @@ async function clearAllData() {
         ...empIds.map(id => cloudDelete('employees', id)),
         ...recIds.map(id => cloudDelete('records', id)),
         ...dailyIds.map(id => cloudDelete('daily', id)),
-        ...prodIds.map(id => cloudDelete('products', id))
+        ...prodIds.map(id => cloudDelete('products', id)),
+        ...entIds.map(id => cloudDelete('leaveEntitlements', id))
       ]);
       // 雲端可能還有「已被軟刪除但下次又同步回來」的孤兒文件，
       // 直接掃一次 collection 把所有殘留全部刪掉
-      const collectionsToWipe = ['employees', 'records', 'daily', 'products'];
+      const collectionsToWipe = ['employees', 'records', 'daily', 'products', 'leaveEntitlements'];
       for (const c of collectionsToWipe) {
         try {
           const snap = await ws().collection(c).get();
@@ -7376,7 +7689,7 @@ async function wipeCloudOnly() {
   if (!confirm('🚨 最終確認：將清空 Firestore 所有文件，本地也會同步清空！')) return;
   try {
     suppressSubscription = true;
-    const collectionsToWipe = ['employees', 'records', 'daily', 'products'];
+    const collectionsToWipe = ['employees', 'records', 'daily', 'products', 'leaveEntitlements'];
     let total = 0;
     for (const c of collectionsToWipe) {
       const snap = await ws().collection(c).get();
@@ -7384,11 +7697,12 @@ async function wipeCloudOnly() {
       total += snap.docs.length;
     }
     // 同步把本地也清空
-    employees = []; records = []; dailyEntries = []; products = [];
+    employees = []; records = []; dailyEntries = []; products = []; leaveEntitlements = [];
     save(STORE.employees, []);
     save(STORE.records, []);
     save(STORE.daily, []);
     save(STORE.products, []);
+    save(STORE.leaveEntitlements, []);
     refreshEmployeeList();
     refreshEmpDropdown();
     refreshRecords();
@@ -7396,6 +7710,7 @@ async function wipeCloudOnly() {
     refreshMonthlyDaily();
     refreshProductList();
     updateSummary();
+    if (typeof refreshEntitlementList === 'function') refreshEntitlementList();
     // ★ 廣播清除，讓其他裝置同步
     await broadcastClear('wipeCloudOnly');
     suppressSubscription = false;
@@ -8023,6 +8338,9 @@ function init() {
   }
   refreshUserList();
   onUserRoleChange();
+  // 特別假額度初始化
+  if (typeof refreshEntitlementEmpDropdown === 'function') refreshEntitlementEmpDropdown();
+  if (typeof refreshEntitlementList === 'function') refreshEntitlementList();
   // 自動清理 30 天前舊照片（管理者角色、每 24 小時最多跑一次）
   maybeAutoCleanupPhotos();
 }
