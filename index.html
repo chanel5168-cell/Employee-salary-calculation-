@@ -697,6 +697,9 @@
       </div>
     </div>
 
+    <!-- 🚨 工時缺漏警示橫幅（選了員工且月薪制才可能顯示） -->
+    <div id="shortageWarningBanner" style="display:none;"></div>
+
     <!-- ① 本月出勤明細（提前顯示）-->
     <div class="card">
       <div id="monthlyAttendance"></div>
@@ -3610,6 +3613,9 @@ function refreshMonthlyAttendance() {
   if (!box) return;
   const empId = document.getElementById('calcEmp').value;
   const month = document.getElementById('calcMonth').value;
+  // 清掉頂部警示橫幅
+  const banner = document.getElementById('shortageWarningBanner');
+  if (banner) { banner.style.display = 'none'; banner.innerHTML = ''; }
   if (!empId || !month) { box.innerHTML = ''; return; }
 
   // 解析月份，建立當月所有日期
@@ -3762,6 +3768,32 @@ function refreshMonthlyAttendance() {
             ➕ 自動加入「出勤不足扣薪」NT$ ${formatMoney(suggestedDeduct)}（缺 ${shortage.toFixed(1)}h × 底薪/${expectedHours}h）
           </button>
         </div>`;
+      }
+      // 🚨 頂部警示橫幅（改進 A）— 儲存全域狀態供 B 使用
+      window.__shortageAudit = {
+        shortage, expectedHours, normalHours, leaveHours,
+        empName: empObj.name, suggestedDeduct
+      };
+      const banner = document.getElementById('shortageWarningBanner');
+      if (banner) {
+        if (shortage > 0 && expectedHours > 0 && empObj.baseSalary > 0) {
+          banner.style.display = 'block';
+          banner.innerHTML = `
+            <div style="background:linear-gradient(90deg, #fee2e2 0%, #fef2f2 100%); border:2px solid #dc2626; border-radius:10px; padding:14px 16px; margin-bottom:14px; animation: pulse 2s infinite;">
+              <style>@keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); } 50% { box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); } }</style>
+              <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                <div style="font-size:28px;">🚨</div>
+                <div style="flex:1; min-width:200px;">
+                  <div style="font-weight:700; color:#991b1b; font-size:15px;">${escapeHtml(empObj.name)} 本月工時缺漏 ${shortage.toFixed(1)} 小時</div>
+                  <div style="font-size:12px; color:#7f1d1d; margin-top:2px;">應上班 ${expectedHours}h｜正常 ${normalHours.toFixed(1)}h + 請假 ${leaveHours.toFixed(1)}h = ${(normalHours+leaveHours).toFixed(1)}h</div>
+                  <div style="font-size:12px; color:#7f1d1d; margin-top:3px;">💡 建議扣薪 <strong style="font-size:14px;">NT$ ${formatMoney(suggestedDeduct)}</strong>（底薪 ${formatMoney(empObj.baseSalary)} × ${shortage.toFixed(1)}h ÷ ${expectedHours}h）</div>
+                </div>
+                <button type="button" onclick="addShortageDeduction(${suggestedDeduct}, ${shortage.toFixed(1)})" class="btn btn-danger" style="padding:10px 16px; font-size:13px; font-weight:700; background:#dc2626;">➕ 自動加入扣薪</button>
+              </div>
+            </div>`;
+        } else {
+          banner.style.display = 'none';
+        }
       }
       return `
       <div style="padding:10px 12px; background:${shortage > 0 ? '#fef2f2' : '#f0fdf4'}; border-left:4px solid ${color}; border-radius:6px; margin-bottom:8px; font-size:13px; line-height:1.6;">
@@ -6221,6 +6253,42 @@ function saveSalaryRecord() {
   const input = gatherCalcInput();
   const r = computeSalary(emp, input);
   const original = editingRecordId ? records.find(x => x._id === editingRecordId) : null;
+
+  // 🚨 改進 B：儲存前檢查工時缺漏
+  if (emp && !emp.isHourly && emp.baseSalary > 0 && window.__shortageAudit) {
+    const audit = window.__shortageAudit;
+    if (audit.shortage > 0 && audit.empName === emp.name) {
+      // 檢查是否已有「出勤不足扣薪」項目
+      const hasShortageDeduct = currentDeductItems.some(x => x.name && x.name.startsWith('出勤不足扣薪'));
+      if (!hasShortageDeduct) {
+        const choice = confirm(
+          `🚨 工時缺漏警告！\n\n` +
+          `員工「${emp.name}」本月：\n` +
+          `  應上班 ${audit.expectedHours} 小時\n` +
+          `  實際記錄 ${audit.normalHours.toFixed(1)}h + 請假 ${audit.leaveHours.toFixed(1)}h\n` +
+          `  缺漏 ${audit.shortage.toFixed(1)} 小時（未請假）\n\n` +
+          `目前「其他扣款」沒有「出勤不足扣薪」項目，\n` +
+          `員工可能會拿到不合理的全額薪資。\n\n` +
+          `建議扣薪：NT$ ${formatMoney(audit.suggestedDeduct)}\n` +
+          `（底薪 × 缺漏時數 ÷ 應上班時數）\n\n` +
+          `✅ 按「確定」→ 自動加入扣薪並儲存\n` +
+          `❌ 按「取消」→ 回去檢查（不會儲存）`
+        );
+        if (!choice) return;  // 使用者取消
+        // 自動加入扣薪
+        currentDeductItems.push({
+          name: `出勤不足扣薪 (缺 ${audit.shortage.toFixed(1)}h)`,
+          amount: audit.suggestedDeduct
+        });
+        renderDeductItems();
+        updateDeductTotal();
+        // 重新計算薪資
+        const newInput = gatherCalcInput();
+        Object.assign(r, computeSalary(emp, newInput));
+      }
+    }
+  }
+
   // 檢查是否已有同員工同月份的記錄（避免重複）
   if (!editingRecordId) {
     const dup = records.find(x => x.empId === empId && x.month === month);
