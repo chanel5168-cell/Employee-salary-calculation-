@@ -272,6 +272,18 @@
   <!-- 🔔 Firestore 規則到期倒數提醒（只對管理者顯示） -->
   <div id="firestoreExpiryBanner" style="display:none; margin-bottom:12px; padding:12px 14px; border-radius:10px; cursor:pointer; font-size:13px; line-height:1.5; box-shadow:0 2px 4px rgba(0,0,0,0.08);" onclick="showFirestoreRulesHowto()"></div>
 
+  <!-- 🪗 全頁摺疊快捷鈕（浮動） -->
+  <div style="position:sticky; top:10px; z-index:100; display:flex; justify-content:flex-end; gap:6px; margin-bottom:8px; pointer-events:none;">
+    <button type="button" onclick="collapseAllInActivePanel('hide')" title="全部收起"
+      style="pointer-events:auto; background:#06C755; color:white; border:none; padding:6px 12px; border-radius:20px; font-size:12px; font-weight:700; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.15); font-family:inherit;">
+      ⬆ 全部收起
+    </button>
+    <button type="button" onclick="collapseAllInActivePanel('show')" title="全部展開"
+      style="pointer-events:auto; background:white; color:#06C755; border:1px solid #06C755; padding:6px 12px; border-radius:20px; font-size:12px; font-weight:700; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.15); font-family:inherit;">
+      ⬇ 全部展開
+    </button>
+  </div>
+
   <div class="tabs">
     <div class="tab active" data-panel="employees">員工</div>
     <div class="tab" data-panel="daily">每日</div>
@@ -629,17 +641,36 @@
         <div class="form-group">
           <label>出勤類型</label>
           <select id="hourAttType" onchange="onHourAttTypeChange()">
-            <option value="normal">✅ 正常上班</option>
-            <option value="加班">💪 加班</option>
-            <option value="特休">🌴 特休</option>
-            <option value="事假">📋 事假（不給薪）</option>
-            <option value="病假">🤒 病假（半薪）</option>
-            <option value="公假">🏛 公假</option>
-            <option value="婚假">💒 婚假</option>
-            <option value="喪假">🕊 喪假</option>
-            <option value="產假">👶 產假</option>
-            <option value="陪產假">👨 陪產假</option>
-            <option value="颱風假">🌀 颱風假</option>
+            <optgroup label="上班/加班">
+              <option value="normal">✅ 正常上班</option>
+              <option value="加班">💪 加班（法定 1.34/1.67 倍）</option>
+              <option value="時薪加班">💰 時薪加班（另計特別時薪）</option>
+            </optgroup>
+            <optgroup label="有薪假（全薪）">
+              <option value="特休">🌴 特休</option>
+              <option value="公假">🏛 公假</option>
+              <option value="婚假">💒 婚假</option>
+              <option value="喪假">🕊 喪假</option>
+              <option value="產假">👶 產假</option>
+              <option value="陪產假">👨 陪產假</option>
+              <option value="產檢假">🩺 產檢假</option>
+              <option value="公傷病假">🩹 公傷病假</option>
+            </optgroup>
+            <optgroup label="半薪假">
+              <option value="病假">🤒 病假（半薪）</option>
+              <option value="生理假">🌸 生理假（半薪）</option>
+              <option value="流產假">🤱 流產假</option>
+              <option value="安胎休養假">🤰 安胎休養假（半薪）</option>
+            </optgroup>
+            <optgroup label="無薪假">
+              <option value="事假">📋 事假（不給薪）</option>
+              <option value="家庭照顧假">👨‍👩‍👧‍👦 家庭照顧假</option>
+              <option value="颱風假">🌀 颱風假</option>
+              <option value="育嬰留職停薪">👶 育嬰留職停薪</option>
+            </optgroup>
+            <optgroup label="自訂">
+              <option value="__custom__">✏ 自訂（手動輸入）</option>
+            </optgroup>
           </select>
         </div>
         <div class="form-group">
@@ -649,6 +680,22 @@
           </label>
           <select id="hourWorkContent" style="font-weight:500;">
             <option value="">-- 請選擇 --</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 自訂出勤類型輸入（選了「✏ 自訂」才顯示） -->
+      <div class="form-row" id="hourCustomTypeRow" style="display:none;">
+        <div class="form-group">
+          <label>自訂類型名稱 *</label>
+          <input type="text" id="hourCustomTypeName" placeholder="例：員工福利 / 看球賽 / 公司旅遊">
+        </div>
+        <div class="form-group">
+          <label>付薪方式</label>
+          <select id="hourCustomPayType">
+            <option value="full">全薪（不扣款）</option>
+            <option value="half">半薪（扣一半）</option>
+            <option value="none">無薪（全扣）</option>
           </select>
         </div>
       </div>
@@ -760,18 +807,51 @@
         <div class="form-group">
           <label>出勤類型</label>
           <select id="quickAttType" onchange="onQuickAttTypeChange()">
-            <option value="normal">✅ 正常上班</option>
-            <option value="加班">💪 加班（法定 1.34/1.67 倍）</option>
-            <option value="時薪加班">💰 時薪加班（另計特別時薪）</option>
-            <option value="特休">🌴 特休</option>
-            <option value="事假">📋 事假（不給薪）</option>
-            <option value="病假">🤒 病假（半薪）</option>
-            <option value="公假">🏛 公假</option>
-            <option value="婚假">💒 婚假</option>
-            <option value="喪假">🕊 喪假</option>
-            <option value="產假">👶 產假</option>
-            <option value="陪產假">👨 陪產假</option>
-            <option value="颱風假">🌀 颱風假</option>
+            <optgroup label="上班/加班">
+              <option value="normal">✅ 正常上班</option>
+              <option value="加班">💪 加班（法定 1.34/1.67 倍）</option>
+              <option value="時薪加班">💰 時薪加班（另計特別時薪）</option>
+            </optgroup>
+            <optgroup label="有薪假（全薪）">
+              <option value="特休">🌴 特休</option>
+              <option value="公假">🏛 公假</option>
+              <option value="婚假">💒 婚假</option>
+              <option value="喪假">🕊 喪假</option>
+              <option value="產假">👶 產假</option>
+              <option value="陪產假">👨 陪產假</option>
+              <option value="產檢假">🩺 產檢假</option>
+              <option value="公傷病假">🩹 公傷病假</option>
+            </optgroup>
+            <optgroup label="半薪假">
+              <option value="病假">🤒 病假（半薪）</option>
+              <option value="生理假">🌸 生理假（半薪）</option>
+              <option value="流產假">🤱 流產假</option>
+              <option value="安胎休養假">🤰 安胎休養假（半薪）</option>
+            </optgroup>
+            <optgroup label="無薪假">
+              <option value="事假">📋 事假（不給薪）</option>
+              <option value="家庭照顧假">👨‍👩‍👧‍👦 家庭照顧假</option>
+              <option value="颱風假">🌀 颱風假</option>
+              <option value="育嬰留職停薪">👶 育嬰留職停薪</option>
+            </optgroup>
+            <optgroup label="自訂">
+              <option value="__custom__">✏ 自訂（手動輸入）</option>
+            </optgroup>
+          </select>
+        </div>
+      </div>
+      <!-- 自訂出勤類型輸入（選了「✏ 自訂」才顯示） -->
+      <div class="form-row" id="quickCustomTypeRow" style="display:none;">
+        <div class="form-group">
+          <label>自訂類型名稱 *</label>
+          <input type="text" id="quickCustomTypeName" placeholder="例：員工福利 / 看球賽 / 公司旅遊">
+        </div>
+        <div class="form-group">
+          <label>付薪方式</label>
+          <select id="quickCustomPayType">
+            <option value="full">全薪（不扣款）</option>
+            <option value="half">半薪（扣一半）</option>
+            <option value="none">無薪（全扣）</option>
           </select>
         </div>
       </div>
@@ -1386,7 +1466,11 @@
     </div>
 
     <div class="card">
-      <h3>🌴 特休管理</h3>
+      <h3 style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleCard('leaveInfoBody', 'leaveInfoToggle')">
+        <span>🌴 特休管理（法規說明）</span>
+        <span id="leaveInfoToggle" style="font-size:12px; color:#3b82f6; background:#eff6ff; padding:3px 10px; border-radius:12px; border:1px solid #3b82f6;">收起 ▲</span>
+      </h3>
+      <div id="leaveInfoBody">
 
       <div class="alert alert-info" style="background:#dbeafe; border-left-color:#3b82f6;">
         <div style="font-weight:700; color:#1e40af; margin-bottom:6px;">📘 月薪制（勞基法 §38）</div>
@@ -1464,16 +1548,26 @@
         <label>計算基準日 (預設今天)</label>
         <input type="date" id="leaveBaseDate" onchange="refreshLeaveList()">
       </div>
+      </div>
     </div>
 
     <div class="card">
-      <h3>員工特休清單 <span class="badge" id="leaveCount">0</span></h3>
-      <div id="leaveList"></div>
+      <h3 style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleCard('leaveListBody', 'leaveListToggle')">
+        <span>員工特休清單 <span class="badge" id="leaveCount">0</span></span>
+        <span id="leaveListToggle" style="font-size:12px; color:#3b82f6; background:#eff6ff; padding:3px 10px; border-radius:12px; border:1px solid #3b82f6;">收起 ▲</span>
+      </h3>
+      <div id="leaveListBody">
+        <div id="leaveList"></div>
+      </div>
     </div>
 
     <!-- ===== 特別假額度追蹤（婚假、喪假、產假等有期限的假）===== -->
     <div class="card" style="border:2px solid #f59e0b;">
-      <h3 style="color:#92400e;">🎉 特別假額度追蹤（婚/喪/產/陪產/家庭照顧）</h3>
+      <h3 style="color:#92400e; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleCard('entBody', 'entToggle')">
+        <span>🎉 特別假額度追蹤（婚/喪/產/陪產/家庭照顧）</span>
+        <span id="entToggle" style="font-size:12px; color:#92400e; background:#fef3c7; padding:3px 10px; border-radius:12px; border:1px solid #f59e0b;">收起 ▲</span>
+      </h3>
+      <div id="entBody">
       <div style="padding:10px 12px; background:#fef3c7; border-radius:8px; font-size:12px; color:#78350f; line-height:1.8; margin-bottom:12px;">
         ⚠ <strong>避免漏掉有期限的假</strong>：員工結婚、喪事、分娩時建立一筆額度，系統會倒數到期日，自動從每日頁的請假記錄扣除，避免過期忘記請而被罰。
       </div>
@@ -1540,6 +1634,13 @@
         </div>
         <div id="entList"></div>
       </div>
+      </div>
+    </div>
+
+    <!-- 快速展開/收起控制 -->
+    <div style="text-align:center; margin:10px 0 20px;">
+      <button class="btn btn-secondary btn-sm" onclick="toggleAllLeaveCards('hide')" style="padding:6px 14px; font-size:12px;">⬆ 全部收起</button>
+      <button class="btn btn-secondary btn-sm" onclick="toggleAllLeaveCards('show')" style="padding:6px 14px; font-size:12px; margin-left:6px;">⬇ 全部展開</button>
     </div>
   </div>
 
@@ -1732,9 +1833,16 @@ const DEFAULT_LEAVE_CATS = [
   { _id: 'lc_4', name: '公假', payType: 'full' },
   { _id: 'lc_5', name: '產假', payType: 'full' },
   { _id: 'lc_6', name: '陪產假', payType: 'full' },
-  { _id: 'lc_7', name: '病假 (普通傷病)', payType: 'half' },
+  { _id: 'lc_7', name: '病假', payType: 'half' },
   { _id: 'lc_8', name: '事假', payType: 'none' },
-  { _id: 'lc_9', name: '颱風假', payType: 'none' }
+  { _id: 'lc_9', name: '颱風假', payType: 'none' },
+  { _id: 'lc_10', name: '家庭照顧假', payType: 'none' },
+  { _id: 'lc_11', name: '產檢假', payType: 'full' },
+  { _id: 'lc_12', name: '生理假', payType: 'half' },
+  { _id: 'lc_13', name: '流產假', payType: 'full' },
+  { _id: 'lc_14', name: '公傷病假', payType: 'full' },
+  { _id: 'lc_15', name: '安胎休養假', payType: 'half' },
+  { _id: 'lc_16', name: '育嬰留職停薪', payType: 'none' }
 ];
 const DEFAULT_WORKPLACES = [
   { _id: 'wp_1', name: '暘基' },
@@ -2897,6 +3005,23 @@ function addHourEntry() {
     }
   }
   const original = editingDailyId ? dailyEntries.find(x => x._id === editingDailyId) : null;
+
+  // 自訂出勤類型處理
+  let _hourAttType = document.getElementById('hourAttType').value || 'normal';
+  if (_hourAttType === '__custom__') {
+    const customName = (document.getElementById('hourCustomTypeName').value || '').trim();
+    if (!customName) { alert('請填寫自訂類型名稱'); return; }
+    const customPayType = document.getElementById('hourCustomPayType').value || 'full';
+    _hourAttType = customName;
+    // 自動加入請假類別
+    if (!leaveCategories.find(c => c.name === customName)) {
+      const newCat = { _id: 'lc_custom_' + Date.now(), name: customName, payType: customPayType };
+      leaveCategories.push(newCat);
+      save(STORE.leaveCats, leaveCategories);
+      if (typeof cloudSave === 'function') cloudSave('leaveCats', newCat);
+    }
+  }
+
   const entry = {
     _id: editingDailyId || ('d_' + Date.now()),
     date, empId,
@@ -2908,7 +3033,7 @@ function addHourEntry() {
     rate,
     subtotal: Math.round(hours * rate * 100) / 100,
     workContent: document.getElementById('hourWorkContent').value,
-    attType: document.getElementById('hourAttType').value || 'normal',
+    attType: _hourAttType,
     lateMinutes: parseFloat(document.getElementById('hourLate').value) || 0,
     note: document.getElementById('hourNote').value.trim(),
     photo: currentHourPhoto || null,
@@ -3074,9 +3199,21 @@ function openAttendanceEditModal(entry) {
     ['加班', '💪 加班（法定倍率）'],
     ['時薪加班', '💰 時薪加班（另計特別時薪）'],
     ['特休', '🌴 特休'],
-    ['事假', '📋 事假（不給薪）'], ['病假', '🤒 病假（半薪）'], ['公假', '🏛 公假'],
-    ['婚假', '💒 婚假'], ['喪假', '🕊 喪假'], ['產假', '👶 產假'],
-    ['陪產假', '👨 陪產假'], ['颱風假', '🌀 颱風假']
+    ['公假', '🏛 公假'],
+    ['婚假', '💒 婚假'],
+    ['喪假', '🕊 喪假'],
+    ['產假', '👶 產假'],
+    ['陪產假', '👨 陪產假'],
+    ['產檢假', '🩺 產檢假'],
+    ['公傷病假', '🩹 公傷病假'],
+    ['病假', '🤒 病假（半薪）'],
+    ['生理假', '🌸 生理假（半薪）'],
+    ['流產假', '🤱 流產假'],
+    ['安胎休養假', '🤰 安胎休養假（半薪）'],
+    ['事假', '📋 事假（不給薪）'],
+    ['家庭照顧假', '👨‍👩‍👧‍👦 家庭照顧假'],
+    ['颱風假', '🌀 颱風假'],
+    ['育嬰留職停薪', '👶 育嬰留職停薪']
   ];
   // 兼容兩種：計時 (hour) 與論件 (piece)
   let body;
@@ -5726,11 +5863,12 @@ function updateLateHint() {
 // 出勤類型切換 - 選擇特休/請假時自動帶入工作內容
 function onHourAttTypeChange() {
   const type = document.getElementById('hourAttType').value;
-  if (type && type !== 'normal') {
-    // 設定工作內容為請假類型
+  // 自訂模式 → 顯示輸入欄
+  const customRow = document.getElementById('hourCustomTypeRow');
+  if (customRow) customRow.style.display = (type === '__custom__') ? 'flex' : 'none';
+  if (type && type !== 'normal' && type !== '__custom__') {
     const workSel = document.getElementById('hourWorkContent');
     if (workSel) {
-      // 若選項中沒有，加入暫用
       if (!Array.from(workSel.options).some(o => o.value === type)) {
         const opt = document.createElement('option');
         opt.value = type;
@@ -5744,7 +5882,10 @@ function onHourAttTypeChange() {
 
 function onQuickAttTypeChange() {
   const type = document.getElementById('quickAttType').value;
-  const isLeaveType = type && type !== 'normal' && type !== '加班';
+  // 自訂模式 → 顯示輸入欄
+  const customRow = document.getElementById('quickCustomTypeRow');
+  if (customRow) customRow.style.display = (type === '__custom__') ? 'flex' : 'none';
+  const isLeaveType = type && type !== 'normal' && type !== '加班' && type !== '__custom__';
 
   // 時間欄位 → 所有類型都顯示（請假也要填時段）
   const timeRow = document.getElementById('quickAttTimeRow');
@@ -6022,7 +6163,21 @@ function quickAddAttendance() {
   }
   const rate = emp.hourlyRate || Math.round((emp.baseSalary || 0) / 30 / 8);
 
-  const attType = document.getElementById('quickAttType').value || 'normal';
+  let attType = document.getElementById('quickAttType').value || 'normal';
+  // 自訂出勤類型處理
+  if (attType === '__custom__') {
+    const customName = (document.getElementById('quickCustomTypeName').value || '').trim();
+    if (!customName) { alert('請填寫自訂類型名稱'); return; }
+    const customPayType = document.getElementById('quickCustomPayType').value || 'full';
+    attType = customName;
+    // 自動加入請假類別（供月薪頁請假明細用）
+    if (!leaveCategories.find(c => c.name === customName)) {
+      const newCat = { _id: 'lc_custom_' + Date.now(), name: customName, payType: customPayType };
+      leaveCategories.push(newCat);
+      save(STORE.leaveCats, leaveCategories);
+      if (typeof cloudSave === 'function') cloudSave('leaveCats', newCat);
+    }
+  }
   // 請假類型：不含 加班、時薪加班
   const isLeave = attType !== 'normal' && attType !== '加班' && attType !== '時薪加班';
   const isMonthly = !emp.isHourly;
@@ -6916,6 +7071,162 @@ function buildPieceCountSheets(wb, targetMonth) {
   });
 }
 
+// 1b) 月薪員工日數表（依工作地點分頁，顯示每日工時）
+function buildMonthlyCountSheets(wb, targetMonth) {
+  const weekdayNames = ['日','一','二','三','四','五','六'];
+  // 只處理月薪制員工
+  const monthlyEmps = employees.filter(e => !e.isHourly && e.baseSalary > 0);
+  const sites = [...new Set(monthlyEmps.map(e => e.workplace || '未指定'))];
+
+  sites.forEach(site => {
+    const siteEmps = monthlyEmps.filter(e => (e.workplace || '未指定') === site);
+    if (siteEmps.length === 0) return;
+
+    const [y, m] = targetMonth.split('-').map(Number);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const rocYear = y - 1911;
+
+    const rows = [];
+    rows.push([rocYear, m, ...siteEmps.map(e => e.name), '日計(時)']);
+
+    // 每日工時
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${targetMonth}-${String(d).padStart(2, '0')}`;
+      const dow = new Date(y, m - 1, d).getDay();
+      const wd = weekdayNames[dow];
+      const row = [wd, d];
+      let dayTotal = 0;
+      siteEmps.forEach(emp => {
+        const hrs = dailyEntries
+          .filter(x => x.empId === emp._id && x.date === dateStr && x.type === 'hour')
+          .filter(x => {
+            const t = x.attType || 'normal';
+            return t === 'normal' || t === '加班' || t === '時薪加班';
+          })
+          .reduce((a, b) => a + (parseFloat(b.hours) || 0), 0);
+        row.push(hrs || '');
+        dayTotal += hrs;
+      });
+      row.push(dayTotal ? Math.round(dayTotal * 10) / 10 : '');
+      rows.push(row);
+    }
+
+    // 小計列
+    const hoursTotalRow = ['', '總時數'];
+    const salaryRow = ['', '底薪'];
+    const otRow = ['', '加班費'];
+    const subtotalRow = ['', '月薪合計'];
+    let grandTotal = 0;
+
+    siteEmps.forEach(emp => {
+      // 該員工當月總工時
+      const empHours = dailyEntries
+        .filter(x => x.empId === emp._id && x.date.startsWith(targetMonth) && x.type === 'hour')
+        .filter(x => {
+          const t = x.attType || 'normal';
+          return t === 'normal' || t === '加班' || t === '時薪加班';
+        })
+        .reduce((a, b) => a + (parseFloat(b.hours) || 0), 0);
+      // 加班時數（ot1 + ot2）
+      const otHours = dailyEntries
+        .filter(x => x.empId === emp._id && x.date.startsWith(targetMonth) && x.type === 'hour')
+        .filter(x => {
+          const t = x.attType || 'normal';
+          return t === '加班' || t === '時薪加班';
+        })
+        .reduce((a, b) => a + (parseFloat(b.hours) || 0), 0);
+
+      // 從月薪記錄取得實際薪資（若已結算）
+      const rec = records.find(r => r.empId === emp._id && r.month === targetMonth);
+      const base = rec ? (rec.base || 0) : (emp.baseSalary || 0);
+      const otPay = rec ? ((rec.otPay1 || 0) + (rec.otPay2 || 0)) : 0;
+      const subtotal = base + otPay;
+
+      hoursTotalRow.push(Math.round(empHours * 10) / 10 || '');
+      salaryRow.push(base || '');
+      otRow.push(otPay || '');
+      subtotalRow.push(subtotal || '');
+      grandTotal += subtotal;
+    });
+    hoursTotalRow.push('');
+    salaryRow.push('');
+    otRow.push('');
+    subtotalRow.push(grandTotal);
+    rows.push(hoursTotalRow, salaryRow, otRow, subtotalRow);
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    // 週末紅色
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dow = new Date(y, m - 1, d).getDay();
+      if (dow === 0 || dow === 6) {
+        const rowIdx = d;
+        for (let c = 0; c <= siteEmps.length + 2; c++) {
+          const ref = XLSX.utils.encode_cell({ r: rowIdx, c });
+          if (ws[ref]) styleWeekendCell(ws[ref], dow);
+        }
+      }
+    }
+    const cols = [{wch:4},{wch:8}];
+    siteEmps.forEach(() => cols.push({wch:10}));
+    cols.push({wch:10});
+    ws['!cols'] = cols;
+
+    const safeName = site.replace(/[\\/:*?"<>|]/g, '_').slice(0, 20);
+    XLSX.utils.book_append_sheet(wb, ws, `月薪日數_${safeName}`);
+  });
+}
+
+// 1c) 所有員工月薪總表（月薪 + 論件合一）
+function buildCombinedMonthlySummary(wb, targetMonth) {
+  const rows = [
+    ['👥 月薪 & 論件 員工合併總表'],
+    ['月份', targetMonth],
+    ['匯出時間', new Date().toLocaleString('zh-TW')],
+    [],
+    ['員工編號', '姓名', '廠別', '薪資制', '總時數', '底薪', '加班費', '論件收入', '計時收入', '實發金額']
+  ];
+
+  let grandTotal = 0;
+  let grandHours = 0;
+  // 月薪員工
+  employees.forEach(emp => {
+    const rec = records.find(r => r.empId === emp._id && r.month === targetMonth);
+    const empDaily = dailyEntries.filter(x => x.empId === emp._id && x.date.startsWith(targetMonth));
+    const totalHours = empDaily
+      .filter(x => x.type === 'hour')
+      .filter(x => {
+        const t = x.attType || 'normal';
+        return t === 'normal' || t === '加班' || t === '時薪加班';
+      })
+      .reduce((a, b) => a + (parseFloat(b.hours) || 0), 0);
+
+    // 只列出該月有月薪記錄或有每日記錄的員工
+    if (!rec && empDaily.length === 0) return;
+
+    rows.push([
+      emp.id || '',
+      emp.name,
+      emp.workplace || '',
+      emp.isHourly ? '時薪制' : '月薪制',
+      Math.round(totalHours * 10) / 10,
+      rec ? (rec.base || 0) : 0,
+      rec ? ((rec.otPay1 || 0) + (rec.otPay2 || 0)) : 0,
+      rec ? (rec.pieceIncome || 0) : 0,
+      rec ? (rec.hourIncome || 0) : 0,
+      rec ? (rec.net || 0) : 0
+    ]);
+    grandHours += totalHours;
+    grandTotal += rec ? (rec.net || 0) : 0;
+  });
+
+  rows.push([]);
+  rows.push(['', '', '', '合計', Math.round(grandHours * 10) / 10, '', '', '', '', grandTotal]);
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:10},{wch:12},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:10},{wch:10},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, ws, '👥合併總表');
+}
+
 // 2) 薪資明細表（以現有月薪記錄，一位員工一張小表堆疊）
 function buildSalaryDetailSheets(wb, monthRecords) {
   if (!monthRecords || monthRecords.length === 0) return;
@@ -7352,8 +7663,10 @@ function exportToExcel() {
     XLSX.utils.book_append_sheet(wb, wsE, '員工月總');
   }
 
-  // === 勞保局規範三張表（依所選月份）===
+  // === 勞保局規範 + 合併總表（依所選月份）===
   const targetMonth = month || new Date().toISOString().slice(0,7);
+  try { buildCombinedMonthlySummary(wb, targetMonth); } catch(e){ console.error('合併總表失敗:', e); }
+  try { buildMonthlyCountSheets(wb, targetMonth); } catch(e){ console.error('月薪日數表失敗:', e); }
   try { buildPieceCountSheets(wb, targetMonth); } catch(e){ console.error('論件日數表失敗:', e); }
   try { buildSalaryDetailSheets(wb, data); } catch(e){ console.error('薪資明細表失敗:', e); }
   try { buildAttendanceSheets(wb, targetMonth); } catch(e){ console.error('出勤紀錄表失敗:', e); }
@@ -8768,6 +9081,10 @@ function init() {
   if (typeof refreshEntitlementList === 'function') refreshEntitlementList();
   // 自動清理 30 天前舊照片（管理者角色、每 24 小時最多跑一次）
   maybeAutoCleanupPhotos();
+  // ★ 全頁自動摺疊系統
+  setTimeout(() => {
+    if (typeof enableAutoCollapse === 'function') enableAutoCollapse();
+  }, 200);
 }
 
 init();
@@ -9095,6 +9412,111 @@ function toggleLeaveReference() {
     box.style.display = 'none';
     toggle.textContent = '展開 ▼';
   }
+}
+
+// ========= 🪗 通用卡片展開/收起 =========
+function toggleCard(bodyId, toggleId) {
+  const body = document.getElementById(bodyId);
+  const toggle = document.getElementById(toggleId);
+  if (!body) return;
+  const isHidden = body.style.display === 'none';
+  body.style.display = isHidden ? 'block' : 'none';
+  if (toggle) toggle.textContent = isHidden ? '收起 ▲' : '展開 ▼';
+}
+
+// ========= 🪗 全頁自動摺疊系統（所有頁籤通用）=========
+// 自動處理 .panel > .card，讓每張卡片的 h3 標題可點擊展開/收起
+function enableAutoCollapse() {
+  document.querySelectorAll('.panel > .card').forEach(card => {
+    if (card.dataset.autoCollapsified) return;
+    const h3 = card.querySelector(':scope > h3');
+    if (!h3) return;
+    // 跳過已經手動設定 onclick 的卡片（例：特休頁手動摺疊的卡片）
+    if (h3.getAttribute('onclick')) { card.dataset.autoCollapsified = '1'; return; }
+    card.dataset.autoCollapsified = '1';
+
+    // 把 h3 後面的兄弟元素包進一個 wrapper div，方便切換顯示
+    const wrapper = document.createElement('div');
+    wrapper.className = 'card-body-auto';
+    let node = h3.nextSibling;
+    while (node) {
+      const next = node.nextSibling;
+      wrapper.appendChild(node);
+      node = next;
+    }
+    card.appendChild(wrapper);
+
+    // 加三角形指示符
+    if (!h3.querySelector('.auto-collapse-ind')) {
+      const ind = document.createElement('span');
+      ind.className = 'auto-collapse-ind';
+      ind.style.cssText = 'float:right; font-size:12px; color:#6b7280; font-weight:normal; user-select:none;';
+      ind.textContent = '▲';
+      h3.appendChild(ind);
+    }
+    h3.style.cursor = 'pointer';
+    h3.style.userSelect = 'none';
+
+    // 點 h3 切換（但不要攔截 h3 內的按鈕）
+    h3.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return;
+      const hidden = wrapper.style.display === 'none';
+      wrapper.style.display = hidden ? '' : 'none';
+      const ind = h3.querySelector('.auto-collapse-ind');
+      if (ind) ind.textContent = hidden ? '▲' : '▼';
+    });
+  });
+}
+
+// 全部收起/展開（目前可見頁籤）
+function collapseAllInActivePanel(action) {
+  const active = document.querySelector('.panel.active');
+  if (!active) return;
+  // 特休頁用手動摺疊系統
+  if (active.id === 'panel-leave' && typeof toggleAllLeaveCards === 'function') {
+    toggleAllLeaveCards(action);
+    return;
+  }
+  active.querySelectorAll(':scope > .card').forEach(card => {
+    const wrapper = card.querySelector(':scope > .card-body-auto');
+    if (!wrapper) return;
+    const h3 = card.querySelector(':scope > h3');
+    if (action === 'hide') {
+      wrapper.style.display = 'none';
+      const ind = h3 && h3.querySelector('.auto-collapse-ind');
+      if (ind) ind.textContent = '▼';
+    } else {
+      wrapper.style.display = '';
+      const ind = h3 && h3.querySelector('.auto-collapse-ind');
+      if (ind) ind.textContent = '▲';
+    }
+  });
+  active.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// 特休頁：一鍵全展開/收起
+function toggleAllLeaveCards(action) {
+  const cards = [
+    { body: 'leaveReferenceBox', toggle: 'leaveRefToggle' },
+    { body: 'leaveInfoBody', toggle: 'leaveInfoToggle' },
+    { body: 'leaveListBody', toggle: 'leaveListToggle' },
+    { body: 'entBody', toggle: 'entToggle' }
+  ];
+  cards.forEach(c => {
+    const body = document.getElementById(c.body);
+    const toggle = document.getElementById(c.toggle);
+    if (!body) return;
+    if (action === 'hide') {
+      body.style.display = 'none';
+      if (toggle) toggle.textContent = '展開 ▼';
+    } else {
+      body.style.display = 'block';
+      if (toggle) toggle.textContent = '收起 ▲';
+    }
+  });
+  // 頂端對齊
+  const leavePanel = document.getElementById('panel-leave');
+  if (leavePanel) leavePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ========= ⚖ 分析頁：整月勞基法稽核報表 =========
