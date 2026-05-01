@@ -1266,6 +1266,7 @@
       <button class="btn btn-secondary btn-block" onclick="fixOvertimeEntries()" style="margin-top:8px;">🔧 修正所有加班記錄（重設計薪狀態與金額）</button>
       <button class="btn btn-secondary btn-block" onclick="deleteEntriesByEmployee()" style="margin-top:8px; background:#fef3c7; color:#92400e; border:1px solid #f59e0b;">🗑 依員工清除每日記錄（可選月份）</button>
       <button class="btn btn-secondary btn-block" onclick="cleanupOldPhotos()" style="margin-top:8px; background:#e0f2fe; color:#075985; border:1px solid #0284c7;">📷 清理 30 天前舊照片（節省 Firebase 空間）</button>
+      <button class="btn btn-secondary btn-block" onclick="clearAllUsers()" style="margin-top:8px; background:#fef3c7; color:#92400e; border:1px solid #f59e0b;">👥 清除所有使用者帳號（保留員工/薪資資料）</button>
       <button class="btn btn-danger btn-block" onclick="wipeCloudOnly()" style="margin-top:8px; background:#c92a2a;">🔐 ☁ 強制重設雲端資料（清除全部後仍殘留時使用）</button>
       <button class="btn btn-secondary btn-block" onclick="forcePullFromCloud()" style="margin-top:8px;">🔄 從雲端強制同步（清空本地以雲端為準）</button>
       <div style="padding:8px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; font-size:12px; color:#664d03; margin-top:6px;">
@@ -9139,10 +9140,57 @@ function removeDuplicateDailyEntries() {
   alert(`✅ 清理完成：刪除 ${toDeleteIds.length} 筆重複`);
 }
 
+// 👥 清除所有使用者帳號（保留員工/薪資資料）
+async function clearAllUsers() {
+  if (!requireAdmin('清除所有使用者帳號')) return;
+  if (users.length === 0) { alert('使用者清單已經是空的'); return; }
+  const userList = users.map(u => `  ・${u.username} (${u.displayName || ''})`).join('\n');
+  if (!confirm(
+    `⚠ 確定清除所有使用者帳號嗎？\n\n` +
+    `目前有 ${users.length} 個使用者：\n${userList}\n\n` +
+    `按「確定」→ 全部刪除（含您自己的帳號！）\n` +
+    `按「取消」→ 不動作\n\n` +
+    `💡 員工資料、薪資記錄不會被刪。\n` +
+    `💡 內建 admin 帳號永遠可登入（密碼在程式碼裡）。`
+  )) return;
+  if (!confirm('🚨 最終確認：此動作無法復原，所有使用者帳號將被刪除！')) return;
+
+  const userIds = users.map(u => u._id);
+  users = [];
+  save(STORE.users, []);
+  refreshUserList();
+
+  if (cloudReady) {
+    try {
+      suppressSubscription = true;
+      await Promise.all(userIds.map(id => cloudDelete('users', id)));
+      // 掃一次 collection 把所有殘留全部刪掉
+      const snap = await ws().collection('users').get();
+      await Promise.all(snap.docs.map(d => d.ref.delete()));
+      suppressSubscription = false;
+      alert(`✅ 已清除 ${userIds.length} 個使用者帳號（本地 + 雲端）\n\n💡 您可能需要重新登入（用內建 admin 帳號）`);
+    } catch (e) {
+      suppressSubscription = false;
+      alert('本地已清除，但雲端清除失敗：' + e.message);
+    }
+  } else {
+    alert(`✅ 已清除 ${userIds.length} 個使用者帳號（僅本地）`);
+  }
+}
+
 async function clearAllData() {
   if (!requireAdmin('清除所有員工與薪資記錄（本地 + 雲端）')) return;
+
+  // 詢問是否一併清除使用者帳號
+  const includeUsers = confirm(
+    `⚠ 是否要一併清除「使用者帳號清單」？\n\n` +
+    `按「確定」→ 清除員工 + 薪資 + 使用者帳號（您自己的帳號也會被刪！）\n` +
+    `按「取消」→ 只清員工 + 薪資，保留使用者帳號\n\n` +
+    `提醒：內建 admin 帳號永遠可登入（密碼在程式碼裡）`
+  );
+
   if (!confirm('⚠ 確定清除所有員工與薪資記錄？\n此動作將同時刪除本地與雲端資料，無法復原！\n\n建議先按「備份 JSON」保留一份！')) return;
-  if (!confirm('🚨 最終確認：按下確定後，所有員工、薪資記錄、每日記錄、產品清單將全部消失！')) return;
+  if (!confirm(`🚨 最終確認：按下確定後，所有員工、薪資記錄、每日記錄、產品清單${includeUsers ? '、使用者帳號' : ''}將全部消失！`)) return;
 
   // 先記下所有要刪除的雲端文件 ID
   const empIds = employees.map(e => e._id);
@@ -9150,9 +9198,14 @@ async function clearAllData() {
   const dailyIds = dailyEntries.map(d => d._id);
   const prodIds = products.map(p => p._id);
   const entIds = leaveEntitlements.map(e => e._id);
+  const userIds = includeUsers ? users.map(u => u._id) : [];
 
   // 清空本地
   employees = []; records = []; dailyEntries = []; products = []; leaveEntitlements = [];
+  if (includeUsers) {
+    users = [];
+    save(STORE.users, []);
+  }
   save(STORE.employees, []);
   save(STORE.records, []);
   save(STORE.daily, []);
@@ -9166,22 +9219,28 @@ async function clearAllData() {
   refreshProductList();
   updateSummary();
   if (typeof refreshEntitlementList === 'function') refreshEntitlementList();
+  if (typeof refreshUserList === 'function') refreshUserList();
 
   // 同步刪除雲端
   if (cloudReady) {
     try {
       // 暫時關閉訂閱避免雲端把資料推回來
       suppressSubscription = true;
-      await Promise.all([
+      const promises = [
         ...empIds.map(id => cloudDelete('employees', id)),
         ...recIds.map(id => cloudDelete('records', id)),
         ...dailyIds.map(id => cloudDelete('daily', id)),
         ...prodIds.map(id => cloudDelete('products', id)),
         ...entIds.map(id => cloudDelete('leaveEntitlements', id))
-      ]);
+      ];
+      if (includeUsers) {
+        promises.push(...userIds.map(id => cloudDelete('users', id)));
+      }
+      await Promise.all(promises);
       // 雲端可能還有「已被軟刪除但下次又同步回來」的孤兒文件，
       // 直接掃一次 collection 把所有殘留全部刪掉
       const collectionsToWipe = ['employees', 'records', 'daily', 'products', 'leaveEntitlements'];
+      if (includeUsers) collectionsToWipe.push('users');
       for (const c of collectionsToWipe) {
         try {
           const snap = await ws().collection(c).get();
