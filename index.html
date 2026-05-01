@@ -5662,7 +5662,37 @@ function addProduct() {
   const name = document.getElementById('newProductName').value.trim();
   const price = parseFloat(document.getElementById('newProductPrice').value) || 0;
   if (!name) { alert('請輸入產品名稱'); return; }
-  if (products.find(p => p.name === name)) { alert('此產品已存在'); return; }
+
+  // ✅ 同品名 → 詢問是否更新單價/照片（覆蓋舊的）
+  const existing = products.find(p => p.name === name);
+  if (existing) {
+    const oldPrice = existing.defaultPrice || 0;
+    const ok = confirm(
+      `⚠ 產品「${name}」已存在！\n\n` +
+      `目前單價：NT$ ${oldPrice}\n` +
+      `要更新為：NT$ ${price}\n\n` +
+      `按「確定」→ 覆蓋舊單價${currentNewProductPhoto ? '與照片' : ''}\n` +
+      `按「取消」→ 不動作（如果是不同產品請改名再新增）`
+    );
+    if (!ok) return;
+    existing.defaultPrice = price;
+    if (currentNewProductPhoto) existing.photo = currentNewProductPhoto;
+    try {
+      save(STORE.products, products);
+    } catch (e) {
+      alert('儲存失敗：' + e.message);
+      return;
+    }
+    cloudSave('products', existing);
+    document.getElementById('newProductName').value = '';
+    document.getElementById('newProductPrice').value = '';
+    clearNewProductPhoto();
+    refreshProductManagerList();
+    refreshProductList();
+    alert(`✅ 已更新產品「${name}」單價：NT$ ${oldPrice} → NT$ ${price}`);
+    return;
+  }
+
   const newProd = {
     _id: 'p_' + Date.now(),
     name,
@@ -6888,8 +6918,15 @@ function computeSalary(emp, input) {
     dailyDeduct = Math.round(dailyRate * (input.leaveDays || 0));
   }
 
-  const otPay1 = Math.round(otHourly * 1.34 * (input.ot1 || 0));
-  const otPay2 = Math.round(otHourly * 1.67 * (input.ot2 || 0));
+  // 依員工的「假日計薪模式」決定加班費倍率
+  // - agreement（約定制）：時薪×時數，無加倍（適合學生/兼職時薪已訂高）
+  // - law（法規制）：1.34/1.67（月份合計層級用簡化倍率近似；逐日精算請用「時薪加班」）
+  // - simple（簡化）：1.34/1.67（預設）
+  const _payMode = emp.holidayPayMode || 'simple';
+  const _mult1 = (_payMode === 'agreement') ? 1.0 : 1.34;
+  const _mult2 = (_payMode === 'agreement') ? 1.0 : 1.67;
+  const otPay1 = Math.round(otHourly * _mult1 * (input.ot1 || 0));
+  const otPay2 = Math.round(otHourly * _mult2 * (input.ot2 || 0));
 
   const pieceIncome = input.pieceIncome || 0;
   const hourIncome = input.hourIncome || 0;
@@ -7202,14 +7239,22 @@ function calculateAndPreview() {
     ${r.pieceIncome ? `<div class="result-row"><span>論件收入</span><span>NT$ ${formatMoney(r.pieceIncome)}</span></div>` : ''}
     ${r.hourIncome ? `<div class="result-row"><span>計時收入</span><span>NT$ ${formatMoney(r.hourIncome)}</span></div>` : ''}
     ${r.leavePayAmount ? `<div class="result-row"><span>特休未休折算 (${r.leavePayDays}天)</span><span>NT$ ${formatMoney(r.leavePayAmount)}</span></div>` : ''}
-    ${r.otPay1 ? `
-      <div class="result-row"><span>平日加班費</span><span>NT$ ${formatMoney(r.otPay1)}</span></div>
-      <div class="result-row" style="padding-left:16px; font-size:12px; color:#6b7280;"><span>├ ${input.ot1 || 0} 小時 × ${formatMoney(r.otHourly || 0)} × 1.34</span><span>NT$ ${formatMoney(r.otPay1)}</span></div>
-    ` : ''}
-    ${r.otPay2 ? `
-      <div class="result-row"><span>假日加班費</span><span>NT$ ${formatMoney(r.otPay2)}</span></div>
-      <div class="result-row" style="padding-left:16px; font-size:12px; color:#6b7280;"><span>├ ${input.ot2 || 0} 小時 × ${formatMoney(r.otHourly || 0)} × 1.67</span><span>NT$ ${formatMoney(r.otPay2)}</span></div>
-    ` : ''}
+    ${(() => {
+      const empNow = employees.find(e => e._id === document.getElementById('calcEmp').value);
+      const _md = (empNow && empNow.holidayPayMode) || 'simple';
+      const _m1 = _md === 'agreement' ? '1.0（約定制）' : '1.34';
+      const _m2 = _md === 'agreement' ? '1.0（約定制）' : '1.67';
+      let html = '';
+      if (r.otPay1) {
+        html += `<div class="result-row"><span>平日加班費</span><span>NT$ ${formatMoney(r.otPay1)}</span></div>
+          <div class="result-row" style="padding-left:16px; font-size:12px; color:#6b7280;"><span>├ ${input.ot1 || 0} 小時 × ${formatMoney(r.otHourly || 0)} × ${_m1}</span><span>NT$ ${formatMoney(r.otPay1)}</span></div>`;
+      }
+      if (r.otPay2) {
+        html += `<div class="result-row"><span>假日加班費</span><span>NT$ ${formatMoney(r.otPay2)}</span></div>
+          <div class="result-row" style="padding-left:16px; font-size:12px; color:#6b7280;"><span>├ ${input.ot2 || 0} 小時 × ${formatMoney(r.otHourly || 0)} × ${_m2}</span><span>NT$ ${formatMoney(r.otPay2)}</span></div>`;
+      }
+      return html;
+    })()}
     ${r.bonus ? `<div class="result-row"><span>獎金/津貼</span><span>NT$ ${formatMoney(r.bonus)}</span></div>${bonusDetail}` : ''}
     ${r.leaveAddback ? `<div class="result-row"><span>請假加薪（有薪假）</span><span>NT$ ${formatMoney(r.leaveAddback)}</span></div>` : ''}
     ${r.leaveDeduct ? `<div class="result-row"><span>請假扣款</span><span>-NT$ ${formatMoney(r.leaveDeduct)}</span></div>${leaveDeductDetail}` : ''}
