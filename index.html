@@ -403,6 +403,20 @@
           </select>
         </div>
         <div style="margin-top:8px;">
+          <label style="font-size:12px; color:#78350f;">⏰ 假日計薪模式（時薪制適用）</label>
+          <select id="empHolidayPayMode" style="padding:6px 10px; border-radius:6px; border:1px solid #d4a56f; background:white; width:100%;">
+            <option value="simple">📊 簡化倍率（休息日/國定假日皆 1.67×）</option>
+            <option value="law">⚖ 法規制（依勞基法 §24、§39 嚴格計算）</option>
+            <option value="agreement">🤝 約定制（時薪×實際時數，不加倍）</option>
+          </select>
+          <div style="font-size:11px; color:#78350f; margin-top:4px; padding:6px; background:#fffbeb; border-radius:4px;">
+            💡 適用情境：<br>
+            • <strong>簡化倍率</strong>（預設）：所有假日加班一律 1.67 倍，最簡單<br>
+            • <strong>法規制</strong>：嚴格依勞基法（國定假日加發 1 日 + 1.34/1.67×；休息日 1.34/1.67/2.67×）<br>
+            • <strong>約定制</strong>：學生/兼職類（時薪已訂高，按時薪×實際時數，不另加倍）
+          </div>
+        </div>
+        <div style="margin-top:8px;">
           <label style="font-size:12px; color:#78350f;">合約類型</label>
           <select id="empContractType" style="padding:6px 10px; border-radius:6px; border:1px solid #d4a56f; background:white;">
             <option value="fulltime">正職（全職）</option>
@@ -893,50 +907,90 @@
       </h3>
       <div id="batchCardBody">
       <div style="padding:8px; background:#fef3c7; border-radius:6px; font-size:12px; color:#92400e; margin-bottom:10px; line-height:1.6;">
-        適合固定上下班時間的員工 — 設定預設時間後勾選日期一次建立。<br>
+        適合固定上下班時間 / 固定論件數量的員工 — 設定預設值後勾選日期一次建立。<br>
         • <strong>月薪制</strong>：批次記錄會標為「僅打卡」，不會與底薪重複計算。<br>
         • <strong>時薪制</strong>：批次記錄會用員工的時薪自動算出當日工資，可直接帶入計時收入。<br>
+        • <strong>論件</strong>：每天同產品/同數量批次建立，自動算成計時/件數收入。<br>
         已有記錄的日期會自動停用勾選。
       </div>
 
-      <!-- 常用時段快速預設 -->
-      <div style="margin-bottom:8px; font-size:12px; color:#374151;">
-        快速套用：
-        <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('full')" style="padding:3px 8px; font-size:11px;">全天 08-17</button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('morning')" style="padding:3px 8px; font-size:11px;">上午 08-12</button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('afternoon')" style="padding:3px 8px; font-size:11px;">下午 13-17</button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('3h_morning')" style="padding:3px 8px; font-size:11px;">3 小時 09-12</button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('3h_afternoon')" style="padding:3px 8px; font-size:11px;">3 小時 14-17</button>
+      <!-- 模式切換：計時 / 論件 -->
+      <div style="display:flex; gap:6px; margin-bottom:10px; padding:6px; background:#f3f4f6; border-radius:8px;">
+        <button type="button" id="batchModeHourBtn" class="btn btn-primary" style="flex:1; padding:8px;" onclick="setBatchMode('hour')">⏰ 計時模式</button>
+        <button type="button" id="batchModePieceBtn" class="btn btn-secondary" style="flex:1; padding:8px;" onclick="setBatchMode('piece')">📦 論件模式</button>
       </div>
 
-      <div class="form-row">
-        <div class="form-group">
-          <label>上班時間</label>
-          <input type="text" id="batchStart" value="08:00" placeholder="HH:MM" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this); updateBatchPreview()">
+      <!-- ⏰ 計時模式欄位 -->
+      <div id="batchHourFields">
+        <!-- 常用時段快速預設 -->
+        <div style="margin-bottom:8px; font-size:12px; color:#374151;">
+          快速套用：
+          <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('full')" style="padding:3px 8px; font-size:11px;">全天 08-17</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('morning')" style="padding:3px 8px; font-size:11px;">上午 08-12</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('afternoon')" style="padding:3px 8px; font-size:11px;">下午 13-17</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('3h_morning')" style="padding:3px 8px; font-size:11px;">3 小時 09-12</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('3h_afternoon')" style="padding:3px 8px; font-size:11px;">3 小時 14-17</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="applyBatchPreset('4h_morning')" style="padding:3px 8px; font-size:11px;">4 小時 08-12</button>
         </div>
-        <div class="form-group">
-          <label>下班時間</label>
-          <input type="text" id="batchEnd" value="17:00" placeholder="HH:MM" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this); updateBatchPreview()">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>休息 (分鐘)</label>
-          <div style="display:flex; gap:4px;">
-            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('batchBreak').value=0; updateBatchPreview()" style="padding:4px 8px; font-size:11px;">無</button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('batchBreak').value=60; updateBatchPreview()" style="padding:4px 8px; font-size:11px;">1小時</button>
-            <input type="number" id="batchBreak" placeholder="分" value="60" min="0" step="5" style="flex:1;" oninput="updateBatchPreview()">
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>上班時間</label>
+            <input type="text" id="batchStart" value="08:00" placeholder="HH:MM" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this); updateBatchPreview()">
+          </div>
+          <div class="form-group">
+            <label>下班時間</label>
+            <input type="text" id="batchEnd" value="17:00" placeholder="HH:MM" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this); updateBatchPreview()">
           </div>
         </div>
-        <div class="form-group">
-          <label>工作內容</label>
-          <select id="batchWork">
-            <option value="">-- 選填 --</option>
-          </select>
+        <div class="form-row">
+          <div class="form-group">
+            <label>休息 (分鐘)</label>
+            <div style="display:flex; gap:4px;">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('batchBreak').value=0; updateBatchPreview()" style="padding:4px 8px; font-size:11px;">無</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('batchBreak').value=60; updateBatchPreview()" style="padding:4px 8px; font-size:11px;">1小時</button>
+              <input type="number" id="batchBreak" placeholder="分" value="60" min="0" step="5" style="flex:1;" oninput="updateBatchPreview()">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>工作內容</label>
+            <select id="batchWork">
+              <option value="">-- 選填 --</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      <!-- 預覽：每天工時與金額 -->
+      <!-- 📦 論件模式欄位 -->
+      <div id="batchPieceFields" style="display:none;">
+        <div class="form-row">
+          <div class="form-group">
+            <label>產品 *</label>
+            <select id="batchPieceProduct" onchange="updateBatchPiecePreview()">
+              <option value="">-- 請選擇 --</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>每日數量 *</label>
+            <input type="number" id="batchPieceQty" placeholder="例：50" min="0" step="0.1" oninput="updateBatchPiecePreview()">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>單價 NT$（自動帶產品預設，可改）</label>
+            <input type="number" id="batchPiecePrice" placeholder="例：12" min="0" step="0.01" oninput="updateBatchPiecePreview()">
+          </div>
+          <div class="form-group">
+            <label>備註</label>
+            <input type="text" id="batchPieceNote" placeholder="選填">
+          </div>
+        </div>
+        <div id="batchPiecePreviewBox" style="padding:8px 10px; background:#fef3c7; border-left:3px solid #f59e0b; border-radius:4px; font-size:12px; color:#92400e; margin-bottom:10px;">
+          📦 <strong>每天</strong> 0 件 × NT$ 0 = <strong>NT$ 0</strong>
+        </div>
+      </div>
+
+      <!-- 預覽：每天工時與金額（計時模式） -->
       <div id="batchPreviewBox" style="padding:8px 10px; background:#eff6ff; border-left:3px solid #3b82f6; border-radius:4px; font-size:12px; color:#1e40af; margin-bottom:10px; display:none;"></div>
 
       <div style="display:flex; gap:6px; margin-bottom:8px;">
@@ -1685,10 +1739,10 @@
         <div class="form-group">
           <label>角色 *</label>
           <select id="newUserRole" onchange="onUserRoleChange()">
-            <option value="factory">🏭 廠別主管</option>
-            <option value="employee">👤 員工 (唯讀)</option>
+            <option value="super">👑 總管理者（最高權限）</option>
             <option value="admin">🔧 管理者</option>
-            <option value="super">👑 總管理者 (最高權限)</option>
+            <option value="factory">🏭 廠別主管</option>
+            <option value="employee">👤 員工（唯讀）</option>
           </select>
         </div>
       </div>
@@ -2595,6 +2649,7 @@ function saveEmployee() {
     responsibilitySystem: document.getElementById('empResponsibilitySystem').checked,
     flexibleHours: document.getElementById('empFlexibleHours').value || '',
     contractType: document.getElementById('empContractType').value || 'fulltime',
+    holidayPayMode: document.getElementById('empHolidayPayMode').value || 'simple',
     insuredSalary: parseFloat(document.getElementById('empInsuredSalary').value) || 0,
     dependents: parseFloat(document.getElementById('empDependents').value) || 0,
     pensionSelf: parseFloat(document.getElementById('empPensionSelf').value) || 0,
@@ -2635,6 +2690,7 @@ function editEmployee(id) {
   document.getElementById('empResponsibilitySystem').checked = !!e.responsibilitySystem;
   document.getElementById('empFlexibleHours').value = e.flexibleHours || '';
   document.getElementById('empContractType').value = e.contractType || 'fulltime';
+  document.getElementById('empHolidayPayMode').value = e.holidayPayMode || 'simple';
   document.getElementById('empInsuredSalary').value = e.insuredSalary || '';
   document.getElementById('empDependents').value = e.dependents || '';
   document.getElementById('empPensionSelf').value = e.pensionSelf || '';
@@ -2663,6 +2719,7 @@ function clearEmpForm() {
   document.getElementById('empResponsibilitySystem').checked = false;
   document.getElementById('empFlexibleHours').value = '';
   document.getElementById('empContractType').value = 'fulltime';
+  document.getElementById('empHolidayPayMode').value = 'simple';
   document.getElementById('empWorkplace').value = '';
   document.getElementById('empLeaveHint').style.display = 'none';
 }
@@ -2716,6 +2773,123 @@ function calcSpanMins(start, end) {
   let mins = (eh * 60 + em) - (sh * 60 + sm);
   if (mins < 0) mins += 24 * 60; // 跨日
   return Math.max(0, mins);
+}
+
+// ===== ⏰ 假日計薪模式 helper =====
+// 取得日期類型：weekday（平日）/ saturday（休息日）/ sunday（例假）/ holiday（國定假日）
+function getDayType(dateStr) {
+  if (!dateStr) return 'weekday';
+  if (holidays.includes(dateStr)) return 'holiday';
+  const dow = new Date(dateStr).getDay();
+  if (dow === 0) return 'sunday';
+  if (dow === 6) return 'saturday';
+  return 'weekday';
+}
+
+// 依員工的 holidayPayMode 計算當日工時應領金額
+// hours: 工時、rate: 時薪、dateStr: 該日日期、payMode: 員工模式（agreement/law/simple）
+// 回傳 { subtotal, breakdown, mode, dayType }
+function calcHourlyDayPay(hours, rate, dateStr, payMode) {
+  const dayType = getDayType(dateStr);
+  const mode = payMode || 'simple';
+  let subtotal = 0;
+  let breakdown = '';
+
+  if (mode === 'agreement') {
+    // 約定制：所有日子都按時薪×時數
+    subtotal = Math.round(hours * rate);
+    breakdown = `${hours}h × NT$${rate} = NT$${subtotal}（約定制）`;
+  } else if (mode === 'law') {
+    // 法規制：依勞基法 §24、§39
+    if (dayType === 'weekday') {
+      subtotal = Math.round(hours * rate);
+      breakdown = `平日 ${hours}h × ${rate} = NT$${subtotal}`;
+    } else if (dayType === 'saturday') {
+      // 休息日：前 2h × 1.34，3-8h × 1.67，9-12h × 2.67
+      const h1 = Math.min(2, hours);
+      const h2 = Math.max(0, Math.min(6, hours - 2));
+      const h3 = Math.max(0, Math.min(4, hours - 8));
+      const p1 = h1 * rate * 1.34;
+      const p2 = h2 * rate * 1.67;
+      const p3 = h3 * rate * 2.67;
+      subtotal = Math.round(p1 + p2 + p3);
+      const parts = [];
+      if (h1 > 0) parts.push(`前2h(${h1}h)×${rate}×1.34`);
+      if (h2 > 0) parts.push(`3-8h(${h2}h)×${rate}×1.67`);
+      if (h3 > 0) parts.push(`9-12h(${h3}h)×${rate}×2.67`);
+      breakdown = `休息日 §24：${parts.join(' + ')} = NT$${subtotal}`;
+    } else if (dayType === 'sunday') {
+      // 例假：原則禁止，若工作則加倍
+      subtotal = Math.round(hours * rate * 2);
+      breakdown = `例假 §40：${hours}h × ${rate} × 2 = NT$${subtotal}（含1日工資加倍）`;
+    } else if (dayType === 'holiday') {
+      // 國定假日：8h內加發1日 + 9-10h × 1.34 + 11-12h × 1.67
+      const baseHours = Math.min(8, hours);
+      const dailyPremium = 8 * rate; // 加發 1 日工資（固定 8 小時）
+      let pay = baseHours * rate + dailyPremium;
+      let bd = `本工 ${baseHours}h×${rate} + 加發1日(8h×${rate})`;
+      if (hours > 8) {
+        const h9_10 = Math.min(2, hours - 8);
+        const p9_10 = h9_10 * rate * 1.34;
+        pay += p9_10;
+        bd += ` + 9-10h(${h9_10}h)×${rate}×1.34`;
+        if (hours > 10) {
+          const h11_12 = Math.min(2, hours - 10);
+          const p11_12 = h11_12 * rate * 1.67;
+          pay += p11_12;
+          bd += ` + 11-12h(${h11_12}h)×${rate}×1.67`;
+        }
+      }
+      subtotal = Math.round(pay);
+      breakdown = `國定假日 §39：${bd} = NT$${subtotal}`;
+    }
+  } else {
+    // simple（簡化倍率）：原本邏輯
+    if (dayType === 'weekday') {
+      subtotal = Math.round(hours * rate);
+      breakdown = `平日 ${hours}h × ${rate} = NT$${subtotal}`;
+    } else {
+      subtotal = Math.round(hours * rate * 1.67);
+      const dayLabel = dayType === 'holiday' ? '國定假日' : (dayType === 'saturday' ? '休息日' : '例假');
+      breakdown = `${dayLabel}（簡化）${hours}h × ${rate} × 1.67 = NT$${subtotal}`;
+    }
+  }
+  return { subtotal, breakdown, mode, dayType };
+}
+
+// ✅ 時段重疊檢查：給某員工某天的某時段，找出 dailyEntries 裡有沒有重疊的記錄
+// 排除自己（編輯時的本筆）
+// 回傳重疊的記錄陣列
+function checkTimeOverlap(empId, date, start, end, excludeId) {
+  if (!start || !end) return [];
+  const toMin = (s) => {
+    if (!s) return null;
+    const [h, m] = s.split(':').map(Number);
+    return h * 60 + m;
+  };
+  let s1 = toMin(start);
+  let e1 = toMin(end);
+  if (s1 === null || e1 === null) return [];
+  if (e1 <= s1) e1 += 24 * 60; // 跨日
+
+  return dailyEntries.filter(d => {
+    if (d.empId !== empId) return false;
+    if (d.date !== date) return false;
+    if (excludeId && d._id === excludeId) return false;
+    // 取出該記錄的時段
+    let s2, e2;
+    if (d.type === 'hour') {
+      s2 = toMin(d.start);
+      e2 = toMin(d.end);
+    } else if (d.type === 'piece') {
+      s2 = toMin(d.startTime);
+      e2 = toMin(d.endTime);
+    }
+    if (s2 === null || e2 === null) return false; // 沒填時間就不算重疊
+    if (e2 <= s2) e2 += 24 * 60;
+    // 兩時段重疊：max(s1,s2) < min(e1,e2)
+    return Math.max(s1, s2) < Math.min(e1, e2);
+  });
 }
 
 // 24 小時制時間輸入自動格式化（blur 時執行）
@@ -2893,6 +3067,24 @@ function addPieceEntry() {
   const pStart = document.getElementById('pieceStart').value;
   const pEnd = document.getElementById('pieceEnd').value;
   const pWorkMins = (pStart && pEnd) ? calcSpanMins(pStart, pEnd) : null;
+
+  // ✅ 時段重疊檢查（避免同日同時段 論件 + 計時 重複計薪）
+  if (pStart && pEnd) {
+    const conflicts = checkTimeOverlap(empId, date, pStart, pEnd, editingDailyId);
+    if (conflicts.length > 0) {
+      const conflictMsg = conflicts.map(c =>
+        `  • ${c.type === 'piece' ? '📦 論件' : '⏰ 計時'}：${c.startTime || c.start}-${c.endTime || c.end}（${c.name || c.workContent || c.attType || ''}）`
+      ).join('\n');
+      const ok = confirm(
+        `⚠ 時段重疊警告！\n\n` +
+        `${emp.name} 在 ${date} 已有以下記錄與本筆 ${pStart}-${pEnd} 時段重疊：\n${conflictMsg}\n\n` +
+        `如果同時段論件＋計時都計薪，會「重複給薪」造成薪資高估。\n\n` +
+        `按「確定」→ 仍要儲存（例如論件只是記錄工時，不算薪）\n` +
+        `按「取消」→ 取消儲存，回去調整時段`
+      );
+      if (!ok) return;
+    }
+  }
   const entry = {
     _id: editingDailyId || ('d_' + Date.now()),
     date, empId,
@@ -2982,6 +3174,44 @@ function addHourEntry() {
   }
 
   const emp = employees.find(e => e._id === empId);
+
+  // ✅ 時段重疊檢查（避免同日同時段 計時 + 論件 重複計薪）
+  if (start && end) {
+    const conflicts = checkTimeOverlap(empId, date, start, end, editingDailyId);
+    if (conflicts.length > 0) {
+      const conflictMsg = conflicts.map(c =>
+        `  • ${c.type === 'piece' ? '📦 論件' : '⏰ 計時'}：${c.startTime || c.start}-${c.endTime || c.end}（${c.name || c.workContent || c.attType || ''}）`
+      ).join('\n');
+      const okOl = confirm(
+        `⚠ 時段重疊警告！\n\n` +
+        `${emp ? emp.name : ''} 在 ${date} 已有以下記錄與本筆 ${start}-${end} 時段重疊：\n${conflictMsg}\n\n` +
+        `如果同時段都計薪，會「重複給薪」造成薪資高估。\n\n` +
+        `按「確定」→ 仍要儲存\n` +
+        `按「取消」→ 取消儲存，回去調整時段`
+      );
+      if (!okOl) return;
+    }
+  }
+
+  // ✅ 週末/國定假日 + 正常上班 → 提醒改加班（排班制員工除外）
+  const _attTypeNow = document.getElementById('hourAttType').value || 'normal';
+  if (_attTypeNow === 'normal' && emp && !emp.isShift) {
+    const dt = getDayType(date);
+    if (dt === 'holiday' || dt === 'sunday' || dt === 'saturday') {
+      const dayLabel = dt === 'holiday' ? '🎌 國定假日' : (dt === 'sunday' ? '📅 例假（週日）' : '📅 休息日（週六）');
+      const recommended = dt === 'holiday' ? '加班 (依 §39 加倍)' : '加班 (1.34/1.67×)';
+      const okHol = confirm(
+        `⚠ ${dayLabel} 警告！\n\n` +
+        `${date} 是${dayLabel}，您選的出勤類型是「正常上班」。\n\n` +
+        `若該員工這天確實有來上班（不是排班內的工作日），\n` +
+        `應改選「💪 加班」並依勞基法計算加班費。\n\n` +
+        `按「確定」→ 維持「正常上班」（適用：員工排班就在此日，不另計加班）\n` +
+        `按「取消」→ 取消儲存，回去改選「加班」`
+      );
+      if (!okHol) return;
+    }
+  }
+
   // ★ 同日同員工重複檢查（編輯模式下除外）
   if (!editingDailyId) {
     const dup = dailyEntries.find(d => d.empId === empId && d.date === date && d.type === 'hour');
@@ -3759,6 +3989,11 @@ function toggleWorkplaceManager() {
 }
 
 function addWorkplace() {
+  // 只有總管理者 / 管理者 可以新增廠別
+  if (currentUser && !isAdmin()) {
+    alert('⚠ 只有「管理者」以上層級可以新增廠別');
+    return;
+  }
   const name = document.getElementById('newWorkplaceName').value.trim();
   if (!name) return;
   if (workplaces.find(w => w.name === name)) { alert('此地點已存在'); return; }
@@ -3772,7 +4007,20 @@ function addWorkplace() {
 }
 
 function deleteWorkplace(id) {
-  if (!confirm('確定刪除此工作地點？')) return;
+  // 只有總管理者可以刪除廠別（避免管理者誤刪）
+  if (currentUser && !isSuperAdmin()) {
+    alert('⚠ 只有「總管理者」可以刪除廠別。\n\n如需刪除，請聯絡總管理者。');
+    return;
+  }
+  const wp = workplaces.find(w => w._id === id);
+  if (!wp) return;
+  // 檢查是否有員工正在使用該廠別
+  const usingEmps = employees.filter(e => e.workplace === wp.name);
+  if (usingEmps.length > 0) {
+    if (!confirm(`⚠ 此廠別「${wp.name}」目前有 ${usingEmps.length} 位員工使用：\n${usingEmps.map(e => '・' + e.name).join('\n')}\n\n刪除後這些員工的工作地點將變空白（薪資資料保留）。\n\n仍要刪除嗎？`)) return;
+  } else {
+    if (!confirm(`確定刪除工作地點「${wp.name}」？`)) return;
+  }
   workplaces = workplaces.filter(w => w._id !== id);
   save(STORE.workplaces, workplaces);
   cloudDelete('workplaces', id);
@@ -3801,9 +4049,10 @@ function refreshMonthlyAttendance() {
   if (!box) return;
   const empId = document.getElementById('calcEmp').value;
   const month = document.getElementById('calcMonth').value;
-  // 清掉頂部警示橫幅
+  // 清掉頂部警示橫幅與舊的稽核資料
   const banner = document.getElementById('shortageWarningBanner');
   if (banner) { banner.style.display = 'none'; banner.innerHTML = ''; }
+  window.__shortageAudit = null;
   if (!empId || !month) { box.innerHTML = ''; return; }
 
   // 解析月份，建立當月所有日期
@@ -3923,9 +4172,100 @@ function refreshMonthlyAttendance() {
     </div>
     <div style="font-size:11px; color:#6b7280; margin-bottom:8px;">（點每列「✏️」可編輯，或按上方按鈕強制刷新上方出勤天數/加班時數）</div>
 
-    <!-- ★ 工時稽核摘要（僅月薪制員工）-->
+    <!-- ★ 時薪制員工的工時/收入摘要 -->
+    ${(() => {
+      if (!empObj || !empObj.isHourly) return '';
+      // 計算時薪制當月：計時收入 + 論件收入 + 加班費
+      let hourCount = 0, hourPay = 0;
+      let pieceCount = 0, pieceQty = 0, piecePay = 0;
+      let otHours = 0, otPay = 0;
+      empEntries.forEach(d => {
+        if (d.type === 'hour') {
+          const t = d.attType || 'normal';
+          if (t === 'normal' || t === '時薪加班') {
+            hourCount += (d.hours || 0);
+            hourPay += (d.subtotal || 0);
+          }
+          if (t === '加班' || t === '時薪加班') {
+            otHours += (d.hours || 0);
+          }
+        } else if (d.type === 'piece') {
+          pieceCount++;
+          pieceQty += (d.qty || 0);
+          piecePay += (d.subtotal || 0);
+        }
+      });
+      const total = hourPay + piecePay;
+      return `
+        <div style="padding:12px 14px; background:#fef3c7; border-left:4px solid #f59e0b; border-radius:6px; margin-bottom:8px; font-size:13px; line-height:1.7;">
+          <strong style="color:#92400e;">📊 時薪制工時/收入摘要</strong> (時薪 NT$ ${empObj.hourlyRate || 0})<br>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:6px; margin-top:6px;">
+            <div style="background:white; padding:6px 8px; border-radius:4px;">
+              <div style="font-size:11px; color:#92400e;">⏰ 計時上班</div>
+              <div style="font-weight:700; color:#1e40af;">${hourCount.toFixed(1)} 小時 → NT$ ${formatMoney(hourPay)}</div>
+            </div>
+            <div style="background:white; padding:6px 8px; border-radius:4px;">
+              <div style="font-size:11px; color:#92400e;">📦 論件</div>
+              <div style="font-weight:700; color:#7c2d12;">${pieceCount} 筆/${pieceQty} 件 → NT$ ${formatMoney(piecePay)}</div>
+            </div>
+            <div style="background:white; padding:6px 8px; border-radius:4px;">
+              <div style="font-size:11px; color:#92400e;">🔥 加班時數</div>
+              <div style="font-weight:700; color:#dc2626;">${otHours.toFixed(1)} 小時</div>
+            </div>
+            <div style="background:linear-gradient(135deg, #fef9c3, #fde68a); padding:6px 8px; border-radius:4px; border:1px dashed #f59e0b;">
+              <div style="font-size:11px; color:#92400e;">💰 預估本月總收入</div>
+              <div style="font-weight:700; color:#92400e; font-size:15px;">NT$ ${formatMoney(total)}</div>
+            </div>
+          </div>
+          <div style="font-size:11px; color:#78350f; margin-top:6px;">💡 此摘要僅供參考。實際薪資請按月薪頁的計算公式（含加班費倍率、勞健保等）。</div>
+        </div>
+      `;
+    })()}
+
+    <!-- ★ 工時稽核摘要（僅月薪制員工，排班制另外處理）-->
     ${(() => {
       if (!empObj || empObj.isHourly) return '';
+      // 排班制員工：不做「平日工作日 vs 上班時數」比對
+      if (empObj.isShift) {
+        let totalNormal = 0, totalOT = 0, totalLeave = 0, weekendWorkDays = 0, holidayWorkDays = 0;
+        const workedDates = new Set();
+        empEntries.forEach(d => {
+          if (d.type !== 'hour') return;
+          const t = d.attType || 'normal';
+          const isLeave = t !== 'normal' && t !== '加班' && t !== '時薪加班';
+          const h = isLeave ? ((d.hours && d.hours > 0) ? d.hours : 8) : (d.hours || 0);
+          const dow = new Date(d.date).getDay();
+          const isHol = holidays.includes(d.date);
+          if (isLeave) {
+            totalLeave += h;
+          } else if (t === '加班' || t === '時薪加班') {
+            totalOT += h;
+          } else {
+            totalNormal += h;
+            workedDates.add(d.date);
+            if (isHol) holidayWorkDays++;
+            else if (dow === 0 || dow === 6) weekendWorkDays++;
+          }
+        });
+        const totalDays = workedDates.size;
+        const warnNote = (weekendWorkDays > 0 || holidayWorkDays > 0)
+          ? `<div style="margin-top:6px; padding:6px 10px; background:#fee2e2; border-left:3px solid #dc2626; border-radius:4px; font-size:12px; color:#991b1b;">
+              ⚠ 偵測到員工在 <strong>${weekendWorkDays}</strong> 個週末日 / <strong>${holidayWorkDays}</strong> 個國定假日 上班但類型選「正常上班」。<br>
+              排班制員工若在這些日子來上班，依規範這些<strong>不算正常班表</strong>，建議：
+              <ol style="margin:4px 0 0 18px; padding:0;">
+                <li>確認排班表 → 若這些日是該員工排班內的工作日 → 維持「正常上班」</li>
+                <li>若是支援/加班 → 點該日「✏ 編輯」改為「加班」或「時薪加班」</li>
+              </ol>
+            </div>`
+          : '';
+        return `
+          <div style="padding:10px 12px; background:#fce7f3; border-left:4px solid #be185d; border-radius:6px; margin-bottom:8px; font-size:13px; line-height:1.7;">
+            <strong style="color:#be185d;">🗓 排班制員工出勤摘要</strong>（不做「應上班時數」比對）<br>
+            出勤天數 <strong>${totalDays}</strong> 天 ｜ 正常工時 <strong>${totalNormal.toFixed(1)}h</strong> ｜ 加班 <strong>${totalOT.toFixed(1)}h</strong> ｜ 請假 <strong>${totalLeave.toFixed(1)}h</strong>
+            ${warnNote}
+          </div>
+        `;
+      }
       const expectedHours = monthWorkdays * 8;
       let normalHours = 0;
       let leaveHours = 0;
@@ -3958,10 +4298,15 @@ function refreshMonthlyAttendance() {
         </div>`;
       }
       // 🚨 頂部警示橫幅（改進 A）— 儲存全域狀態供 B 使用
-      window.__shortageAudit = {
-        shortage, expectedHours, normalHours, leaveHours,
-        empName: empObj.name, suggestedDeduct
-      };
+      // 排班制員工不做工時缺漏判斷
+      if (empObj.isShift) {
+        window.__shortageAudit = null;
+      } else {
+        window.__shortageAudit = {
+          shortage, expectedHours, normalHours, leaveHours,
+          empName: empObj.name, suggestedDeduct
+        };
+      }
       const banner = document.getElementById('shortageWarningBanner');
       if (banner) {
         if (shortage > 0 && expectedHours > 0 && empObj.baseSalary > 0) {
@@ -6015,7 +6360,8 @@ function applyBatchPreset(preset) {
     'morning':      { start: '08:00', end: '12:00', brk: 0 },
     'afternoon':    { start: '13:00', end: '17:00', brk: 0 },
     '3h_morning':   { start: '09:00', end: '12:00', brk: 0 },
-    '3h_afternoon': { start: '14:00', end: '17:00', brk: 0 }
+    '3h_afternoon': { start: '14:00', end: '17:00', brk: 0 },
+    '4h_morning':   { start: '08:00', end: '12:00', brk: 0 }
   };
   const p = presets[preset];
   if (!p) return;
@@ -6053,7 +6399,117 @@ function updateBatchPreview() {
   box.style.display = 'block';
 }
 
+// 🆕 批次模式切換
+let _batchMode = 'hour'; // 'hour' or 'piece'
+function setBatchMode(mode) {
+  _batchMode = mode;
+  const hourBtn = document.getElementById('batchModeHourBtn');
+  const pieceBtn = document.getElementById('batchModePieceBtn');
+  const hourFields = document.getElementById('batchHourFields');
+  const pieceFields = document.getElementById('batchPieceFields');
+  if (mode === 'hour') {
+    hourBtn.className = 'btn btn-primary';
+    pieceBtn.className = 'btn btn-secondary';
+    hourFields.style.display = '';
+    pieceFields.style.display = 'none';
+  } else {
+    hourBtn.className = 'btn btn-secondary';
+    pieceBtn.className = 'btn btn-primary';
+    hourFields.style.display = 'none';
+    pieceFields.style.display = '';
+    // 同步產品下拉
+    const sel = document.getElementById('batchPieceProduct');
+    if (sel && sel.options.length <= 1) {
+      sel.innerHTML = '<option value="">-- 請選擇 --</option>' +
+        products.map(p => `<option value="${p._id}" data-price="${p.price || ''}">${escapeHtml(p.name)} ${p.price ? '(預設 ' + p.price + ')' : ''}</option>`).join('');
+      sel.addEventListener('change', () => {
+        const opt = sel.options[sel.selectedIndex];
+        const price = opt && opt.dataset.price;
+        if (price) document.getElementById('batchPiecePrice').value = price;
+        updateBatchPiecePreview();
+      });
+    }
+  }
+}
+
+function updateBatchPiecePreview() {
+  const qty = parseFloat(document.getElementById('batchPieceQty').value) || 0;
+  const price = parseFloat(document.getElementById('batchPiecePrice').value) || 0;
+  const subtotal = qty * price;
+  const box = document.getElementById('batchPiecePreviewBox');
+  if (box) box.innerHTML = `📦 <strong>每天</strong> ${qty} 件 × NT$ ${price} = <strong>NT$ ${formatMoney(subtotal)}</strong>`;
+}
+
+// 🆕 論件批次儲存
+function batchSavePieceAttendance() {
+  const empId = document.getElementById('calcEmp').value;
+  const emp = employees.find(e => e._id === empId);
+  if (!emp) { alert('請先選員工'); return; }
+  const productId = document.getElementById('batchPieceProduct').value;
+  const product = products.find(p => p._id === productId);
+  if (!product) { alert('請選擇產品'); return; }
+  const qty = parseFloat(document.getElementById('batchPieceQty').value) || 0;
+  const price = parseFloat(document.getElementById('batchPiecePrice').value) || 0;
+  const note = document.getElementById('batchPieceNote').value.trim();
+  if (qty <= 0) { alert('每日數量必須 > 0'); return; }
+  if (price <= 0) { alert('單價必須 > 0'); return; }
+
+  const checkedDates = [...document.querySelectorAll('.batch-day-chk:checked:not(:disabled)')].map(c => c.dataset.date);
+  if (checkedDates.length === 0) { alert('請勾選要新增的日期'); return; }
+
+  // 重複檢查（同產品同日期）
+  const dupDates = checkedDates.filter(date =>
+    dailyEntries.some(d => d.empId === empId && d.date === date && d.type === 'piece' && d.productId === productId)
+  );
+  let datesToAdd = checkedDates;
+  if (dupDates.length > 0) {
+    const ok = confirm(
+      `⚠ 偵測到以下 ${dupDates.length} 個日期已有「${product.name}」的論件記錄：\n${dupDates.join(', ')}\n\n` +
+      `按「確定」→ 跳過已有的，只新增 ${checkedDates.length - dupDates.length} 天\n` +
+      `按「取消」→ 完全取消批次新增`
+    );
+    if (!ok) return;
+    datesToAdd = checkedDates.filter(d => !dupDates.includes(d));
+    if (datesToAdd.length === 0) return;
+  }
+
+  const subtotal = Math.round(qty * price * 100) / 100;
+  if (!confirm(`將為 ${emp.name} 批次新增 ${datesToAdd.length} 天論件記錄：\n  產品：${product.name}\n  每天 ${qty} 件 × NT$ ${price} = NT$ ${formatMoney(subtotal)}\n  總計：NT$ ${formatMoney(subtotal * datesToAdd.length)}\n\n繼續？`)) return;
+
+  let baseId = Date.now();
+  let count = 0;
+  datesToAdd.forEach(date => {
+    const entry = {
+      _id: 'd_' + (baseId + count),
+      date, empId, empName: emp.name, empNo: emp.id,
+      type: 'piece',
+      productId, name: product.name,
+      qty, price,
+      subtotal,
+      attType: 'normal',
+      source: 'batch',
+      note: note || '批次新增',
+      photo: null,
+      createdAt: new Date().toISOString()
+    };
+    dailyEntries.push(entry);
+    cloudSave('daily', entry);
+    count++;
+  });
+  try { save(STORE.daily, dailyEntries); }
+  catch (e) { alert('儲存失敗：' + e.message); }
+  alert(`✅ 已批次新增 ${count} 天論件記錄\n總金額：NT$ ${formatMoney(subtotal * count)}`);
+  refreshAllDailyViews();
+  // 收合
+  const body = document.getElementById('batchCardBody');
+  const btn = document.getElementById('batchToggleBtn');
+  if (body) body.style.display = 'none';
+  if (btn) btn.textContent = '▶ 展開';
+}
+
 function batchSaveAttendance() {
+  // 依模式分流到不同函式
+  if (_batchMode === 'piece') return batchSavePieceAttendance();
   const empId = document.getElementById('calcEmp').value;
   const emp = employees.find(e => e._id === empId);
   if (!emp) { alert('請先選員工'); return; }
@@ -6201,6 +6657,22 @@ function quickAddAttendance() {
   // 請假類型：不含 加班、時薪加班
   const isLeave = attType !== 'normal' && attType !== '加班' && attType !== '時薪加班';
   const isMonthly = !emp.isHourly;
+
+  // ✅ 週末/國定假日 + 正常上班 → 提醒改加班（排班制員工除外）
+  if (attType === 'normal' && emp && !emp.isShift) {
+    const dt = getDayType(date);
+    if (dt === 'holiday' || dt === 'sunday' || dt === 'saturday') {
+      const dayLabel = dt === 'holiday' ? '🎌 國定假日' : (dt === 'sunday' ? '📅 例假（週日）' : '📅 休息日（週六）');
+      const okH = confirm(
+        `⚠ ${dayLabel} 警告！\n\n` +
+        `${date} 是${dayLabel}，但出勤類型選了「正常上班」。\n\n` +
+        `若員工確實有來上班，應改成「💪 加班」依勞基法計算加班費。\n\n` +
+        `按「確定」→ 維持「正常上班」（員工排班就是這天）\n` +
+        `按「取消」→ 取消儲存，改選「加班」`
+      );
+      if (!okH) return;
+    }
+  }
   // ★ subtotal 決策（「加班歸加班，計時歸計時」）：
   //   normal (時薪制) → subtotal = hours × rate（計時收入）
   //   normal (月薪制) → 打卡 attendanceOnly（底薪含）
@@ -8906,9 +9378,46 @@ function updateUserInfoBar() {
   bar.innerHTML = `
     👤 <strong>${escapeHtml(currentUser.displayName || currentUser.username)}</strong>
     <span style="color:#6b7280; font-size:12px;">[${roleLabel}]</span>
-    <button class="btn btn-secondary btn-sm" onclick="doLogout()" style="margin-left:8px; padding:2px 10px; font-size:12px;">登出</button>
+    <button class="btn btn-secondary btn-sm" onclick="changeMyPassword()" style="margin-left:8px; padding:2px 10px; font-size:12px; background:#fef3c7; color:#92400e;">🔑 改密碼</button>
+    <button class="btn btn-secondary btn-sm" onclick="doLogout()" style="margin-left:6px; padding:2px 10px; font-size:12px;">登出</button>
   `;
   bar.style.display = 'block';
+}
+
+// ========= 🔑 修改自己的密碼 =========
+function changeMyPassword() {
+  if (!currentUser) { alert('請先登入'); return; }
+  // 內建 admin 帳號（_id='admin'）不能改密碼，因為密碼寫死在程式裡
+  if (currentUser._id === 'admin') {
+    alert('⚠ 您是內建系統管理員（admin），密碼寫在程式碼裡，請聯絡 IT 修改 ADMIN_PASSWORD 變數。\n\n建議：改用您建立的「總管理者」帳號登入，那個帳號的密碼可以隨時修改。');
+    return;
+  }
+
+  const old = prompt('請輸入「目前」密碼：');
+  if (!old) return;
+  if (old !== currentUser.password) {
+    alert('❌ 目前密碼錯誤');
+    return;
+  }
+
+  const np1 = prompt('請輸入「新」密碼（至少 4 個字元）：');
+  if (!np1) return;
+  if (np1.length < 4) { alert('密碼太短，至少 4 個字元'); return; }
+  if (np1 === old) { alert('新密碼跟舊密碼一樣，沒有變更'); return; }
+
+  const np2 = prompt('請「再次輸入」新密碼確認：');
+  if (np2 !== np1) { alert('❌ 兩次密碼不一致，請重新操作'); return; }
+
+  // 更新本地 + 雲端
+  currentUser.password = np1;
+  // 找到 users 陣列裡的這位
+  const u = users.find(x => x._id === currentUser._id);
+  if (u) {
+    u.password = np1;
+    save(STORE.users, users);
+    if (typeof cloudSave === 'function') cloudSave('users', u);
+  }
+  alert('✅ 密碼已更新！\n\n下次登入請使用新密碼。');
 }
 
 // 依角色隱藏 / 鎖定不該看到的功能
@@ -9005,14 +9514,34 @@ function onUserRoleChange() {
       wpLabel.innerHTML = '限定廠別 * <span style="color:#6b7280; font-size:11px; font-weight:normal;">（可勾選多個，未勾代表該廠看不到）</span>';
     }
   }
-  // 同步廠別 checkbox
+  // 同步廠別 checkbox（層級聯動：管理者只能指派自己擁有的廠別給下屬）
   if (showWpRow) {
     const box = document.getElementById('newUserWorkplaceChecks');
     if (box) {
-      if (workplaces.length === 0) {
-        box.innerHTML = '<div style="color:#9ca3af; font-size:12px;">尚無廠別資料，請先到員工頁設定工作地點</div>';
+      // 取得目前登入者可指派的廠別範圍
+      let assignableWps = workplaces.slice();
+      if (currentUser && !isSuperAdmin()) {
+        // 非總管理者：只能指派自己擁有的廠別
+        const myWps = getUserWorkplaces(currentUser);
+        if (myWps.length > 0) {
+          assignableWps = workplaces.filter(w => myWps.includes(w.name));
+        } else if (currentUser.role === 'admin') {
+          // admin 沒勾廠別 = 擁有全部，不限制
+          // assignableWps 保持全部
+        } else {
+          // 其他角色（factory）沒設廠別 = 沒得指派
+          assignableWps = [];
+        }
+      }
+
+      if (assignableWps.length === 0) {
+        box.innerHTML = '<div style="color:#9ca3af; font-size:12px; padding:6px;">您目前的廠別範圍內沒有可指派的廠別</div>';
       } else {
-        box.innerHTML = workplaces.map(w => `
+        // 顯示提示：只能指派自己有的廠別
+        const restrictedNote = (currentUser && !isSuperAdmin())
+          ? '<div style="font-size:11px; color:#6b7280; margin-bottom:6px; padding:4px 8px; background:#fef3c7; border-radius:4px;">💡 您只能指派自己擁有的廠別給下屬（廠別層級聯動）</div>'
+          : '';
+        box.innerHTML = restrictedNote + assignableWps.map(w => `
           <label style="display:flex; align-items:center; gap:4px; cursor:pointer; background:#fff; padding:6px 10px; border-radius:6px; border:1px solid #e5e7eb;">
             <input type="checkbox" class="user-wp-chk" value="${escapeHtml(w.name)}">
             <span>${escapeHtml(w.name)}</span>
