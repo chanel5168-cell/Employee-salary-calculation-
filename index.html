@@ -784,6 +784,9 @@
     <!-- 🚨 工時缺漏警示橫幅（選了員工且月薪制才可能顯示） -->
     <div id="shortageWarningBanner" style="display:none;"></div>
 
+    <!-- 📋 員工目前狀態確認（計薪前確認以最新設定為準） -->
+    <div id="empStatusConfirmCard" style="display:none;"></div>
+
     <!-- ⚖ 勞基法風險檢查 -->
     <div class="card" id="laborAuditCard" style="display:none; border:2px solid #f59e0b;">
       <h3 style="color:#92400e;">⚖ 勞基法風險檢查 <span style="font-size:12px; color:#6b7280; font-weight:normal;">(§30 §32 §34 §36)</span></h3>
@@ -1697,6 +1700,56 @@
     <div style="text-align:right; margin-bottom:8px;">
       <button type="button" onclick="toggleLiffSettings()" style="background:none; border:1px solid #d1d5db; color:#6b7280; padding:4px 10px; border-radius:8px; font-size:11px; cursor:pointer;">🔧 展開 / 收起 LIFF 設定</button>
     </div>
+    <!-- 🏢 公司資訊管理（薪資單抬頭） -->
+    <div class="card" style="border:2px solid #c9a95c;">
+      <h3 style="color:#92400e;">🏢 公司資訊管理</h3>
+      <div style="padding:8px 10px; background:#fef3c7; border-radius:6px; font-size:12px; color:#78350f; line-height:1.7; margin-bottom:10px;">
+        💡 設定列印薪資單與匯出 Excel 顯示的公司抬頭。<br>
+        可建立多筆（例如總公司、香港分公司、各廠區），列印時可選擇用哪一筆。
+      </div>
+
+      <div style="background:#fffbeb; padding:14px; border-radius:8px; border:1px dashed #c9a95c; margin-bottom:12px;">
+        <div style="font-weight:700; color:#92400e; margin-bottom:8px;">➕ 新增 / 編輯公司資訊</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>公司名稱 *（中文）</label>
+            <input type="text" id="newCompanyName" placeholder="例：暘基五金有限公司">
+          </div>
+          <div class="form-group">
+            <label>英文名稱（選填）</label>
+            <input type="text" id="newCompanyNameEn" placeholder="YANG JI HARDWARE CO., LTD.">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>統一編號</label>
+            <input type="text" id="newCompanyTaxId" placeholder="83273097">
+          </div>
+          <div class="form-group">
+            <label>地址</label>
+            <input type="text" id="newCompanyAddress" placeholder="彰化縣伸港鄉定興村定興路53號">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>E-mail</label>
+            <input type="text" id="newCompanyEmail" placeholder="yang.ji.hardware@gmail.com">
+          </div>
+          <div class="form-group">
+            <label>標語</label>
+            <input type="text" id="newCompanySlogan" placeholder="穩固久遠 · 品質至上">
+          </div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-secondary" id="companyCancelBtn" onclick="cancelCompanyEdit()" style="display:none;">取消編輯</button>
+          <button class="btn btn-primary btn-block" id="companyPrimaryBtn" onclick="saveCompanyInfo()">➕ 新增</button>
+        </div>
+      </div>
+
+      <div style="font-size:13px; font-weight:700; color:#92400e; margin-bottom:6px;">已儲存的公司資訊 <span class="badge" id="companyCount" style="background:#fef3c7; color:#92400e;">0</span></div>
+      <div id="companyList"></div>
+    </div>
+
     <div class="card" id="liffSettingsCard" style="display:none;">
       <h3>📱 LINE LIFF 設定</h3>
       <div class="alert alert-warn" style="font-size:12px;">
@@ -1837,7 +1890,9 @@ const STORE = {
   rates: 'salary_rates',
   users: 'salary_users',
   currentUserId: 'salary_current_user_id',
-  leaveEntitlements: 'salary_leave_entitlements'
+  leaveEntitlements: 'salary_leave_entitlements',
+  companies: 'salary_companies',
+  defaultCompanyId: 'salary_default_company_id'
 };
 
 function load(key, def) {
@@ -1852,6 +1907,20 @@ let dailyEntries = load(STORE.daily, []);
 let products = load(STORE.products, []);
 let users = load(STORE.users, []);
 let leaveEntitlements = load(STORE.leaveEntitlements, []);  // 特別假額度
+// 🏢 公司資訊（薪資單抬頭）— 預設帶入暘基五金一筆
+const DEFAULT_COMPANIES = [{
+  _id: 'co_default',
+  name: '暘基五金有限公司',
+  nameEn: 'YANG JI HARDWARE CO., LTD.',
+  taxId: '83273097',
+  address: '彰化縣伸港鄉定興村定興路53號',
+  email: 'yang.ji.hardware@gmail.com',
+  slogan: '穩固久遠 · 品質至上',
+  isDefault: true
+}];
+let companies = load(STORE.companies, DEFAULT_COMPANIES);
+if (!companies || companies.length === 0) companies = DEFAULT_COMPANIES;
+let editingCompanyId = null;
 let currentUser = null; // 登入後的使用者物件
 const DEFAULT_DEDUCT_CATS = [
   { _id: 'dc_default_1', name: '借支', defaultAmount: 0 },
@@ -2587,7 +2656,7 @@ document.querySelectorAll('.tab').forEach(t => {
     if (t.dataset.panel === 'export') updateSummary();
     if (t.dataset.panel === 'calc') refreshEmpDropdown();
     if (t.dataset.panel === 'leave') { refreshLeaveList(); refreshEntitlementEmpDropdown(); refreshEntitlementList(); }
-    if (t.dataset.panel === 'setup') refreshHolidayList();
+    if (t.dataset.panel === 'setup') { refreshHolidayList(); if (typeof refreshCompanyList === 'function') refreshCompanyList(); }
     if (t.dataset.panel === 'analytics') initAnalyticsPanel();
     if (t.dataset.panel === 'daily') {
       refreshEmpDropdown();
@@ -2609,26 +2678,80 @@ function refreshEmployeeList() {
     return;
   }
   box.innerHTML = visible.map(e => {
-    // 薪資顯示：時薪制凸顯時薪、月薪制凸顯月薪
-    const shiftBadge = e.isShift ? ' <span class="badge" style="background:#ede9fe; color:#5b21b6;">排班制</span>' : '';
-    const salaryInfo = e.isHourly
-      ? `<span class="badge" style="background:#fef3c7; color:#92400e;">時薪制</span>${shiftBadge} 時薪 NT$ <strong>${formatMoney(e.hourlyRate || 0)}</strong>${e.baseSalary > 0 ? ` · 月薪 NT$ ${formatMoney(e.baseSalary)}` : ''}`
-      : `<span class="badge" style="background:#dbeafe; color:#1e40af;">月薪制</span>${shiftBadge} 月薪 NT$ <strong>${formatMoney(e.baseSalary)}</strong>${e.hourlyRate > 0 ? ` · 時薪 NT$ ${formatMoney(e.hourlyRate)}` : ''}`;
+    // 薪資制標籤
+    const typeBadge = e.isShift
+      ? '<span class="badge" style="background:#fce7f3; color:#be185d;">🗓 月薪+排班</span>'
+      : (e.isHourly ? '<span class="badge" style="background:#fef3c7; color:#92400e;">⏰ 時薪制</span>'
+                    : '<span class="badge" style="background:#dbeafe; color:#1e40af;">💼 月薪制</span>');
+
+    // 薪資金額
+    const salaryAmount = e.isHourly
+      ? `時薪 <strong>NT$ ${formatMoney(e.hourlyRate || 0)}</strong>${e.weeklyHours ? ` · 週 ${e.weeklyHours}h` : ''}`
+      : `月薪 <strong>NT$ ${formatMoney(e.baseSalary)}</strong> · 時薪 ${formatMoney(e.hourlyRate || Math.round((e.baseSalary||0)/30/8))}`;
+
+    // 假日計薪模式
+    const payModeMap = {
+      'simple': '<span class="badge" style="background:#e5e7eb; color:#374151;">📊 簡化倍率</span>',
+      'law': '<span class="badge" style="background:#dcfce7; color:#166534;">⚖ 法規制</span>',
+      'agreement': '<span class="badge" style="background:#fef3c7; color:#92400e;">🤝 約定制</span>'
+    };
+    const payModeBadge = payModeMap[e.holidayPayMode || 'simple'];
+
+    // 合約類型
+    const contractMap = {
+      'fulltime': '',
+      'parttime': ' <span class="badge" style="background:#fce7f3; color:#9d174d;">兼職</span>',
+      'outsource': ' <span class="badge" style="background:#fee2e2; color:#991b1b;">外包</span>',
+      'intern': ' <span class="badge" style="background:#e0f2fe; color:#075985;">實習生</span>'
+    };
+    const contractBadge = contractMap[e.contractType || 'fulltime'] || '';
+
+    // 投保狀態（醒目）
+    const insBadge = !e.insuredDate
+      ? '<span class="badge" style="background:#fee2e2; color:#991b1b; font-weight:700;">🚫 未投保</span>'
+      : '<span class="badge" style="background:#d1fae5; color:#065f46;">🏥 已投保</span>';
+
+    // 特殊勞動標記
+    const specialBadges = [];
+    if (e.responsibilitySystem) specialBadges.push('<span class="badge" style="background:#e0e7ff; color:#3730a3;">👔 §84-1</span>');
+    if (e.otAgreement) specialBadges.push('<span class="badge" style="background:#dcfce7; color:#166534;">✅ 同意 54h</span>');
+    if (e.flexibleHours) specialBadges.push(`<span class="badge" style="background:#fef3c7; color:#92400e;">⚡ ${e.flexibleHours==='8week'?'八週變形':e.flexibleHours==='4week'?'四週變形':'二週變形'}</span>`);
+
+    // 廠別
+    const wpBadge = e.workplace ? `<span class="badge" style="background:#ddd6fe; color:#5b21b6;">🏭 ${escapeHtml(e.workplace)}</span>` : '<span class="badge" style="background:#fee2e2; color:#991b1b;">⚠ 未指定廠別</span>';
+
+    // 投保資訊 / 眷口 / 自提
     const extraInfo = [];
-    if (e.insuredSalary) extraInfo.push(`投保 NT$ ${formatMoney(e.insuredSalary)}`);
+    if (e.insuredSalary) extraInfo.push(`投保薪資 NT$ ${formatMoney(e.insuredSalary)}`);
     if (e.dependents > 0) extraInfo.push(`眷口 ${e.dependents}`);
-    if (e.pensionSelf > 0) extraInfo.push(`自提退 ${e.pensionSelf}%`);
+    if (e.pensionSelf > 0) extraInfo.push(`自提勞退 ${e.pensionSelf}%`);
+
+    // 最後更新時間
+    const updateTime = e.updatedAt ? new Date(e.updatedAt).toLocaleString('zh-TW') : (e.createdAt ? new Date(e.createdAt).toLocaleString('zh-TW') : '');
+    const updateNote = updateTime ? `<div style="font-size:10px; color:#9ca3af; margin-top:4px;">🕐 最後更新：${updateTime}</div>` : '';
+
     return `
-    <div class="employee-item">
-      <div class="info">
-        <div class="name">${escapeHtml(e.name)} <span class="badge">${escapeHtml(e.id || '-')}</span>${e.workplace ? ` <span class="badge" style="background:#ddd6fe; color:#5b21b6;">${escapeHtml(e.workplace)}</span>` : ''}</div>
-        <div class="sub">${escapeHtml(e.title || '未填')} · ${salaryInfo}</div>
-        ${extraInfo.length > 0 ? `<div class="sub" style="font-size:11px; color:#6b7280;">${extraInfo.join(' · ')}</div>` : ''}
-        ${e.phone ? `<div class="sub">📞 <a href="tel:${escapeHtml(e.phone)}" style="color:#06C755;">${escapeHtml(e.phone)}</a></div>` : ''}
+    <div class="employee-item" style="flex-direction:column; align-items:stretch; gap:6px;">
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <div class="name" style="font-size:15px;">${escapeHtml(e.name)}</div>
+        <span class="badge">${escapeHtml(e.id || '-')}</span>
+        ${wpBadge}
+        ${typeBadge}
+        ${payModeBadge}
+        ${insBadge}
+        ${contractBadge}
+        ${specialBadges.join('')}
       </div>
-      <div class="actions">
-        <button class="btn btn-secondary btn-sm" onclick="editEmployee('${e._id}')">編輯</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteEmployee('${e._id}')">刪除</button>
+      <div class="sub" style="font-size:13px;">
+        ${escapeHtml(e.title || '未填職稱')} · ${salaryAmount}
+      </div>
+      ${extraInfo.length > 0 ? `<div class="sub" style="font-size:11px; color:#6b7280;">${extraInfo.join(' · ')}</div>` : ''}
+      ${e.phone ? `<div class="sub" style="font-size:11px;">📞 <a href="tel:${escapeHtml(e.phone)}" style="color:#06C755;">${escapeHtml(e.phone)}</a></div>` : ''}
+      ${e.hireDate ? `<div class="sub" style="font-size:11px; color:#6b7280;">📅 到職：${escapeHtml(e.hireDate)}${e.insuredDate ? ' · 投保：' + escapeHtml(e.insuredDate) : ''}</div>` : ''}
+      ${updateNote}
+      <div class="actions" style="margin-top:4px;">
+        <button class="btn btn-secondary btn-sm" onclick="editEmployee('${e._id}')">✏️ 編輯</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteEmployee('${e._id}')">🗑 刪除</button>
       </div>
     </div>
     `;
@@ -2672,6 +2795,10 @@ function saveEmployee() {
     workplace: document.getElementById('empWorkplace').value,
     note: document.getElementById('empNote').value.trim()
   };
+  // 記錄建立/更新時間
+  const _existing = editingEmpId ? employees.find(x => x._id === editingEmpId) : null;
+  emp.createdAt = (_existing && _existing.createdAt) || new Date().toISOString();
+  emp.updatedAt = new Date().toISOString();
 
   if (editingEmpId) {
     employees = employees.map(e => e._id === editingEmpId ? emp : e);
@@ -5035,6 +5162,81 @@ function refreshLeaveList() {
   }).join('');
 }
 
+// 📋 計薪前先顯示員工目前狀態（讓使用者確認以最新設定為準）
+function refreshEmpStatusConfirm() {
+  const card = document.getElementById('empStatusConfirmCard');
+  if (!card) return;
+  const empId = document.getElementById('calcEmp').value;
+  if (!empId) { card.style.display = 'none'; card.innerHTML = ''; return; }
+  const emp = employees.find(e => e._id === empId);
+  if (!emp) { card.style.display = 'none'; return; }
+
+  const typeStr = emp.isShift ? '🗓 月薪+排班' : (emp.isHourly ? '⏰ 時薪制' : '💼 月薪制');
+  const payModeMap = {
+    'simple': '📊 簡化倍率（休/假日 1.67×）',
+    'law': '⚖ 法規制（§24、§39 嚴格）',
+    'agreement': '🤝 約定制（不加倍）'
+  };
+  const payMode = payModeMap[emp.holidayPayMode || 'simple'];
+  const insStatus = emp.insuredDate
+    ? `🏥 已投保（${emp.insuredDate}）`
+    : '🚫 <strong style="color:#dc2626;">未投保</strong>（不扣勞健保）';
+  const contractMap = { 'fulltime': '正職', 'parttime': '兼職', 'outsource': '外包', 'intern': '實習生' };
+  const contract = contractMap[emp.contractType || 'fulltime'];
+
+  const updateTime = emp.updatedAt ? new Date(emp.updatedAt).toLocaleString('zh-TW') : '';
+
+  const specialNotes = [];
+  if (emp.responsibilitySystem) specialNotes.push('👔 §84-1 責任制');
+  if (emp.otAgreement) specialNotes.push('✅ 已簽勞資會議同意（月加班 54h）');
+  if (emp.flexibleHours) specialNotes.push(`⚡ ${emp.flexibleHours === '8week' ? '八週' : emp.flexibleHours === '4week' ? '四週' : '二週'}變形工時`);
+
+  card.style.display = 'block';
+  card.className = 'card';
+  card.style.border = '2px solid #06C755';
+  card.style.background = 'linear-gradient(180deg, #f0fdf4 0%, #ffffff 60%)';
+  card.innerHTML = `
+    <h3 style="color:#065f46;">📋 員工目前狀態（計薪以下列設定為準）</h3>
+    <div style="padding:10px 12px; background:white; border-radius:8px; border:1px dashed #059669; margin-bottom:10px;">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+        <strong style="font-size:16px; color:#065f46;">${escapeHtml(emp.name)}</strong>
+        <span style="font-size:11px; background:#dcfce7; color:#166534; padding:2px 8px; border-radius:10px;">${escapeHtml(emp.id || '無編號')}</span>
+        ${emp.workplace ? `<span style="font-size:11px; background:#ddd6fe; color:#5b21b6; padding:2px 8px; border-radius:10px;">🏭 ${escapeHtml(emp.workplace)}</span>` : '<span style="font-size:11px; background:#fee2e2; color:#991b1b; padding:2px 8px; border-radius:10px;">⚠ 未指定廠別</span>'}
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:8px; font-size:13px;">
+        <div style="padding:6px 10px; background:#f0fdf4; border-radius:6px; border-left:3px solid #06C755;">
+          <div style="font-size:11px; color:#065f46;">薪資制度</div>
+          <div style="font-weight:700;">${typeStr}</div>
+          <div style="font-size:11px; color:#6b7280;">
+            ${emp.isHourly ? `時薪 NT$ ${formatMoney(emp.hourlyRate || 0)}` : `月薪 NT$ ${formatMoney(emp.baseSalary || 0)}（時薪 NT$ ${formatMoney(emp.hourlyRate || Math.round((emp.baseSalary||0)/30/8))}）`}
+          </div>
+        </div>
+        <div style="padding:6px 10px; background:#fef3c7; border-radius:6px; border-left:3px solid #f59e0b;">
+          <div style="font-size:11px; color:#92400e;">假日計薪模式</div>
+          <div style="font-weight:700;">${payMode}</div>
+        </div>
+        <div style="padding:6px 10px; background:${emp.insuredDate ? '#d1fae5' : '#fee2e2'}; border-radius:6px; border-left:3px solid ${emp.insuredDate ? '#059669' : '#dc2626'};">
+          <div style="font-size:11px; color:${emp.insuredDate ? '#065f46' : '#991b1b'};">投保狀態</div>
+          <div style="font-weight:700;">${insStatus}</div>
+          ${emp.insuredDate ? `<div style="font-size:11px; color:#6b7280;">投保薪資 NT$ ${formatMoney(emp.insuredSalary || emp.baseSalary || 0)}${emp.dependents ? ' · 眷口 ' + emp.dependents : ''}</div>` : ''}
+        </div>
+        <div style="padding:6px 10px; background:#e0e7ff; border-radius:6px; border-left:3px solid #6366f1;">
+          <div style="font-size:11px; color:#3730a3;">合約類型</div>
+          <div style="font-weight:700;">${contract}${emp.weeklyHours ? ' · 週 ' + emp.weeklyHours + 'h' : ''}</div>
+        </div>
+      </div>
+      ${specialNotes.length > 0 ? `<div style="margin-top:8px; font-size:12px; color:#6b21a8; padding:6px 10px; background:#faf5ff; border-radius:6px;">特殊勞動標記：${specialNotes.join(' · ')}</div>` : ''}
+      <div style="margin-top:8px; padding:6px 10px; background:#f9fafb; border-radius:6px; font-size:11px; color:#6b7280; display:flex; justify-content:space-between; flex-wrap:wrap; gap:4px;">
+        <span>🕐 員工資料最後更新：${updateTime || '—'}</span>
+        <a href="javascript:void(0)" onclick="document.querySelectorAll('.tab').forEach(t => t.click === undefined ? null : null); document.querySelectorAll('.tab').forEach(t => { if (t.dataset.panel === 'employees') t.click(); }); setTimeout(() => editEmployee('${emp._id}'), 200);" style="color:#06C755; text-decoration:none;">✏️ 修改員工資料</a>
+      </div>
+      <div style="margin-top:6px; font-size:11px; color:#92400e; background:#fef3c7; padding:6px 10px; border-radius:6px;">
+        💡 系統會以**員工資料最後一次更新**的設定計算本月薪資。如果中途有改過（例如月薪制改時薪制、約定制改法規制），請先確認上面顯示的是您要的版本。
+      </div>
+    </div>
+  `;
+}
+
 function refreshLaborAuditCard() {
   const card = document.getElementById('laborAuditCard');
   const content = document.getElementById('laborAuditContent');
@@ -6846,6 +7048,7 @@ function addLateDeduction(amount) {
 function updateMonthlyDailyHint() {
   updateDailyRateHint();
   updateLateHint();
+  if (typeof refreshEmpStatusConfirm === 'function') refreshEmpStatusConfirm();
   refreshMonthlyAttendance();
   if (typeof refreshLaborAuditCard === 'function') refreshLaborAuditCard();
   renderBatchAttendance();
@@ -7462,10 +7665,22 @@ function saveSalaryRecord() {
   if (typeof refreshLeaveList === 'function') refreshLeaveList();
 }
 
-// ✅ 儲存成功 - 陽基五金品牌風格薪資單（深藍 + 金）
+// ✅ 儲存成功 - 暘基五金品牌風格薪資單（深藍 + 金）
 function showSalarySaveSuccess(rec, emp, wasEditing) {
   const existing = document.getElementById('saveSuccessModal');
   if (existing) existing.remove();
+
+  // 取得目前要顯示的公司資訊
+  let _co = (typeof getActiveCompany === 'function') ? getActiveCompany() : (companies && companies[0]) || {};
+  // 若有多筆，可讓使用者選
+  if (companies && companies.length > 1) {
+    const names = companies.map((c, i) => `${i + 1}. ${c.name}${c.isDefault ? '（預設）' : ''}`).join('\n');
+    const pick = prompt(`系統有多筆公司資訊，請選擇要用於本次薪資單的公司：\n\n${names}\n\n輸入編號（1~${companies.length}），按取消用預設`, '');
+    if (pick !== null) {
+      const idx = parseInt(pick) - 1;
+      if (!isNaN(idx) && idx >= 0 && idx < companies.length) _co = companies[idx];
+    }
+  }
 
   const deductDetail = (rec.deductItems && rec.deductItems.length > 0)
     ? rec.deductItems.map(x => `<tr><td style="padding:3px 8px; font-size:12px; color:#475569;">&nbsp;&nbsp;・${escapeHtml(x.name)}</td><td style="padding:3px 8px; font-size:12px; color:#475569; text-align:right;">- NT$ ${formatMoney(x.amount)}</td></tr>`).join('')
@@ -7524,8 +7739,8 @@ function showSalarySaveSuccess(rec, emp, wasEditing) {
 
         <!-- 公司抬頭 -->
         <div style="text-align:center; padding:16px 0; border-top:3px solid ${BRAND_GOLD}; border-bottom:3px solid ${BRAND_GOLD}; margin-bottom:16px; background: linear-gradient(180deg, transparent 0%, #fef9ee 100%);">
-          <div style="font-size:22px; font-weight:900; color:${BRAND_NAVY}; letter-spacing:3px;">暘基五金有限公司</div>
-          <div style="font-size:11px; color:#64748b; letter-spacing:2px; margin-top:2px;">YANG JI HARDWARE CO., LTD.</div>
+          <div style="font-size:22px; font-weight:900; color:${BRAND_NAVY}; letter-spacing:3px;">${escapeHtml(_co.name || '')}</div>
+          <div style="font-size:11px; color:#64748b; letter-spacing:2px; margin-top:2px;">${escapeHtml(_co.nameEn || '')}</div>
           <div style="margin-top:8px; padding-top:8px; border-top:1px dashed ${BRAND_GOLD};">
             <div style="font-size:18px; font-weight:700; color:${BRAND_GOLD};">⚙ 員工薪資單 ⚙</div>
             <div style="font-size:12px; color:#64748b; margin-top:2px;">Employee Pay Slip · ${escapeHtml(rec.month)}</div>
@@ -7607,9 +7822,9 @@ function showSalarySaveSuccess(rec, emp, wasEditing) {
 
         <!-- 頁尾公司資訊 -->
         <div style="margin-top:16px; padding-top:12px; border-top:2px solid ${BRAND_GOLD}; text-align:center; font-size:10px; color:#64748b; line-height:1.6;">
-          <div style="color:${BRAND_NAVY}; font-weight:700; letter-spacing:1px;">⚙ 穩 固 久 遠 · 品 質 至 上 ⚙</div>
-          <div style="margin-top:4px;">彰化縣伸港鄉定興村定興路53號</div>
-          <div>E-mail: yang.ji.hardware@gmail.com · 統編: 83273097</div>
+          ${_co.slogan ? `<div style="color:${BRAND_NAVY}; font-weight:700; letter-spacing:1px;">⚙ ${escapeHtml(_co.slogan)} ⚙</div>` : ''}
+          ${_co.address ? `<div style="margin-top:4px;">${escapeHtml(_co.address)}</div>` : ''}
+          ${(_co.email || _co.taxId) ? `<div>${_co.email ? 'E-mail: ' + escapeHtml(_co.email) : ''}${_co.email && _co.taxId ? ' · ' : ''}${_co.taxId ? '統編: ' + escapeHtml(_co.taxId) : ''}</div>` : ''}
           <div style="margin-top:6px; color:#94a3b8; font-size:9px;">列印時間：${new Date().toLocaleString('zh-TW')}</div>
         </div>
       </div>
@@ -9675,6 +9890,124 @@ function refreshUserList() {
       </tr>`;
     }).join('') + '</tbody></table>';
 }
+
+// ========= 🏢 公司資訊管理 =========
+function saveCompanyInfo() {
+  const name = (document.getElementById('newCompanyName').value || '').trim();
+  if (!name) { alert('請輸入公司名稱'); return; }
+
+  const co = editingCompanyId
+    ? { ...(companies.find(c => c._id === editingCompanyId) || {}) }
+    : { _id: 'co_' + Date.now() };
+  co.name = name;
+  co.nameEn = (document.getElementById('newCompanyNameEn').value || '').trim();
+  co.taxId = (document.getElementById('newCompanyTaxId').value || '').trim();
+  co.address = (document.getElementById('newCompanyAddress').value || '').trim();
+  co.email = (document.getElementById('newCompanyEmail').value || '').trim();
+  co.slogan = (document.getElementById('newCompanySlogan').value || '').trim();
+
+  if (editingCompanyId) {
+    companies = companies.map(c => c._id === editingCompanyId ? co : c);
+  } else {
+    // 第一筆設為預設
+    if (companies.length === 0) co.isDefault = true;
+    companies.push(co);
+  }
+  save(STORE.companies, companies);
+  if (typeof cloudSave === 'function') cloudSave('companies', co);
+  clearCompanyForm();
+  refreshCompanyList();
+  alert(editingCompanyId ? `✅ 已更新「${name}」` : `✅ 已新增「${name}」`);
+  editingCompanyId = null;
+  document.getElementById('companyPrimaryBtn').textContent = '➕ 新增';
+  document.getElementById('companyCancelBtn').style.display = 'none';
+}
+
+function editCompanyInfo(id) {
+  const co = companies.find(c => c._id === id);
+  if (!co) return;
+  editingCompanyId = id;
+  document.getElementById('newCompanyName').value = co.name || '';
+  document.getElementById('newCompanyNameEn').value = co.nameEn || '';
+  document.getElementById('newCompanyTaxId').value = co.taxId || '';
+  document.getElementById('newCompanyAddress').value = co.address || '';
+  document.getElementById('newCompanyEmail').value = co.email || '';
+  document.getElementById('newCompanySlogan').value = co.slogan || '';
+  document.getElementById('companyPrimaryBtn').textContent = '💾 更新';
+  document.getElementById('companyCancelBtn').style.display = 'inline-block';
+}
+
+function cancelCompanyEdit() {
+  editingCompanyId = null;
+  clearCompanyForm();
+  document.getElementById('companyPrimaryBtn').textContent = '➕ 新增';
+  document.getElementById('companyCancelBtn').style.display = 'none';
+}
+
+function clearCompanyForm() {
+  ['newCompanyName','newCompanyNameEn','newCompanyTaxId','newCompanyAddress','newCompanyEmail','newCompanySlogan']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+}
+
+function deleteCompanyInfo(id) {
+  const co = companies.find(c => c._id === id);
+  if (!co) return;
+  if (companies.length === 1) { alert('至少要保留 1 筆公司資訊'); return; }
+  if (!confirm(`確定刪除「${co.name}」？`)) return;
+  const wasDefault = co.isDefault;
+  companies = companies.filter(c => c._id !== id);
+  if (wasDefault && companies.length > 0) companies[0].isDefault = true;
+  save(STORE.companies, companies);
+  if (typeof cloudDelete === 'function') cloudDelete('companies', id);
+  refreshCompanyList();
+}
+
+function setDefaultCompany(id) {
+  companies.forEach(c => { c.isDefault = (c._id === id); });
+  save(STORE.companies, companies);
+  companies.forEach(c => { if (typeof cloudSave === 'function') cloudSave('companies', c); });
+  refreshCompanyList();
+}
+
+function refreshCompanyList() {
+  const box = document.getElementById('companyList');
+  const countEl = document.getElementById('companyCount');
+  if (!box) return;
+  if (countEl) countEl.textContent = companies.length;
+  if (companies.length === 0) {
+    box.innerHTML = '<div style="padding:12px; text-align:center; color:#9ca3af; font-size:13px;">尚無公司資訊，請新增一筆</div>';
+    return;
+  }
+  box.innerHTML = companies.map(co => `
+    <div style="background:${co.isDefault ? '#fef9ee' : '#fff'}; border:1px solid ${co.isDefault ? '#c9a95c' : '#e5e7eb'}; border-radius:8px; padding:10px 12px; margin-bottom:6px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:200px;">
+          <div style="font-weight:700; color:#1a2a4a;">
+            ${co.isDefault ? '⭐ ' : ''}${escapeHtml(co.name)}
+            ${co.isDefault ? '<span style="font-size:10px; background:#c9a95c; color:white; padding:2px 6px; border-radius:8px; margin-left:4px;">預設</span>' : ''}
+          </div>
+          ${co.nameEn ? `<div style="font-size:11px; color:#64748b;">${escapeHtml(co.nameEn)}</div>` : ''}
+          <div style="font-size:11px; color:#64748b; margin-top:3px;">
+            ${co.taxId ? `統編：${escapeHtml(co.taxId)} · ` : ''}${escapeHtml(co.address || '—')}
+          </div>
+        </div>
+        <div style="display:flex; gap:4px; flex-wrap:wrap;">
+          ${co.isDefault ? '' : `<button class="btn btn-secondary btn-sm" onclick="setDefaultCompany('${co._id}')" style="padding:3px 8px; font-size:11px;">設為預設</button>`}
+          <button class="btn btn-secondary btn-sm" onclick="editCompanyInfo('${co._id}')" style="padding:3px 8px; font-size:11px;">✏️ 編輯</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteCompanyInfo('${co._id}')" style="padding:3px 8px; font-size:11px;">🗑</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// 取得目前要使用的公司（預設那個）
+function getActiveCompany() {
+  if (!companies || companies.length === 0) return DEFAULT_COMPANIES[0];
+  return companies.find(c => c.isDefault) || companies[0];
+}
+
+// ========= 🏢 公司資訊管理結束 =========
 
 // ➕ 在使用者管理介面快速新增廠別（與員工頁工作地點共用同一份資料）
 function toggleUserWorkplaceAdd() {
