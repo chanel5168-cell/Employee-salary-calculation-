@@ -11317,21 +11317,108 @@ function refreshAnalytics() {
   const totalGross = all.reduce((s, r) => s + (r.gross || 0), 0);
   const totalNet = all.reduce((s, r) => s + (r.net || 0), 0);
   const totalIns = all.reduce((s, r) => s + (r.laborIns || 0) + (r.healthIns || 0), 0);
-  const totalOt = all.reduce((s, r) => s + ((r.ot1 || 0) + (r.ot2 || 0)), 0);
+  // ★ 加班總時數：包含已儲存記錄的 ot1/ot2 + 從每日記錄抓出的分段/時薪加班時數
+  let totalOt = all.reduce((s, r) => s + ((r.ot1 || 0) + (r.ot2 || 0)), 0);
+  // 從每日記錄補抓本月的分段加班 / 時薪加班時數（這些不會記在 ot1/ot2，而在 subtotal）
+  if (filterMon && typeof dailyEntries !== 'undefined') {
+    const scope = getAnalyticsScope();
+    const segOtFromDaily = dailyEntries.filter(d => {
+      if (d.type !== 'hour') return false;
+      if (!d.date.startsWith(filterMon)) return false;
+      const t = d.attType || '';
+      // 只抓分段加班 + 時薪加班（subtotal>0 已含倍率）
+      if (t !== '時薪加班' && !isSegmentedOt(t)) return false;
+      const emp = employees.find(e => e._id === d.empId);
+      const wp = (emp && emp.workplace) || d.empWorkplace || '';
+      return wp && scope.wps.includes(wp);
+    }).reduce((s, d) => s + (d.hours || 0), 0);
+    totalOt += segOtFromDaily;
+  }
   const empCount = new Set(all.map(r => r.empId)).size;
 
+  // ★ 偵測「有每日記錄但未結算月薪」的員工
+  let missingInfo = null;
+  if (filterMon && typeof dailyEntries !== 'undefined') {
+    const scope = getAnalyticsScope();
+    // 該月有每日記錄的員工集合
+    const empsWithDaily = new Set();
+    let dailyTotal = 0;
+    dailyEntries.forEach(d => {
+      if (!d.date.startsWith(filterMon)) return;
+      const emp = employees.find(e => e._id === d.empId);
+      const wp = (emp && emp.workplace) || d.empWorkplace || '';
+      if (!wp || !scope.wps.includes(wp)) return;
+      empsWithDaily.add(d.empId);
+      // 估算金額（subtotal 加 baseSalary 對月薪制）
+      if (isPaidHourEntry && isPaidHourEntry(d, emp)) dailyTotal += (d.subtotal || 0);
+      else if (d.type === 'piece' && (d.subtotal || 0) > 0) dailyTotal += d.subtotal;
+    });
+    // 該月已存記錄的員工
+    const empsWithRecord = new Set(all.map(r => r.empId));
+    // 月薪制員工的底薪也要加入估算（即便沒每日記錄也照給）
+    let monthlyBaseEstimate = 0;
+    employees.forEach(emp => {
+      if (!scope.wps.includes(emp.workplace || '')) return;
+      if (emp.isHourly) return; // 時薪制底薪 = 0
+      if (empsWithDaily.has(emp._id) || empsWithRecord.has(emp._id)) {
+        monthlyBaseEstimate += (emp.baseSalary || 0);
+      }
+    });
+    const missingEmps = [...empsWithDaily].filter(eid => !empsWithRecord.has(eid));
+    if (missingEmps.length > 0 || dailyTotal > 0) {
+      missingInfo = {
+        count: missingEmps.length,
+        empIds: missingEmps,
+        empNames: missingEmps.map(eid => {
+          const e = employees.find(x => x._id === eid);
+          return e ? `${e.name}（${e.id || '-'}）` : eid;
+        }),
+        dailyTotal,
+        monthlyBaseEstimate,
+        savedTotal: totalGross,
+        estimateTotal: dailyTotal + monthlyBaseEstimate
+      };
+    }
+  }
+
   const cards = [
-    { label: '員工人次', value: empCount, color: '#06C755' },
-    { label: '應發合計', value: 'NT$ ' + totalGross.toLocaleString(), color: '#1e40af' },
+    { label: '員工人次（已結算）', value: empCount, color: '#06C755' },
+    { label: '應發合計（已結算）', value: 'NT$ ' + totalGross.toLocaleString(), color: '#1e40af' },
     { label: '勞健保合計', value: 'NT$ ' + totalIns.toLocaleString(), color: '#9333ea' },
     { label: '實發合計', value: 'NT$ ' + totalNet.toLocaleString(), color: '#dc2626' },
     { label: '加班總時數', value: totalOt.toFixed(1) + ' 時', color: '#ea580c' }
   ];
   document.getElementById('analyticsSummary').innerHTML = cards.map(c => `
     <div style="padding:14px; border-radius:10px; background:#fff; border:1px solid #e5e7eb;">
-      <div style="font-size:12px; color:#6b7280; margin-bottom:4px;">${c.label}</div>
-      <div style="font-size:18px; font-weight:700; color:${c.color};">${c.value}</div>
+      <div style="font-size:13px; color:#6b7280; margin-bottom:4px;">${c.label}</div>
+      <div style="font-size:19px; font-weight:700; color:${c.color};">${c.value}</div>
     </div>`).join('');
+
+  // ★ 未結算警示卡 — 直接顯示在摘要下方
+  let warnEl = document.getElementById('analyticsMissingWarn');
+  if (!warnEl) {
+    warnEl = document.createElement('div');
+    warnEl.id = 'analyticsMissingWarn';
+    const sumEl = document.getElementById('analyticsSummary');
+    if (sumEl && sumEl.parentNode) sumEl.parentNode.insertBefore(warnEl, sumEl.nextSibling);
+  }
+  if (missingInfo && missingInfo.count > 0) {
+    warnEl.innerHTML = `
+      <div style="margin:12px 0; padding:14px 16px; background:linear-gradient(135deg,#fef3c7,#fed7aa); border-left:5px solid #ea580c; border-radius:10px;">
+        <div style="font-weight:700; color:#9a3412; font-size:16px; margin-bottom:8px;">
+          ⚠ ${filterMon || '本月'} 有 <strong>${missingInfo.count}</strong> 位員工有出勤記錄但「月薪未結算」
+        </div>
+        <div style="font-size:14px; color:#7c2d12; line-height:1.8;">
+          📋 未結算名單：${missingInfo.empNames.slice(0, 5).map(escapeHtml).join('、')}${missingInfo.empNames.length > 5 ? `... 共 ${missingInfo.empNames.length} 人` : ''}<br>
+          💰 已結算金額（分析頁顯示）：<strong>NT$ ${missingInfo.savedTotal.toLocaleString()}</strong><br>
+          📊 含每日記錄估算（${filterMon} 全部員工）：<strong style="color:#dc2626; font-size:16px;">NT$ ${missingInfo.estimateTotal.toLocaleString()}</strong>
+          <span style="font-size:12px; color:#9a3412;">（每日 ${missingInfo.dailyTotal.toLocaleString()} + 月薪底薪 ${missingInfo.monthlyBaseEstimate.toLocaleString()}）</span><br>
+          🔧 <strong>解法</strong>：請到月薪計算頁逐一選員工 + 該月份 → 按「💰 預覽計算」→ 按「💾 儲存月薪記錄」，分析頁的金額才會更新。
+        </div>
+      </div>`;
+  } else {
+    warnEl.innerHTML = '';
+  }
 
   // ---- 圖表 1：近 6 個月總薪資趨勢 ----
   const months = [];
@@ -11341,10 +11428,16 @@ function refreshAnalytics() {
     months.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
   }
   const scope = getAnalyticsScope();
+  const isUnrestricted = isSuperAdmin() ||
+    (currentUser && currentUser.role === 'admin' && getUserWorkplaces(currentUser).length === 0);
   const monthlyData = months.map(m => {
     const rs = records.filter(r => {
+      if (r.month !== m) return false;
       const emp = employees.find(e => e._id === r.empId);
-      return emp && scope.wps.includes(emp.workplace) && r.month === m;
+      // 廠別取得邏輯（與 getAnalyticsRecords 一致）
+      const wp = (emp && emp.workplace) || r.workplace || r.empWorkplace || '';
+      if (!wp) return isUnrestricted; // 沒廠別 → 只有不限角色看得到
+      return scope.wps.includes(wp);
     });
     return {
       gross: rs.reduce((s, r) => s + (r.gross || 0), 0),
@@ -11377,15 +11470,37 @@ function refreshAnalytics() {
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } }
   });
 
-  // ---- 圖表 3：加班時數 TOP 10 ----
-  const otList = all.map(r => ({ name: r.empName, wp: r.workplace, hours: (r.ot1 || 0) + (r.ot2 || 0) }))
+  // ---- 圖表 3：加班時數 TOP 10（合併已結算 ot1/ot2 + 每日分段加班）----
+  const otByEmp = {};
+  // 1) 從已儲存月薪記錄的 ot1/ot2 累計
+  all.forEach(r => {
+    const k = r.empId;
+    if (!otByEmp[k]) otByEmp[k] = { name: r.empName, wp: r.workplace, hours: 0 };
+    otByEmp[k].hours += (r.ot1 || 0) + (r.ot2 || 0);
+  });
+  // 2) 從每日記錄補抓本月分段加班 / 時薪加班的時數
+  if (filterMon && typeof dailyEntries !== 'undefined') {
+    const _scope = getAnalyticsScope();
+    dailyEntries.forEach(d => {
+      if (d.type !== 'hour' || !d.date.startsWith(filterMon)) return;
+      const t = d.attType || '';
+      if (t !== '時薪加班' && !isSegmentedOt(t)) return;
+      const emp = employees.find(e => e._id === d.empId);
+      const wp = (emp && emp.workplace) || d.empWorkplace || '';
+      if (!wp || !_scope.wps.includes(wp)) return;
+      const k = d.empId;
+      if (!otByEmp[k]) otByEmp[k] = { name: d.empName || (emp && emp.name) || '?', wp, hours: 0 };
+      otByEmp[k].hours += (d.hours || 0);
+    });
+  }
+  const otList = Object.values(otByEmp)
     .filter(x => x.hours > 0)
     .sort((a, b) => b.hours - a.hours).slice(0, 10);
   if (_chartOt) _chartOt.destroy();
   _chartOt = new Chart(document.getElementById('chartOvertime'), {
     type: 'bar',
     data: {
-      labels: otList.length ? otList.map(x => `${x.name}（${x.wp}）`) : ['無資料'],
+      labels: otList.length ? otList.map(x => `${x.name}（${x.wp}）`) : ['無資料（請先結算月薪 / 用分段加班類型登錄）'],
       datasets: [{ label: '加班時數', data: otList.length ? otList.map(x => x.hours) : [0], backgroundColor: '#f59e0b' }]
     },
     options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
