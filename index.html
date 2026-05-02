@@ -1272,6 +1272,7 @@
       <button class="btn btn-secondary btn-block" onclick="fixOvertimeEntries()" style="margin-top:8px;">🔧 修正所有加班記錄（重設計薪狀態與金額）</button>
       <button class="btn btn-secondary btn-block" onclick="deleteEntriesByEmployee()" style="margin-top:8px; background:#fef3c7; color:#92400e; border:1px solid #f59e0b;">🗑 依員工清除每日記錄（可選月份）</button>
       <button class="btn btn-secondary btn-block" onclick="cleanupOldPhotos()" style="margin-top:8px; background:#e0f2fe; color:#075985; border:1px solid #0284c7;">📷 清理 30 天前舊照片（節省 Firebase 空間）</button>
+      <button class="btn btn-secondary btn-block" onclick="checkDuplicateEmpIds()" style="margin-top:8px; background:#fef3c7; color:#92400e; border:1px solid #f59e0b;">🔍 檢查員工編號重複</button>
       <button class="btn btn-secondary btn-block" onclick="clearAllUsers()" style="margin-top:8px; background:#fef3c7; color:#92400e; border:1px solid #f59e0b;">👥 清除所有使用者帳號（保留員工/薪資資料）</button>
       <button class="btn btn-danger btn-block" onclick="wipeCloudOnly()" style="margin-top:8px; background:#c92a2a;">🔐 ☁ 強制重設雲端資料（清除全部後仍殘留時使用）</button>
       <button class="btn btn-secondary btn-block" onclick="forcePullFromCloud()" style="margin-top:8px;">🔄 從雲端強制同步（清空本地以雲端為準）</button>
@@ -2799,6 +2800,20 @@ function saveEmployee() {
   const _existing = editingEmpId ? employees.find(x => x._id === editingEmpId) : null;
   emp.createdAt = (_existing && _existing.createdAt) || new Date().toISOString();
   emp.updatedAt = new Date().toISOString();
+
+  // ✅ 員工編號重複檢查（編輯時排除自己）
+  if (emp.id) {
+    const dup = employees.find(x => x.id === emp.id && x._id !== emp._id);
+    if (dup) {
+      const ok = confirm(
+        `⚠ 員工編號重複！\n\n` +
+        `編號「${emp.id}」已被「${dup.name}」使用。\n\n` +
+        `按「確定」→ 仍要儲存（會造成重複，影響後續報表）\n` +
+        `按「取消」→ 回去修改編號（建議）`
+      );
+      if (!ok) return;
+    }
+  }
 
   if (editingEmpId) {
     employees = employees.map(e => e._id === editingEmpId ? emp : e);
@@ -7626,6 +7641,7 @@ function saveSalaryRecord() {
     empName: emp.name,
     empNo: emp.id,
     empTitle: emp.title,
+    empWorkplace: emp.workplace || '',  // ★ 儲存當下廠別，避免員工刪除/搬廠後找不到
     ...input,
     ...r,
     deductItems: cleanedDeductItems,
@@ -9428,6 +9444,45 @@ function removeDuplicateDailyEntries() {
   alert(`✅ 清理完成：刪除 ${toDeleteIds.length} 筆重複`);
 }
 
+// 🔍 檢查員工編號重複
+function checkDuplicateEmpIds() {
+  const groups = {};
+  employees.forEach(e => {
+    const id = (e.id || '').trim();
+    if (!id) return; // 沒填編號的不算
+    if (!groups[id]) groups[id] = [];
+    groups[id].push(e);
+  });
+  const dups = Object.entries(groups).filter(([id, list]) => list.length > 1);
+  const noIdEmps = employees.filter(e => !(e.id || '').trim());
+
+  if (dups.length === 0 && noIdEmps.length === 0) {
+    alert('✅ 員工編號全部正常，沒有重複也沒有遺漏！');
+    return;
+  }
+
+  let msg = '🔍 員工編號檢查結果：\n\n';
+  if (dups.length > 0) {
+    msg += `⚠ 重複編號 ${dups.length} 組：\n`;
+    dups.forEach(([id, list]) => {
+      msg += `\n  編號「${id}」（${list.length} 人）：\n`;
+      list.forEach(e => {
+        const t = e.isHourly ? '時薪制' : '月薪制';
+        msg += `    ・${e.name} - ${t} - ${e.workplace || '無廠別'} - 到職 ${e.hireDate || '無'}\n`;
+      });
+    });
+  }
+  if (noIdEmps.length > 0) {
+    msg += `\n📝 未填編號 ${noIdEmps.length} 人：\n`;
+    noIdEmps.slice(0, 10).forEach(e => {
+      msg += `  ・${e.name}\n`;
+    });
+    if (noIdEmps.length > 10) msg += `  ...另 ${noIdEmps.length - 10} 人\n`;
+  }
+  msg += '\n👉 建議：到員工頁編輯這些員工，補上正確且不重複的編號。';
+  alert(msg);
+}
+
 // 👥 清除所有使用者帳號（保留員工/薪資資料）
 async function clearAllUsers() {
   if (!requireAdmin('清除所有使用者帳號')) return;
@@ -10506,17 +10561,36 @@ function getAnalyticsRecords() {
   const scope = getAnalyticsScope();
   const filterWp = document.getElementById('analyticsWorkplace').value;
   const filterMon = document.getElementById('analyticsMonth').value;
+  // 是否完全沒有廠別限制（總管理者 / 沒設廠別的管理者）
+  const isUnrestricted = isSuperAdmin() ||
+    (currentUser && currentUser.role === 'admin' && getUserWorkplaces(currentUser).length === 0);
 
   return records.filter(r => {
     const emp = employees.find(e => e._id === r.empId);
-    const wp = emp ? emp.workplace : '';
+    // 廠別取得邏輯（增強相容）：員工存在 → 用員工的；員工被刪 → 用記錄裡可能保留的廠別
+    const wp = (emp && emp.workplace) || r.workplace || r.empWorkplace || '';
+
+    // 沒廠別的記錄（孤兒記錄、未指定廠別員工）
+    if (!wp) {
+      // 沒廠別限制的角色 → 一律顯示（避免漏掉舊資料）
+      if (isUnrestricted) {
+        if (filterWp) return false; // 但若有特定廠別篩選，沒廠別的不顯示
+        if (filterMon && r.month !== filterMon) return false;
+        return true;
+      }
+      return false;
+    }
     if (!scope.wps.includes(wp)) return false;
     if (filterWp && wp !== filterWp) return false;
     if (filterMon && r.month !== filterMon) return false;
     return true;
   }).map(r => {
     const emp = employees.find(e => e._id === r.empId) || {};
-    return { ...r, workplace: emp.workplace || '-', _emp: emp };
+    return {
+      ...r,
+      workplace: (emp && emp.workplace) || r.workplace || r.empWorkplace || '(未指定)',
+      _emp: emp
+    };
   });
 }
 
