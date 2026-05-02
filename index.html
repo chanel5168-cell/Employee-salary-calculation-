@@ -1328,6 +1328,7 @@
       <button class="btn btn-secondary btn-block" onclick="diagnoseCloudResidual()" style="margin-top:8px; background:#dbeafe; color:#1e40af; border:1px solid #1e40af;">🔍 診斷雲端殘留（不刪資料 — 列出每個 collection 的本地 vs 雲端筆數）</button>
       <button class="btn btn-danger btn-block" onclick="wipeCloudOnly()" style="margin-top:8px; background:#c92a2a;">🔐 ☁ 強制重設雲端資料（清除全部後仍殘留時使用）</button>
       <button class="btn btn-danger btn-block" onclick="nuclearWipeCloud()" style="margin-top:8px; background:#7f1d1d; color:#fff; font-weight:900; letter-spacing:2px;">☢ 核爆雲端（包含 categories / workplaces / users 全部）</button>
+      <button class="btn btn-secondary btn-block" onclick="restoreDefaultCategories()" style="margin-top:8px; background:#dcfce7; color:#065f46; border:1px solid #059669;">🔄 恢復預設值（廠別 / 假別 / 工作內容…）— 核爆後想要重新初始化時用</button>
       <button class="btn btn-secondary btn-block" onclick="forcePullFromCloud()" style="margin-top:8px;">🔄 從雲端強制同步（清空本地以雲端為準）</button>
       <div style="padding:10px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; font-size:13px; color:#664d03; margin-top:6px; line-height:1.7;">
         💡 <strong>清除順序建議</strong>：<br>
@@ -2264,7 +2265,10 @@ function mergeDefaultCategories() {
     { key: STORE.leaveCats, arr: leaveCategories, defaults: DEFAULT_LEAVE_CATS, cloud: 'leaveCats' },
     { key: STORE.workplaces, arr: workplaces, defaults: DEFAULT_WORKPLACES, cloud: 'workplaces' }
   ];
+  // ★ 若使用者已主動「核爆」過，跳過預設值補回（避免清完後又自動長回來）
+  const purged = localStorage.getItem('salary_defaults_purged') === '1';
   sets.forEach(s => {
+    if (purged) return; // 使用者已核爆過 → 不再自動補預設
     const ids = new Set(s.arr.map(x => x._id));
     const missing = s.defaults.filter(d => !ids.has(d._id));
     if (missing.length > 0) {
@@ -2454,11 +2458,14 @@ function subscribeAll() {
   });
 
   col('workplaces').onSnapshot(snap => {
-    if (snap.docs.length > 0) {
-      workplaces = snap.docs.map(d => d.data());
-      save(STORE.workplaces, workplaces);
-      // 雲端可能還是舊名 → 再次強制修正
-      forceFixWorkplaces();
+    if (suppressSubscription) return;
+    workplaces = snap.docs.map(d => d.data());
+    save(STORE.workplaces, workplaces);
+    // 雲端可能還是舊名 → 再次強制修正
+    if (typeof forceFixWorkplaces === 'function') forceFixWorkplaces();
+    // 一次刷新所有相關 UI（員工頁、使用者頁、分析頁）
+    if (typeof refreshAllWorkplaceUIs === 'function') refreshAllWorkplaceUIs();
+    else {
       refreshWorkplaceDropdown();
       const wm = document.getElementById('workplaceManager');
       if (wm && wm.style.display === 'block') refreshWorkplaceList();
@@ -4380,6 +4387,34 @@ function refreshWorkplaceDropdown() {
   if (current && workplaces.find(w => w.name === current)) sel.value = current;
 }
 
+// 🔄 一次刷新所有與廠別相關的 UI（員工頁、使用者頁、分析頁、排班同意書...）
+function refreshAllWorkplaceUIs() {
+  // 1. 員工頁的工作地點下拉
+  if (typeof refreshWorkplaceDropdown === 'function') refreshWorkplaceDropdown();
+  // 2. 工作地點管理列表
+  if (typeof refreshWorkplaceList === 'function') refreshWorkplaceList();
+  // 3. 使用者管理頁的「限定場別」checkbox（若使用者表單正打開）
+  if (typeof onUserRoleChange === 'function') {
+    const roleEl = document.getElementById('newUserRole');
+    if (roleEl) onUserRoleChange();
+  }
+  // 4. 分析頁的廠別下拉
+  const aSel = document.getElementById('analyticsWorkplace');
+  if (aSel) {
+    const cur = aSel.value;
+    if (typeof getAnalyticsScope === 'function') {
+      try {
+        const scope = getAnalyticsScope();
+        aSel.innerHTML = '<option value="">全部可見廠別</option>' +
+          scope.wps.map(w => `<option value="${escapeHtml(w)}">${escapeHtml(w)}</option>`).join('');
+        if (cur && scope.wps.includes(cur)) aSel.value = cur;
+      } catch (e) {}
+    }
+  }
+  // 5. 使用者列表（顯示使用者擁有的廠別）
+  if (typeof refreshUserList === 'function') refreshUserList();
+}
+
 function toggleWorkplaceManager() {
   const pm = document.getElementById('workplaceManager');
   if (!pm) return;
@@ -4401,8 +4436,35 @@ function addWorkplace() {
   save(STORE.workplaces, workplaces);
   cloudSave('workplaces', w);
   document.getElementById('newWorkplaceName').value = '';
-  refreshWorkplaceList();
-  refreshWorkplaceDropdown();
+
+  // 🔄 一次刷新所有相關 UI（含使用者權限頁、分析頁、員工頁）
+  refreshAllWorkplaceUIs();
+
+  // ★ 詢問是否要把新廠別自動加到「現有限定場別的管理者」
+  const restrictedAdmins = users.filter(u =>
+    u.role === 'admin' && Array.isArray(u.workplaces) && u.workplaces.length > 0
+  );
+  if (restrictedAdmins.length > 0) {
+    const ok = confirm(
+      `已新增廠別「${name}」。\n\n` +
+      `偵測到 ${restrictedAdmins.length} 位「限定場別」管理者：\n` +
+      `  ${restrictedAdmins.map(u => '・' + (u.displayName || u.username)).join('\n  ')}\n\n` +
+      `按「確定」→ 把「${name}」一併加到這些管理者的限定場別\n` +
+      `按「取消」→ 不變動（這些管理者看不到新廠別）\n\n` +
+      `💡 沒有限定場別的「總管理者 / 不限管理者」自動可見所有廠別，無需設定`
+    );
+    if (ok) {
+      restrictedAdmins.forEach(u => {
+        if (!u.workplaces.includes(name)) {
+          u.workplaces.push(name);
+          if (typeof cloudSave === 'function') cloudSave('users', u);
+        }
+      });
+      save(STORE.users, users);
+      alert(`✅ 已將「${name}」加到 ${restrictedAdmins.length} 位限定場別管理者`);
+      refreshAllWorkplaceUIs();
+    }
+  }
 }
 
 function deleteWorkplace(id) {
@@ -4423,8 +4485,23 @@ function deleteWorkplace(id) {
   workplaces = workplaces.filter(w => w._id !== id);
   save(STORE.workplaces, workplaces);
   cloudDelete('workplaces', id);
-  refreshWorkplaceList();
-  refreshWorkplaceDropdown();
+  // ★ 從所有限定場別的使用者身上移除已刪廠別
+  const removedName = wp.name;
+  let userChanged = 0;
+  users.forEach(u => {
+    if (Array.isArray(u.workplaces) && u.workplaces.includes(removedName)) {
+      u.workplaces = u.workplaces.filter(w => w !== removedName);
+      if (typeof cloudSave === 'function') cloudSave('users', u);
+      userChanged++;
+    }
+  });
+  if (userChanged > 0) {
+    save(STORE.users, users);
+  }
+  refreshAllWorkplaceUIs();
+  if (userChanged > 0) {
+    alert(`✅ 已刪除廠別「${removedName}」\n📋 同時從 ${userChanged} 位使用者的限定場別中移除`);
+  }
 }
 
 function refreshWorkplaceList() {
@@ -10431,11 +10508,13 @@ async function nuclearWipeCloud() {
 
     // Step 3: 同步清空本地所有相關 storage
     employees = []; records = []; dailyEntries = []; products = []; leaveEntitlements = [];
-    users = []; deductCats = []; bonusCats = []; workContents = []; leaveCategories = []; workplaces = [];
+    users = []; deductCategories = []; bonusCategories = []; workContents = []; leaveCategories = []; workplaces = [];
     [
       STORE.employees, STORE.records, STORE.daily, STORE.products, STORE.leaveEntitlements,
       STORE.users, STORE.deductCats, STORE.bonusCats, STORE.workContents, STORE.leaveCats, STORE.workplaces
     ].forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
+    // ★ 標記為「已主動清除預設值」→ 下次重新整理不會再自動補 5 個預設廠別 / 12 個預設假別
+    try { localStorage.setItem('salary_defaults_purged', '1'); } catch (e) {}
 
     // 廣播清除，其他裝置下次開啟自動清乾淨
     await broadcastClear('nuclearWipe');
@@ -10465,6 +10544,27 @@ async function nuclearWipeCloud() {
   }
 }
 
+// 🔄 恢復預設值 — 核爆後想要重新初始化系統時用（拿掉 purged 鎖）
+async function restoreDefaultCategories() {
+  if (!requireAdmin('恢復預設廠別 / 假別 / 工作內容')) return;
+  if (!confirm(
+    '⚠ 將恢復系統預設值：\n\n' +
+    '• 5 個廠別（暘基、日盛暘、草埔、烤漆、臨時）\n' +
+    '• 16 個假別（特休、病假、事假...）\n' +
+    '• 預設工作內容、扣款項目、獎金項目\n\n' +
+    '若您剛核爆過、不想要這些預設值跑回來 → 按「取消」\n' +
+    '若您是新公司想要初始化 → 按「確定」'
+  )) return;
+  // 移除「已主動清除」的鎖
+  try { localStorage.removeItem('salary_defaults_purged'); } catch (e) {}
+  // 重新觸發 migrateDefaults 補回預設
+  if (typeof migrateDefaults === 'function') {
+    try { migrateDefaults(); }
+    catch (e) { console.error('migrateDefaults 失敗：', e); }
+  }
+  alert('✅ 預設值恢復鎖已解除。\n\n請按 F5 重新整理頁面 → 系統會自動補回所有預設廠別、假別、工作內容。');
+}
+
 // 🔍 診斷雲端殘留 — 不刪資料，只列出每個 collection 的 doc 數量
 async function diagnoseCloudResidual() {
   if (!cloudReady) { alert('雲端尚未連線'); return; }
@@ -10487,8 +10587,8 @@ async function diagnoseCloudResidual() {
         c === 'leaveCats' ? leaveCategories.length :
         c === 'workContents' ? workContents.length :
         c === 'workplaces' ? workplaces.length :
-        c === 'deductCats' ? (typeof deductCats !== 'undefined' ? deductCats.length : 0) :
-        c === 'bonusCats' ? (typeof bonusCats !== 'undefined' ? bonusCats.length : 0) :
+        c === 'deductCats' ? (typeof deductCategories !== 'undefined' ? deductCategories.length : 0) :
+        c === 'bonusCats' ? (typeof bonusCategories !== 'undefined' ? bonusCategories.length : 0) :
         '?';
       const mismatch = snap.docs.length !== localCount ? ' ⚠ 不一致' : '';
       report += `  ${c.padEnd(20)}: 雲端 ${snap.docs.length} | 本地 ${localCount}${mismatch}\n`;
@@ -10957,24 +11057,46 @@ function addWorkplaceFromUser() {
   save(STORE.workplaces, workplaces);
   if (typeof cloudSave === 'function') cloudSave('workplaces', w);
 
-  // 同步刷新員工頁的工作地點下拉
-  if (typeof refreshWorkplaceDropdown === 'function') refreshWorkplaceDropdown();
-  if (typeof refreshWorkplaceList === 'function') refreshWorkplaceList();
-
-  // 清空輸入框
+  // 清空輸入框 + 收起新增區
   input.value = '';
-  // 收起新增區
   const box = document.getElementById('newUserAddWorkplaceBox');
   if (box) box.style.display = 'none';
 
-  // 重新渲染廠別 checkbox（會包含新加的）
-  onUserRoleChange();
+  // 🔄 一次刷新所有相關 UI（員工頁、使用者頁、分析頁、表單 checkbox）
+  refreshAllWorkplaceUIs();
 
   // 自動勾選剛新增的（方便使用者直接指派）
   setTimeout(() => {
     const cb = [...document.querySelectorAll('.user-wp-chk')].find(c => c.value === name);
     if (cb) cb.checked = true;
   }, 100);
+
+  // ★ 詢問是否要把新廠別自動加到「現有限定場別的管理者」
+  const restrictedAdmins = users.filter(u =>
+    u.role === 'admin' && Array.isArray(u.workplaces) && u.workplaces.length > 0
+    && (!editingUserId || u._id !== editingUserId) // 排除目前編輯中的使用者（自己會在表單存檔時處理）
+  );
+  if (restrictedAdmins.length > 0) {
+    const ok = confirm(
+      `已新增廠別「${name}」。\n\n` +
+      `偵測到 ${restrictedAdmins.length} 位「限定場別」管理者：\n` +
+      `  ${restrictedAdmins.map(u => '・' + (u.displayName || u.username)).join('\n  ')}\n\n` +
+      `按「確定」→ 把「${name}」一併加到這些管理者的限定場別\n` +
+      `按「取消」→ 不變動（這些管理者看不到新廠別）`
+    );
+    if (ok) {
+      restrictedAdmins.forEach(u => {
+        if (!u.workplaces.includes(name)) {
+          u.workplaces.push(name);
+          if (typeof cloudSave === 'function') cloudSave('users', u);
+        }
+      });
+      save(STORE.users, users);
+      refreshAllWorkplaceUIs();
+      alert(`✅ 已新增廠別「${name}」並自動加到 ${restrictedAdmins.length} 位限定場別管理者`);
+      return;
+    }
+  }
 
   alert(`✅ 已新增廠別「${name}」並自動勾選\n（也會出現在員工頁的工作地點下拉）`);
 }
