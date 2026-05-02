@@ -4610,27 +4610,27 @@ function refreshMonthlyAttendance() {
       });
       const total = hourPay + piecePay;
       return `
-        <div style="padding:12px 14px; background:#fef3c7; border-left:4px solid #f59e0b; border-radius:6px; margin-bottom:8px; font-size:13px; line-height:1.7;">
-          <strong style="color:#92400e;">📊 時薪制工時/收入摘要</strong> (時薪 NT$ ${empObj.hourlyRate || 0})<br>
-          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:6px; margin-top:6px;">
-            <div style="background:white; padding:6px 8px; border-radius:4px;">
-              <div style="font-size:11px; color:#92400e;">⏰ 計時上班</div>
-              <div style="font-weight:700; color:#1e40af;">${hourCount.toFixed(1)} 小時 → NT$ ${formatMoney(hourPay)}</div>
+        <div style="padding:12px 14px; background:#fef3c7; border-left:4px solid #f59e0b; border-radius:6px; margin-bottom:8px; font-size:15px; line-height:1.8;">
+          <strong style="color:#92400e; font-size:16px;">📊 時薪制工時/收入摘要</strong> (時薪 NT$ ${empObj.hourlyRate || 0})<br>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:8px; margin-top:8px;">
+            <div style="background:white; padding:8px 10px; border-radius:4px;">
+              <div style="font-size:13px; color:#92400e;">⏰ 計時上班</div>
+              <div style="font-weight:700; color:#1e40af; font-size:15px;">${hourCount.toFixed(1)} 小時 → NT$ ${formatMoney(hourPay)}</div>
             </div>
-            <div style="background:white; padding:6px 8px; border-radius:4px;">
-              <div style="font-size:11px; color:#92400e;">📦 論件</div>
-              <div style="font-weight:700; color:#7c2d12;">${pieceCount} 筆/${pieceQty} 件 → NT$ ${formatMoney(piecePay)}</div>
+            <div style="background:white; padding:8px 10px; border-radius:4px;">
+              <div style="font-size:13px; color:#92400e;">📦 論件</div>
+              <div style="font-weight:700; color:#7c2d12; font-size:15px;">${pieceCount} 筆/${pieceQty} 件 → NT$ ${formatMoney(piecePay)}</div>
             </div>
-            <div style="background:white; padding:6px 8px; border-radius:4px;">
-              <div style="font-size:11px; color:#92400e;">🔥 加班時數</div>
-              <div style="font-weight:700; color:#dc2626;">${otHours.toFixed(1)} 小時</div>
+            <div style="background:white; padding:8px 10px; border-radius:4px;">
+              <div style="font-size:13px; color:#92400e;">🔥 加班時數</div>
+              <div style="font-weight:700; color:#dc2626; font-size:15px;">${otHours.toFixed(1)} 小時</div>
             </div>
-            <div style="background:linear-gradient(135deg, #fef9c3, #fde68a); padding:6px 8px; border-radius:4px; border:1px dashed #f59e0b;">
-              <div style="font-size:11px; color:#92400e;">💰 預估本月總收入</div>
-              <div style="font-weight:700; color:#92400e; font-size:15px;">NT$ ${formatMoney(total)}</div>
+            <div style="background:linear-gradient(135deg, #fef9c3, #fde68a); padding:8px 10px; border-radius:4px; border:1px dashed #f59e0b;">
+              <div style="font-size:13px; color:#92400e;">💰 預估本月總收入</div>
+              <div style="font-weight:700; color:#92400e; font-size:17px;">NT$ ${formatMoney(total)}</div>
             </div>
           </div>
-          <div style="font-size:11px; color:#78350f; margin-top:6px;">💡 此摘要僅供參考。實際薪資請按月薪頁的計算公式（含加班費倍率、勞健保等）。</div>
+          <div style="font-size:13px; color:#78350f; margin-top:6px;">💡 此摘要僅供參考。實際薪資請按月薪頁的計算公式（含加班費倍率、勞健保等）。</div>
         </div>
       `;
     })()}
@@ -4687,12 +4687,12 @@ function refreshMonthlyAttendance() {
           ? `<span style="background:#fef3c7; color:#92400e; padding:1px 6px; border-radius:8px; font-size:11px; margin-left:6px;">⚠ 偏高，請確認排班表</span>`
           : '';
         return `
-          <div style="padding:10px 12px; background:#fce7f3; border-left:4px solid #be185d; border-radius:6px; margin-bottom:8px; font-size:13px; line-height:1.7;">
-            <strong style="color:#be185d;">🗓 排班制員工出勤摘要</strong>（不做「應上班時數」比對）<br>
-            出勤 <strong>${totalDays}</strong> 天 ｜ 請假 <strong>${leaveDayCount}</strong> 天 (${totalLeave.toFixed(1)}h) ｜ 未出勤 <strong style="color:${noRecordDays > 10 ? '#dc2626' : '#be185d'};">${noRecordDays}</strong> 天${noRecordWarn}<br>
-            正常工時 <strong>${totalNormal.toFixed(1)}h</strong> ｜ 加班 <strong>${totalOT.toFixed(1)}h</strong>
-            <div style="font-size:11px; color:#6b7280; margin-top:4px;">📊 整月 ${daysInMonth} 天 = 有記錄 ${recordedDates.size} 天 + 未出勤 ${noRecordDays} 天</div>
-            <div style="font-size:11px; color:#6b7280;">💡「未出勤」= 整月 ${daysInMonth} 天 − 有任何記錄的天數 ${recordedDates.size} 天（含排休/未排班/曠職）。月薪制照給底薪，但建議與排班表核對；若有曠職應於請假明細扣款。</div>
+          <div style="padding:12px 14px; background:#fce7f3; border-left:4px solid #be185d; border-radius:6px; margin-bottom:8px; font-size:15px; line-height:1.8;">
+            <strong style="color:#be185d; font-size:16px;">🗓 排班制員工出勤摘要</strong>（不做「應上班時數」比對）<br>
+            出勤 <strong style="font-size:17px;">${totalDays}</strong> 天 ｜ 請假 <strong style="font-size:17px;">${leaveDayCount}</strong> 天 (${totalLeave.toFixed(1)}h) ｜ 未出勤 <strong style="font-size:17px; color:${noRecordDays > 10 ? '#dc2626' : '#be185d'};">${noRecordDays}</strong> 天${noRecordWarn}<br>
+            正常工時 <strong style="font-size:16px;">${totalNormal.toFixed(1)}h</strong> ｜ 加班 <strong style="font-size:16px;">${totalOT.toFixed(1)}h</strong>
+            <div style="font-size:13px; color:#6b7280; margin-top:6px;">📊 整月 ${daysInMonth} 天 = 有記錄 ${recordedDates.size} 天 + 未出勤 ${noRecordDays} 天</div>
+            <div style="font-size:13px; color:#6b7280;">💡「未出勤」= 整月 ${daysInMonth} 天 − 有任何記錄的天數 ${recordedDates.size} 天（含排休/未排班/曠職）。月薪制照給底薪，但建議與排班表核對；若有曠職應於請假明細扣款。</div>
             ${warnNote}
           </div>
         `;
@@ -4760,79 +4760,79 @@ function refreshMonthlyAttendance() {
         }
       }
       return `
-      <div style="padding:10px 12px; background:${shortage > 0 ? '#fef2f2' : '#f0fdf4'}; border-left:4px solid ${color}; border-radius:6px; margin-bottom:8px; font-size:13px; line-height:1.6;">
-        <strong style="color:${color};">📏 工時稽核（月薪制）</strong>（工作日 ${monthWorkdays} 天 × 8h = ${expectedHours}h）<br>
-        正常上班 <strong>${normalHours.toFixed(1)}h</strong>｜請假 <strong>${leaveHours.toFixed(1)}h</strong>｜合計 <strong>${(normalHours + leaveHours).toFixed(1)}h</strong>｜<span style="color:${color}; font-weight:700;">${label}</span>
-        <div style="font-size:11px; color:#6b7280; margin-top:4px;">💡 此檢查不含加班/時薪加班/論件（已另計薪）。正常上班 + 請假應 ≥ 應上班時數。</div>
+      <div style="padding:12px 14px; background:${shortage > 0 ? '#fef2f2' : '#f0fdf4'}; border-left:4px solid ${color}; border-radius:6px; margin-bottom:8px; font-size:15px; line-height:1.8;">
+        <strong style="color:${color}; font-size:16px;">📏 工時稽核（月薪制）</strong>（工作日 ${monthWorkdays} 天 × 8h = ${expectedHours}h）<br>
+        正常上班 <strong style="font-size:16px;">${normalHours.toFixed(1)}h</strong>｜請假 <strong style="font-size:16px;">${leaveHours.toFixed(1)}h</strong>｜合計 <strong style="font-size:16px;">${(normalHours + leaveHours).toFixed(1)}h</strong>｜<span style="color:${color}; font-weight:700; font-size:16px;">${label}</span>
+        <div style="font-size:13px; color:#6b7280; margin-top:6px;">💡 此檢查不含加班/時薪加班/論件（已另計薪）。正常上班 + 請假應 ≥ 應上班時數。</div>
         ${deductBtn}
       </div>`;
     })()}
 
     <!-- 本月天數概覽 -->
-    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-bottom:8px;">
-      <div style="background:#f0f9ff; padding:8px; border-radius:6px; text-align:center;">
-        <div style="font-size:11px; color:#6b7280;">📆 本月總日數</div>
-        <div style="font-weight:700; color:#0369a1; font-size:19px;">${daysInMonth}</div>
-        <div style="font-size:10px; color:#6b7280;">天</div>
+    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:10px;">
+      <div style="background:#f0f9ff; padding:10px; border-radius:6px; text-align:center;">
+        <div style="font-size:13px; color:#6b7280;">📆 本月總日數</div>
+        <div style="font-weight:700; color:#0369a1; font-size:22px;">${daysInMonth}</div>
+        <div style="font-size:12px; color:#6b7280;">天</div>
       </div>
-      <div style="background:#fef3c7; padding:8px; border-radius:6px; text-align:center;">
-        <div style="font-size:11px; color:#6b7280;">💼 工作日</div>
-        <div style="font-weight:700; color:#92400e; font-size:19px;">${monthWorkdays}</div>
-        <div style="font-size:10px; color:#6b7280;">天</div>
+      <div style="background:#fef3c7; padding:10px; border-radius:6px; text-align:center;">
+        <div style="font-size:13px; color:#6b7280;">💼 工作日</div>
+        <div style="font-weight:700; color:#92400e; font-size:22px;">${monthWorkdays}</div>
+        <div style="font-size:12px; color:#6b7280;">天</div>
       </div>
-      <div style="background:#fed7aa; padding:8px; border-radius:6px; text-align:center;">
-        <div style="font-size:11px; color:#6b7280;">🗓 休息日 (六)</div>
-        <div style="font-weight:700; color:#9a3412; font-size:19px;">${monthSatDays}</div>
-        <div style="font-size:10px; color:#6b7280;">天</div>
+      <div style="background:#fed7aa; padding:10px; border-radius:6px; text-align:center;">
+        <div style="font-size:13px; color:#6b7280;">🗓 休息日 (六)</div>
+        <div style="font-weight:700; color:#9a3412; font-size:22px;">${monthSatDays}</div>
+        <div style="font-size:12px; color:#6b7280;">天</div>
       </div>
-      <div style="background:#fee2e2; padding:8px; border-radius:6px; text-align:center;">
-        <div style="font-size:11px; color:#6b7280;">🎌 例假/國假</div>
-        <div style="font-weight:700; color:#991b1b; font-size:19px;">${monthSunDays + monthHolidayDays}</div>
-        <div style="font-size:10px; color:#6b7280;">天 (含國定 ${monthHolidayDays})</div>
-      </div>
-    </div>
-    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-bottom:8px;">
-      <div style="background:#ecfdf5; padding:8px; border-radius:6px; text-align:center;">
-        <div style="font-size:11px; color:#6b7280;">📆 平日上班</div>
-        <div style="font-weight:700; color:#059669; font-size:19px;">${weekdayWorkDates.size}</div>
-        <div style="font-size:10px; color:#6b7280;">天</div>
-      </div>
-      <div style="background:#fef2f2; padding:8px; border-radius:6px; text-align:center;">
-        <div style="font-size:11px; color:#6b7280;">🔴 例假日上班</div>
-        <div style="font-weight:700; color:#b91c1c; font-size:19px;">${weekendWorkDates.size}</div>
-        <div style="font-size:10px; color:#6b7280;">天</div>
-      </div>
-      <div style="background:#dbeafe; padding:8px; border-radius:6px; text-align:center;" title="所有平日加班總時數。其中 ${weekdayOtHoursForMultiplier.toFixed(1)}h 為「舊式加班」走 ot1 倍率，其餘 ${(weekdayOtHours - weekdayOtHoursForMultiplier).toFixed(1)}h 為分段/時薪加班已含於計時收入">
-        <div style="font-size:11px; color:#6b7280;">💪 平日加班</div>
-        <div style="font-weight:700; color:#1d4ed8; font-size:17px;">${weekdayOtHours.toFixed(1)}</div>
-        <div style="font-size:10px; color:#6b7280;">小時${(weekdayOtHours - weekdayOtHoursForMultiplier) > 0 ? `<br><span style="color:#1e40af;">└ 分段/時薪 ${(weekdayOtHours - weekdayOtHoursForMultiplier).toFixed(1)}h</span>` : ''}</div>
-      </div>
-      <div style="background:#fce7f3; padding:8px; border-radius:6px; text-align:center;" title="所有例假日加班總時數。其中 ${weekendOtHoursForMultiplier.toFixed(1)}h 為「舊式加班」走 ot2 倍率，其餘 ${(weekendOtHours - weekendOtHoursForMultiplier).toFixed(1)}h 為分段/時薪加班已含於計時收入">
-        <div style="font-size:11px; color:#6b7280;">💪 例假日加班</div>
-        <div style="font-weight:700; color:#9d174d; font-size:17px;">${weekendOtHours.toFixed(1)}</div>
-        <div style="font-size:10px; color:#6b7280;">小時${(weekendOtHours - weekendOtHoursForMultiplier) > 0 ? `<br><span style="color:#9d174d;">└ 分段/時薪 ${(weekendOtHours - weekendOtHoursForMultiplier).toFixed(1)}h</span>` : ''}</div>
+      <div style="background:#fee2e2; padding:10px; border-radius:6px; text-align:center;">
+        <div style="font-size:13px; color:#6b7280;">🎌 例假/國假</div>
+        <div style="font-weight:700; color:#991b1b; font-size:22px;">${monthSunDays + monthHolidayDays}</div>
+        <div style="font-size:12px; color:#6b7280;">天 (含國定 ${monthHolidayDays})</div>
       </div>
     </div>
-    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-bottom:10px;">
-      <div style="background:#fef3c7; padding:8px; border-radius:6px; text-align:center;">
-        <div style="font-size:11px; color:#6b7280;">🌴 特休</div>
-        <div style="font-weight:700; color:#92400e; font-size:19px;">${annualLeave}</div>
-        <div style="font-size:10px; color:#6b7280;">天 (${annualLeaveHours}h)</div>
+    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:10px;">
+      <div style="background:#ecfdf5; padding:10px; border-radius:6px; text-align:center;">
+        <div style="font-size:13px; color:#6b7280;">📆 平日上班</div>
+        <div style="font-weight:700; color:#059669; font-size:22px;">${weekdayWorkDates.size}</div>
+        <div style="font-size:12px; color:#6b7280;">天</div>
       </div>
-      <div style="background:#fee2e2; padding:8px; border-radius:6px; text-align:center;">
-        <div style="font-size:11px; color:#6b7280;">📋 其他休假</div>
-        <div style="font-weight:700; color:#991b1b; font-size:19px;">${otherLeave}</div>
-        <div style="font-size:10px; color:#6b7280;">天 (${otherLeaveHours}h)</div>
+      <div style="background:#fef2f2; padding:10px; border-radius:6px; text-align:center;">
+        <div style="font-size:13px; color:#6b7280;">🔴 例假日上班</div>
+        <div style="font-weight:700; color:#b91c1c; font-size:22px;">${weekendWorkDates.size}</div>
+        <div style="font-size:12px; color:#6b7280;">天</div>
       </div>
-      <div style="background:#e0e7ff; padding:8px; border-radius:6px; text-align:center;">
-        <div style="font-size:11px; color:#6b7280;">休假合計</div>
-        <div style="font-weight:700; color:#3730a3; font-size:19px;">${totalLeaveDays}</div>
-        <div style="font-size:10px; color:#6b7280;">天 (${totalLeaveHours}h)</div>
+      <div style="background:#dbeafe; padding:10px; border-radius:6px; text-align:center;" title="所有平日加班總時數。其中 ${weekdayOtHoursForMultiplier.toFixed(1)}h 為「舊式加班」走 ot1 倍率，其餘 ${(weekdayOtHours - weekdayOtHoursForMultiplier).toFixed(1)}h 為分段/時薪加班已含於計時收入">
+        <div style="font-size:13px; color:#6b7280;">💪 平日加班</div>
+        <div style="font-weight:700; color:#1d4ed8; font-size:20px;">${weekdayOtHours.toFixed(1)}</div>
+        <div style="font-size:12px; color:#6b7280;">小時${(weekdayOtHours - weekdayOtHoursForMultiplier) > 0 ? `<br><span style="color:#1e40af;">└ 分段/時薪 ${(weekdayOtHours - weekdayOtHoursForMultiplier).toFixed(1)}h</span>` : ''}</div>
       </div>
-      <div style="background:${totalLateMinutes > 30 ? '#fef2f2' : '#fff7ed'}; padding:8px; border-radius:6px; text-align:center;">
-        <div style="font-size:11px; color:#6b7280;">⏰ 遲到</div>
-        <div style="font-weight:700; color:${totalLateMinutes > 30 ? '#dc2626' : '#c2410c'}; font-size:17px;">${totalLateMinutes}</div>
-        <div style="font-size:10px; color:#6b7280;">分 (${lateDays} 天)</div>
+      <div style="background:#fce7f3; padding:10px; border-radius:6px; text-align:center;" title="所有例假日加班總時數。其中 ${weekendOtHoursForMultiplier.toFixed(1)}h 為「舊式加班」走 ot2 倍率，其餘 ${(weekendOtHours - weekendOtHoursForMultiplier).toFixed(1)}h 為分段/時薪加班已含於計時收入">
+        <div style="font-size:13px; color:#6b7280;">💪 例假日加班</div>
+        <div style="font-weight:700; color:#9d174d; font-size:20px;">${weekendOtHours.toFixed(1)}</div>
+        <div style="font-size:12px; color:#6b7280;">小時${(weekendOtHours - weekendOtHoursForMultiplier) > 0 ? `<br><span style="color:#9d174d;">└ 分段/時薪 ${(weekendOtHours - weekendOtHoursForMultiplier).toFixed(1)}h</span>` : ''}</div>
+      </div>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:12px;">
+      <div style="background:#fef3c7; padding:10px; border-radius:6px; text-align:center;">
+        <div style="font-size:13px; color:#6b7280;">🌴 特休</div>
+        <div style="font-weight:700; color:#92400e; font-size:22px;">${annualLeave}</div>
+        <div style="font-size:12px; color:#6b7280;">天 (${annualLeaveHours}h)</div>
+      </div>
+      <div style="background:#fee2e2; padding:10px; border-radius:6px; text-align:center;">
+        <div style="font-size:13px; color:#6b7280;">📋 其他休假</div>
+        <div style="font-weight:700; color:#991b1b; font-size:22px;">${otherLeave}</div>
+        <div style="font-size:12px; color:#6b7280;">天 (${otherLeaveHours}h)</div>
+      </div>
+      <div style="background:#e0e7ff; padding:10px; border-radius:6px; text-align:center;">
+        <div style="font-size:13px; color:#6b7280;">休假合計</div>
+        <div style="font-weight:700; color:#3730a3; font-size:22px;">${totalLeaveDays}</div>
+        <div style="font-size:12px; color:#6b7280;">天 (${totalLeaveHours}h)</div>
+      </div>
+      <div style="background:${totalLateMinutes > 30 ? '#fef2f2' : '#fff7ed'}; padding:10px; border-radius:6px; text-align:center;">
+        <div style="font-size:13px; color:#6b7280;">⏰ 遲到</div>
+        <div style="font-weight:700; color:${totalLateMinutes > 30 ? '#dc2626' : '#c2410c'}; font-size:20px;">${totalLateMinutes}</div>
+        <div style="font-size:12px; color:#6b7280;">分 (${lateDays} 天)</div>
       </div>
     </div>
     <table style="font-size:12px;">
@@ -5491,42 +5491,42 @@ function refreshEmpStatusConfirm() {
   card.style.border = '2px solid #06C755';
   card.style.background = 'linear-gradient(180deg, #f0fdf4 0%, #ffffff 60%)';
   card.innerHTML = `
-    <h3 style="color:#065f46;">📋 員工目前狀態（計薪以下列設定為準）</h3>
+    <h3 style="color:#065f46; font-size:17px;">📋 員工目前狀態（計薪以下列設定為準）</h3>
     <div style="padding:10px 12px; background:white; border-radius:8px; border:1px dashed #059669; margin-bottom:10px;">
       <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
-        <strong style="font-size:16px; color:#065f46;">${escapeHtml(emp.name)}</strong>
-        <span style="font-size:11px; background:#dcfce7; color:#166534; padding:2px 8px; border-radius:10px;">${escapeHtml(emp.id || '無編號')}</span>
-        ${emp.workplace ? `<span style="font-size:11px; background:#ddd6fe; color:#5b21b6; padding:2px 8px; border-radius:10px;">🏭 ${escapeHtml(emp.workplace)}</span>` : '<span style="font-size:11px; background:#fee2e2; color:#991b1b; padding:2px 8px; border-radius:10px;">⚠ 未指定廠別</span>'}
+        <strong style="font-size:18px; color:#065f46;">${escapeHtml(emp.name)}</strong>
+        <span style="font-size:13px; background:#dcfce7; color:#166534; padding:3px 10px; border-radius:10px;">${escapeHtml(emp.id || '無編號')}</span>
+        ${emp.workplace ? `<span style="font-size:13px; background:#ddd6fe; color:#5b21b6; padding:3px 10px; border-radius:10px;">🏭 ${escapeHtml(emp.workplace)}</span>` : '<span style="font-size:13px; background:#fee2e2; color:#991b1b; padding:3px 10px; border-radius:10px;">⚠ 未指定廠別</span>'}
       </div>
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:8px; font-size:13px;">
-        <div style="padding:6px 10px; background:#f0fdf4; border-radius:6px; border-left:3px solid #06C755;">
-          <div style="font-size:11px; color:#065f46;">薪資制度</div>
-          <div style="font-weight:700;">${typeStr}</div>
-          <div style="font-size:11px; color:#6b7280;">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:8px; font-size:14px;">
+        <div style="padding:8px 10px; background:#f0fdf4; border-radius:6px; border-left:3px solid #06C755;">
+          <div style="font-size:12px; color:#065f46;">薪資制度</div>
+          <div style="font-weight:700; font-size:15px;">${typeStr}</div>
+          <div style="font-size:12px; color:#6b7280;">
             ${emp.isHourly ? `時薪 NT$ ${formatMoney(emp.hourlyRate || 0)}` : `月薪 NT$ ${formatMoney(emp.baseSalary || 0)}（時薪 NT$ ${formatMoney(emp.hourlyRate || Math.round((emp.baseSalary||0)/30/8))}）`}
           </div>
         </div>
-        <div style="padding:6px 10px; background:#fef3c7; border-radius:6px; border-left:3px solid #f59e0b;">
-          <div style="font-size:11px; color:#92400e;">假日計薪模式</div>
-          <div style="font-weight:700;">${payMode}</div>
+        <div style="padding:8px 10px; background:#fef3c7; border-radius:6px; border-left:3px solid #f59e0b;">
+          <div style="font-size:12px; color:#92400e;">假日計薪模式</div>
+          <div style="font-weight:700; font-size:15px;">${payMode}</div>
         </div>
-        <div style="padding:6px 10px; background:${emp.insuredDate ? '#d1fae5' : '#fee2e2'}; border-radius:6px; border-left:3px solid ${emp.insuredDate ? '#059669' : '#dc2626'};">
-          <div style="font-size:11px; color:${emp.insuredDate ? '#065f46' : '#991b1b'};">投保狀態</div>
-          <div style="font-weight:700;">${insStatus}</div>
-          ${emp.insuredDate ? `<div style="font-size:11px; color:#6b7280;">投保薪資 NT$ ${formatMoney(emp.insuredSalary || emp.baseSalary || 0)}${emp.dependents ? ' · 眷口 ' + emp.dependents : ''}</div>` : ''}
+        <div style="padding:8px 10px; background:${emp.insuredDate ? '#d1fae5' : '#fee2e2'}; border-radius:6px; border-left:3px solid ${emp.insuredDate ? '#059669' : '#dc2626'};">
+          <div style="font-size:12px; color:${emp.insuredDate ? '#065f46' : '#991b1b'};">投保狀態</div>
+          <div style="font-weight:700; font-size:15px;">${insStatus}</div>
+          ${emp.insuredDate ? `<div style="font-size:12px; color:#6b7280;">投保薪資 NT$ ${formatMoney(emp.insuredSalary || emp.baseSalary || 0)}${emp.dependents ? ' · 眷口 ' + emp.dependents : ''}</div>` : ''}
         </div>
-        <div style="padding:6px 10px; background:#e0e7ff; border-radius:6px; border-left:3px solid #6366f1;">
-          <div style="font-size:11px; color:#3730a3;">合約類型</div>
-          <div style="font-weight:700;">${contract}${emp.weeklyHours ? ' · 週 ' + emp.weeklyHours + 'h' : ''}</div>
+        <div style="padding:8px 10px; background:#e0e7ff; border-radius:6px; border-left:3px solid #6366f1;">
+          <div style="font-size:12px; color:#3730a3;">合約類型</div>
+          <div style="font-weight:700; font-size:15px;">${contract}${emp.weeklyHours ? ' · 週 ' + emp.weeklyHours + 'h' : ''}</div>
         </div>
       </div>
-      ${specialNotes.length > 0 ? `<div style="margin-top:8px; font-size:12px; color:#6b21a8; padding:6px 10px; background:#faf5ff; border-radius:6px;">特殊勞動標記：${specialNotes.join(' · ')}</div>` : ''}
-      <div style="margin-top:8px; padding:6px 10px; background:#f9fafb; border-radius:6px; font-size:11px; color:#6b7280; display:flex; justify-content:space-between; flex-wrap:wrap; gap:4px;">
+      ${specialNotes.length > 0 ? `<div style="margin-top:8px; font-size:13px; color:#6b21a8; padding:8px 10px; background:#faf5ff; border-radius:6px;">特殊勞動標記：${specialNotes.join(' · ')}</div>` : ''}
+      <div style="margin-top:8px; padding:6px 10px; background:#f9fafb; border-radius:6px; font-size:12px; color:#6b7280; display:flex; justify-content:space-between; flex-wrap:wrap; gap:4px;">
         <span>🕐 員工資料最後更新：${updateTime || '—'}</span>
         <a href="javascript:void(0)" onclick="document.querySelectorAll('.tab').forEach(t => t.click === undefined ? null : null); document.querySelectorAll('.tab').forEach(t => { if (t.dataset.panel === 'employees') t.click(); }); setTimeout(() => editEmployee('${emp._id}'), 200);" style="color:#06C755; text-decoration:none;">✏️ 修改員工資料</a>
       </div>
-      <div style="margin-top:6px; font-size:11px; color:#92400e; background:#fef3c7; padding:6px 10px; border-radius:6px;">
-        💡 系統會以**員工資料最後一次更新**的設定計算本月薪資。如果中途有改過（例如月薪制改時薪制、約定制改法規制），請先確認上面顯示的是您要的版本。
+      <div style="margin-top:6px; font-size:12px; color:#92400e; background:#fef3c7; padding:8px 10px; border-radius:6px; line-height:1.6;">
+        💡 系統會以<strong>員工資料最後一次更新</strong>的設定計算本月薪資。如果中途有改過（例如月薪制改時薪制、約定制改法規制），請先確認上面顯示的是您要的版本。
       </div>
       ${(() => {
         // ⚖ 合規提示：根據員工類型 + 設定，列出建議簽署文件
@@ -5565,10 +5565,10 @@ function refreshEmpStatusConfirm() {
 
         if (tips.length === 0) return '';
         return `
-          <div style="margin-top:8px; padding:8px 10px; background:#f0fdf4; border-left:3px solid #059669; border-radius:6px;">
-            <div style="font-weight:700; color:#065f46; font-size:12px; margin-bottom:6px;">📋 ${type} 員工合規提醒（${tips.length} 項）</div>
+          <div style="margin-top:8px; padding:10px 12px; background:#f0fdf4; border-left:3px solid #059669; border-radius:6px;">
+            <div style="font-weight:700; color:#065f46; font-size:14px; margin-bottom:8px;">📋 ${type} 員工合規提醒（${tips.length} 項）</div>
             ${tips.map(t => `
-              <div style="padding:6px 8px; background:${t.bg}; border-radius:4px; margin-bottom:4px; font-size:11px; color:${t.color}; line-height:1.5;">
+              <div style="padding:8px 10px; background:${t.bg}; border-radius:6px; margin-bottom:6px; font-size:13px; color:${t.color}; line-height:1.6;">
                 ${t.icon} ${t.text}
               </div>`).join('')}
           </div>`;
@@ -5602,7 +5602,7 @@ function refreshLaborAuditCard() {
   let respNote = '';
   if (result.isResponsibility) {
     respNote = `
-      <div style="padding:10px 12px; background:#e0f2fe; border-left:4px solid #0284c7; border-radius:6px; font-size:12px; color:#075985; margin-bottom:10px;">
+      <div style="padding:12px 14px; background:#e0f2fe; border-left:4px solid #0284c7; border-radius:6px; font-size:14px; color:#075985; margin-bottom:10px; line-height:1.6;">
         👔 <strong>${escapeHtml(emp.name)} 為責任制（§84-1）員工</strong>：不受單日/月加班上限約束，但仍受 §34 換班間隔、§36 7休1、§49 女工夜間保護
       </div>`;
   }
@@ -5611,9 +5611,9 @@ function refreshLaborAuditCard() {
   if (totalIssues === 0) {
     card.style.display = 'block';
     content.innerHTML = respNote + `
-      <div style="padding:14px 16px; background:#d1fae5; border-left:4px solid #059669; border-radius:8px; color:#065f46; font-size:14px;">
+      <div style="padding:16px 18px; background:#d1fae5; border-left:4px solid #059669; border-radius:8px; color:#065f46; font-size:16px; line-height:1.7;">
         ✅ <strong>${escapeHtml(emp.name)} 本月工時符合勞基法規定</strong><br>
-        <span style="font-size:12px; opacity:0.85;">已檢查：單日工時、月加班、7休1、換班間隔、週工時</span>
+        <span style="font-size:13px; opacity:0.85;">已檢查：單日工時、月加班、7休1、換班間隔、週工時</span>
       </div>`;
     return;
   }
@@ -5635,40 +5635,40 @@ function refreshLaborAuditCard() {
         if (p.label.startsWith('>4h')) totalIllegalHours += p.hrs;
         else totalLegalPay += pay;
         const isIllegal = p.label.includes('違法') || p.label.includes('禁止');
-        return `<span style="display:inline-block; padding:2px 6px; margin:1px; background:${isIllegal?'#fee2e2':'#f0f9ff'}; color:${isIllegal?'#991b1b':'#075985'}; border-radius:4px; font-size:11px; font-weight:600;">${p.hrs}h ${p.label} = NT$ ${formatMoney(pay)}</span>`;
+        return `<span style="display:inline-block; padding:3px 8px; margin:2px; background:${isIllegal?'#fee2e2':'#f0f9ff'}; color:${isIllegal?'#991b1b':'#075985'}; border-radius:4px; font-size:13px; font-weight:600;">${p.hrs}h ${p.label} = NT$ ${formatMoney(pay)}</span>`;
       }).join(' ');
       // ★ 顯示記錄上實際選的類型（讓使用者比對是否選對）
       const recordedHtml = (bd.recordedTypes && bd.recordedTypes.length > 0)
-        ? `<div style="font-size:10px; color:#475569; margin-top:2px;">📝 已登記：${bd.recordedTypes.map(escapeHtml).join('、')}</div>`
+        ? `<div style="font-size:12px; color:#475569; margin-top:3px;">📝 已登記：${bd.recordedTypes.map(escapeHtml).join('、')}</div>`
         : '';
       return `
         <tr>
-          <td style="padding:4px 6px; border-bottom:1px solid #e5e7eb; font-size:11px;">${bd.date}</td>
-          <td style="padding:4px 6px; border-bottom:1px solid #e5e7eb; font-size:11px; color:${dayKindColor[bd.dayKind]}; font-weight:700;">${dayKindLabel[bd.dayKind]}</td>
-          <td style="padding:4px 6px; border-bottom:1px solid #e5e7eb; font-size:11px; text-align:center;">${bd.otHrs}h</td>
-          <td style="padding:4px 6px; border-bottom:1px solid #e5e7eb;">${partsText}${recordedHtml}</td>
+          <td style="padding:6px 8px; border-bottom:1px solid #e5e7eb; font-size:13px;">${bd.date}</td>
+          <td style="padding:6px 8px; border-bottom:1px solid #e5e7eb; font-size:13px; color:${dayKindColor[bd.dayKind]}; font-weight:700;">${dayKindLabel[bd.dayKind]}</td>
+          <td style="padding:6px 8px; border-bottom:1px solid #e5e7eb; font-size:13px; text-align:center; font-weight:700;">${bd.otHrs}h</td>
+          <td style="padding:6px 8px; border-bottom:1px solid #e5e7eb;">${partsText}${recordedHtml}</td>
         </tr>`;
     }).join('');
     const modeNote = _payMode === 'agreement'
       ? '⚠ 此員工為「約定制」→ 加班費含於時薪內、所有倍率視為 ×1.0；建議僅用於部分工時/學生且時薪明顯高於基本×2'
       : '依勞基法 §24 / §39 計算「應領」加班費，與系統實際 ot1/ot2 月合計可能略有差異（系統以月合計簡化算）';
     html += `
-      <div style="padding:10px 12px; background:linear-gradient(135deg,#fef9c3,#fef3c7); border-left:4px solid #f59e0b; border-radius:8px; margin-bottom:10px;">
-        <div style="font-weight:700; color:#92400e; margin-bottom:6px;">📊 每日加班拆分（§24 / §39）— 共 ${result.dailyOtBreakdown.length} 天有加班</div>
+      <div style="padding:12px 14px; background:linear-gradient(135deg,#fef9c3,#fef3c7); border-left:4px solid #f59e0b; border-radius:8px; margin-bottom:10px;">
+        <div style="font-weight:700; color:#92400e; margin-bottom:8px; font-size:15px;">📊 每日加班拆分（§24 / §39）— 共 ${result.dailyOtBreakdown.length} 天有加班</div>
         <div style="overflow-x:auto;">
           <table style="width:100%; border-collapse:collapse; background:white; border-radius:6px; overflow:hidden;">
             <thead>
               <tr style="background:#fff7ed;">
-                <th style="padding:6px; font-size:11px; text-align:left;">日期</th>
-                <th style="padding:6px; font-size:11px; text-align:left;">日類型</th>
-                <th style="padding:6px; font-size:11px;">OT 時數</th>
-                <th style="padding:6px; font-size:11px; text-align:left;">拆分（時薪 NT$ ${_empHourly}）</th>
+                <th style="padding:8px; font-size:13px; text-align:left;">日期</th>
+                <th style="padding:8px; font-size:13px; text-align:left;">日類型</th>
+                <th style="padding:8px; font-size:13px;">OT 時數</th>
+                <th style="padding:8px; font-size:13px; text-align:left;">拆分（時薪 NT$ ${_empHourly}）</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
-        <div style="margin-top:6px; font-size:11px; color:#78350f;">
+        <div style="margin-top:8px; font-size:13px; color:#78350f; line-height:1.7;">
           ✅ 應給付加班費合計：<strong>NT$ ${formatMoney(totalLegalPay)}</strong>
           ${totalIllegalHours > 0 ? `<span style="margin-left:10px; color:#991b1b;">⛔ 違法時數：<strong>${totalIllegalHours}h</strong>（仍須給付，但屬違法應改善）</span>` : ''}
           <br><span style="color:#9a3412;">📜 ${modeNote}</span>
@@ -5678,28 +5678,28 @@ function refreshLaborAuditCard() {
   }
 
   if (result.violations.length > 0) {
-    html += `<div style="padding:12px 14px; background:#fee2e2; border-left:4px solid #dc2626; border-radius:8px; margin-bottom:10px;">
-      <div style="font-weight:700; color:#991b1b; margin-bottom:8px;">🚨 違規 ${result.violations.length} 項（可能被罰 2~100 萬）</div>
+    html += `<div style="padding:14px 16px; background:#fee2e2; border-left:4px solid #dc2626; border-radius:8px; margin-bottom:10px;">
+      <div style="font-weight:700; color:#991b1b; margin-bottom:10px; font-size:15px;">🚨 違規 ${result.violations.length} 項（可能被罰 2~100 萬）</div>
       ${result.violations.map(v => `
-        <div style="background:white; padding:8px 10px; border-radius:6px; margin-bottom:6px; font-size:13px;">
-          <div style="font-weight:700; color:#991b1b;">⛔ ${escapeHtml(v.rule)}</div>
-          <div style="font-size:12px; color:#7f1d1d; margin-top:2px;">${escapeHtml(v.detail)}</div>
-          <div style="font-size:11px; color:#991b1b; margin-top:2px;">📅 ${escapeHtml(v.date)}｜⚖ ${escapeHtml(v.law)}</div>
+        <div style="background:white; padding:10px 12px; border-radius:6px; margin-bottom:8px; font-size:14px;">
+          <div style="font-weight:700; color:#991b1b; font-size:15px;">⛔ ${escapeHtml(v.rule)}</div>
+          <div style="font-size:13px; color:#7f1d1d; margin-top:4px;">${escapeHtml(v.detail)}</div>
+          <div style="font-size:12px; color:#991b1b; margin-top:4px;">📅 ${escapeHtml(v.date)}｜⚖ ${escapeHtml(v.law)}</div>
         </div>`).join('')}
     </div>`;
   }
   if (result.warnings.length > 0) {
-    html += `<div style="padding:12px 14px; background:#fef3c7; border-left:4px solid #f59e0b; border-radius:8px;">
-      <div style="font-weight:700; color:#92400e; margin-bottom:8px;">⚠ 注意 ${result.warnings.length} 項（建議留意）</div>
+    html += `<div style="padding:14px 16px; background:#fef3c7; border-left:4px solid #f59e0b; border-radius:8px;">
+      <div style="font-weight:700; color:#92400e; margin-bottom:10px; font-size:15px;">⚠ 注意 ${result.warnings.length} 項（建議留意）</div>
       ${result.warnings.map(w => `
-        <div style="background:white; padding:8px 10px; border-radius:6px; margin-bottom:6px; font-size:13px;">
-          <div style="font-weight:700; color:#92400e;">🟡 ${escapeHtml(w.rule)}</div>
-          <div style="font-size:12px; color:#78350f; margin-top:2px;">${escapeHtml(w.detail)}</div>
-          <div style="font-size:11px; color:#92400e; margin-top:2px;">📅 ${escapeHtml(w.date)}｜⚖ ${escapeHtml(w.law)}</div>
+        <div style="background:white; padding:10px 12px; border-radius:6px; margin-bottom:8px; font-size:14px;">
+          <div style="font-weight:700; color:#92400e; font-size:15px;">🟡 ${escapeHtml(w.rule)}</div>
+          <div style="font-size:13px; color:#78350f; margin-top:4px;">${escapeHtml(w.detail)}</div>
+          <div style="font-size:12px; color:#92400e; margin-top:4px;">📅 ${escapeHtml(w.date)}｜⚖ ${escapeHtml(w.law)}</div>
         </div>`).join('')}
     </div>`;
   }
-  html += `<div style="margin-top:10px; padding:10px 12px; background:#f0f9ff; border-radius:6px; font-size:11px; color:#075985; line-height:1.7;">
+  html += `<div style="margin-top:10px; padding:12px 14px; background:#f0f9ff; border-radius:6px; font-size:13px; color:#075985; line-height:1.8;">
     💡 <strong>調整建議</strong>：<br>
     • 讓員工簽「勞資會議同意書」→ 月加班上限 46h → 54h（員工頁勾選「已簽勞資會議同意書」）<br>
     • 月薪制若為特定職位（管理職等），可申請「責任制 §84-1」核備<br>
