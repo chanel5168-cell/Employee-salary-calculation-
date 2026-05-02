@@ -3552,12 +3552,30 @@ function addHourEntry() {
     }
   }
 
-  // ★ 分段加班類型 → 自動套用倍率
-  let _subtotal = Math.round(hours * rate * 100) / 100;
+  // ★ 統一 subtotal 規則（避免重複計薪）：
+  //   - 請假類型 → subtotal = 0（走請假明細）
+  //   - normal + 月薪制 → subtotal = 0（含於底薪，僅打卡）
+  //   - normal + 時薪制 → subtotal = hours × rate（計時收入）
+  //   - 加班（舊式簡化）→ subtotal = 0（走 ot1/ot2 月合計倍率，避免雙重計薪）
+  //   - 時薪加班（另計時薪）→ subtotal = hours × rate（計入計時收入，不再走 ot1/ot2）
+  //   - 分段加班（含倍率）→ subtotal = hours × rate × 倍率（已含加班費，不再走 ot1/ot2）
+  const _isLeave = _hourAttType !== 'normal' && !isOtAttType(_hourAttType);
+  const _isMonthly = !emp.isHourly;
+  const _attendanceOnly = _isMonthly && _hourAttType === 'normal';
+  let _subtotal = 0;
   let _otRate = 1.0;
   if (isSegmentedOt(_hourAttType)) {
     _otRate = getOtMultiplier(_hourAttType, emp && emp.holidayPayMode);
     _subtotal = calcSegmentedOtSubtotal(hours, rate, _hourAttType, emp && emp.holidayPayMode);
+  } else if (_isLeave) {
+    _subtotal = 0; // 請假
+  } else if (_attendanceOnly) {
+    _subtotal = 0; // 月薪制 normal 僅打卡
+  } else if (_hourAttType === '加班') {
+    _subtotal = 0; // 舊式加班：走 ot1/ot2 倍率，subtotal 必為 0
+  } else {
+    // normal（時薪制）/ 時薪加班 → 走計時收入
+    _subtotal = Math.round(hours * rate * 100) / 100;
   }
   const entry = {
     _id: editingDailyId || ('d_' + Date.now()),
@@ -3567,8 +3585,9 @@ function addHourEntry() {
     type: 'hour',
     start, end, breakMin: brk,
     hours: Math.round(hours * 100) / 100,
-    rate,
+    rate: (_subtotal > 0 || _hourAttType === '加班') ? rate : 0,
     otRate: _otRate, // ★ 分段加班用：實際應用倍率（約定制 = 1.0）
+    attendanceOnly: _attendanceOnly,
     subtotal: _subtotal,
     workContent: document.getElementById('hourWorkContent').value,
     attType: _hourAttType,
@@ -4545,7 +4564,7 @@ function refreshMonthlyAttendance() {
   let html = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
       <div style="font-weight:700; color:#059669; font-size:15px;">📅 本月出勤明細</div>
       <div style="display:flex; gap:6px; flex-wrap:wrap;">
-        <button type="button" onclick="forceRefillFromAttendance(${workDays}, ${totalLeaveDays}, ${weekdayOtHours}, ${weekendOtHours})" class="btn btn-primary btn-sm" style="padding:4px 10px; font-size:11px;">🔄 依出勤重算月薪欄位</button>
+        <button type="button" onclick="forceRefillFromAttendance(${workDays}, ${totalLeaveDays}, ${weekdayOtHoursForMultiplier}, ${weekendOtHoursForMultiplier})" class="btn btn-primary btn-sm" style="padding:4px 10px; font-size:11px;" title="只把『舊式加班(走倍率)』的時數帶入 ot1/ot2；分段加班與時薪加班已含於計時收入，不再重複">🔄 依出勤重算月薪欄位</button>
         <button type="button" onclick="clearMonthAttendance('${empId}', '${month}')" class="btn btn-danger btn-sm" style="padding:4px 10px; font-size:11px; background:#dc2626; color:white;">🗑 整月清除</button>
       </div>
     </div>
@@ -4765,15 +4784,15 @@ function refreshMonthlyAttendance() {
         <div style="font-weight:700; color:#b91c1c; font-size:19px;">${weekendWorkDates.size}</div>
         <div style="font-size:10px; color:#6b7280;">天</div>
       </div>
-      <div style="background:#dbeafe; padding:8px; border-radius:6px; text-align:center;">
+      <div style="background:#dbeafe; padding:8px; border-radius:6px; text-align:center;" title="所有平日加班總時數。其中 ${weekdayOtHoursForMultiplier.toFixed(1)}h 為「舊式加班」走 ot1 倍率，其餘 ${(weekdayOtHours - weekdayOtHoursForMultiplier).toFixed(1)}h 為分段/時薪加班已含於計時收入">
         <div style="font-size:11px; color:#6b7280;">💪 平日加班</div>
         <div style="font-weight:700; color:#1d4ed8; font-size:17px;">${weekdayOtHours.toFixed(1)}</div>
-        <div style="font-size:10px; color:#6b7280;">小時</div>
+        <div style="font-size:10px; color:#6b7280;">小時${(weekdayOtHours - weekdayOtHoursForMultiplier) > 0 ? `<br><span style="color:#1e40af;">└ 分段/時薪 ${(weekdayOtHours - weekdayOtHoursForMultiplier).toFixed(1)}h</span>` : ''}</div>
       </div>
-      <div style="background:#fce7f3; padding:8px; border-radius:6px; text-align:center;">
+      <div style="background:#fce7f3; padding:8px; border-radius:6px; text-align:center;" title="所有例假日加班總時數。其中 ${weekendOtHoursForMultiplier.toFixed(1)}h 為「舊式加班」走 ot2 倍率，其餘 ${(weekendOtHours - weekendOtHoursForMultiplier).toFixed(1)}h 為分段/時薪加班已含於計時收入">
         <div style="font-size:11px; color:#6b7280;">💪 例假日加班</div>
         <div style="font-weight:700; color:#9d174d; font-size:17px;">${weekendOtHours.toFixed(1)}</div>
-        <div style="font-size:10px; color:#6b7280;">小時</div>
+        <div style="font-size:10px; color:#6b7280;">小時${(weekendOtHours - weekendOtHoursForMultiplier) > 0 ? `<br><span style="color:#9d174d;">└ 分段/時薪 ${(weekendOtHours - weekendOtHoursForMultiplier).toFixed(1)}h</span>` : ''}</div>
       </div>
     </div>
     <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-bottom:10px;">
@@ -9922,10 +9941,21 @@ function removeDuplicateRecords() {
 }
 
 // 🔄 修正所有加班記錄的 attendanceOnly 與 subtotal（解決舊版邏輯留下的 bug）
+//   - 舊式「加班」→ subtotal = 0（避免與 ot1/ot2 倍率重複計薪）
+//   - 時薪加班 → subtotal = hours × rate（自訂時薪，計入計時收入）
+//   - 分段加班 → subtotal = hours × rate × 倍率（已含加班費）
 function fixOvertimeEntries() {
   if (!requireAdmin('修正加班記錄')) return;
-  if (!confirm('將掃描所有 計時記錄，把「加班/時薪加班」類型的記錄重新計算：\n\n  - attendanceOnly 設為 false（讓它可被計薪）\n  - subtotal 依 hours × rate 重新計算\n  - 若員工時薪為 0 → 自動用員工時薪或月薪推算\n\n繼續？')) return;
+  if (!confirm(
+    '將掃描所有計時記錄並修正：\n\n' +
+    '🔧 舊式「加班」→ subtotal 改為 0（避免與 ot1/ot2 重複計薪 → 解決「平日加班 10」變 5 的 bug）\n' +
+    '🔧 時薪加班 → subtotal = hours × rate\n' +
+    '🔧 分段加班 → subtotal = hours × rate × 倍率\n' +
+    '🔧 attendanceOnly 設為 false\n\n' +
+    '⚠ 此操作會更新所有員工的舊加班記錄。建議執行前先匯出備份。\n\n繼續？'
+  )) return;
   let count = 0;
+  let fixedDouble = 0;
   dailyEntries.forEach(d => {
     if (d.type !== 'hour') return;
     if (!isOtAttType(d.attType)) return;
@@ -9936,10 +9966,16 @@ function fixOvertimeEntries() {
     const rate = d.rate || fallbackRate;
     const oldAttOnly = d.attendanceOnly;
     const oldSub = d.subtotal || 0;
-    // ★ 分段加班 → 套倍率；舊式「加班 / 時薪加班」 → 1.0
-    const newSub = isSegmentedOt(d.attType)
-      ? calcSegmentedOtSubtotal(d.hours || 0, rate, d.attType, emp.holidayPayMode)
-      : Math.round((d.hours || 0) * rate * 100) / 100;
+    // ★ 依類型計算新 subtotal
+    let newSub;
+    if (isSegmentedOt(d.attType)) {
+      newSub = calcSegmentedOtSubtotal(d.hours || 0, rate, d.attType, emp.holidayPayMode);
+    } else if (d.attType === '時薪加班') {
+      newSub = Math.round((d.hours || 0) * rate * 100) / 100;
+    } else {
+      // 舊式「加班」→ subtotal 必為 0（走 ot1/ot2 倍率，避免雙重計薪）
+      newSub = 0;
+    }
     if (oldAttOnly || oldSub !== newSub || !d.rate) {
       d.attendanceOnly = false;
       d.rate = rate;
@@ -9947,12 +9983,20 @@ function fixOvertimeEntries() {
       d.updatedAt = new Date().toISOString();
       cloudSave('daily', d);
       count++;
+      // 統計：舊式加班從 hours×rate 改為 0 的筆數（這些就是會引發雙重計薪的記錄）
+      if (d.attType === '加班' && oldSub > 0 && newSub === 0) fixedDouble++;
     }
   });
   if (count === 0) { alert('✅ 所有加班記錄都正確'); return; }
   save(STORE.daily, dailyEntries);
   refreshAllDailyViews();
-  alert(`✅ 已修正 ${count} 筆加班記錄\n\n請回月薪計算頁按「一鍵帶入」重新計算`);
+  alert(
+    `✅ 已修正 ${count} 筆加班記錄\n` +
+    (fixedDouble > 0 ? `🚨 其中有 ${fixedDouble} 筆舊式「加班」原本 subtotal > 0，會造成雙重計薪 → 已改為 0\n\n` : '\n') +
+    `請回月薪計算頁：\n` +
+    `① 按「🔄 依出勤重算月薪欄位」重新填入 ot1/ot2\n` +
+    `② 按「💰 預覽計算」確認金額正確`
+  );
 }
 
 // 🗑 依員工（可選月份）批次刪除每日記錄 — 同時刪本地 + 雲端
