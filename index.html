@@ -1325,13 +1325,18 @@
       <button class="btn btn-secondary btn-block" onclick="cleanupOldPhotos()" style="margin-top:8px; background:#e0f2fe; color:#075985; border:1px solid #0284c7;">📷 清理 30 天前舊照片（節省 Firebase 空間）</button>
       <button class="btn btn-secondary btn-block" onclick="checkDuplicateEmpIds()" style="margin-top:8px; background:#fef3c7; color:#92400e; border:1px solid #f59e0b;">🔍 檢查員工編號重複</button>
       <button class="btn btn-secondary btn-block" onclick="clearAllUsers()" style="margin-top:8px; background:#fef3c7; color:#92400e; border:1px solid #f59e0b;">👥 清除所有使用者帳號（保留員工/薪資資料）</button>
+      <button class="btn btn-secondary btn-block" onclick="diagnoseCloudResidual()" style="margin-top:8px; background:#dbeafe; color:#1e40af; border:1px solid #1e40af;">🔍 診斷雲端殘留（不刪資料 — 列出每個 collection 的本地 vs 雲端筆數）</button>
       <button class="btn btn-danger btn-block" onclick="wipeCloudOnly()" style="margin-top:8px; background:#c92a2a;">🔐 ☁ 強制重設雲端資料（清除全部後仍殘留時使用）</button>
+      <button class="btn btn-danger btn-block" onclick="nuclearWipeCloud()" style="margin-top:8px; background:#7f1d1d; color:#fff; font-weight:900; letter-spacing:2px;">☢ 核爆雲端（包含 categories / workplaces / users 全部）</button>
       <button class="btn btn-secondary btn-block" onclick="forcePullFromCloud()" style="margin-top:8px;">🔄 從雲端強制同步（清空本地以雲端為準）</button>
-      <div style="padding:8px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; font-size:12px; color:#664d03; margin-top:6px;">
-        💡 若按「清除全部」後，舊的每日記錄又自動跑回來，代表雲端還保留資料。<br>
-        請按上方「☁ 強制重設雲端資料」把 Firestore 也一併清空。<br>
+      <div style="padding:10px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; font-size:13px; color:#664d03; margin-top:6px; line-height:1.7;">
+        💡 <strong>清除順序建議</strong>：<br>
+        ① 先按「🔍 診斷雲端殘留」→ 看清楚哪些 collection 還有資料<br>
+        ② 一般「🔐 清除全部」清不乾淨時 → 按「☁ 強制重設雲端資料」<br>
+        ③ 如果還是有測試員工跑回來 → 按「☢ 核爆雲端」（會掃描所有 11 個 collection 全部刪光）<br>
+        ④ 核爆後請按 <strong>F5 重新整理</strong>，確保 onSnapshot 訂閱重置<br><br>
         🔄 <strong>從雲端強制同步</strong>：如果此裝置（尤其手機）發現資料跟其他人不同步，按這個會把本裝置清空，重新從雲端下載最新版。<br>
-        📷 <strong>30 天前舊照片</strong>：系統每天自動清理一次，會移除 30 天以前的計時照片（保留時數、金額等記錄），以節省 Firebase 免費空間。<span style="color:#dc2626; font-weight:600;">重要照片請定期從「匯出」頁下載 ZIP 備份。</span><br>
+        📷 <strong>30 天前舊照片</strong>：系統每天自動清理一次，會移除 30 天以前的計時照片（保留時數、金額等記錄）。<span style="color:#dc2626; font-weight:600;">重要照片請定期從「匯出」頁下載 ZIP 備份。</span><br>
         🔐 標示的按鈕需要管理者密碼（驗證後 10 分鐘內不再重問）。
       </div>
       <input type="file" id="restoreFile" style="display:none" accept=".json" onchange="restoreData(event)">
@@ -10284,12 +10289,21 @@ async function clearAllData() {
       await Promise.all(promises);
       // 雲端可能還有「已被軟刪除但下次又同步回來」的孤兒文件，
       // 直接掃一次 collection 把所有殘留全部刪掉
+      // ★ 注意：必須包含所有 onSnapshot 訂閱的集合，否則訂閱會把舊資料推回
       const collectionsToWipe = ['employees', 'records', 'daily', 'products', 'leaveEntitlements'];
       if (includeUsers) collectionsToWipe.push('users');
       for (const c of collectionsToWipe) {
         try {
           const snap = await ws().collection(c).get();
-          await Promise.all(snap.docs.map(d => d.ref.delete()));
+          // 用批次刪除加速
+          const docs = snap.docs;
+          const BATCH_SIZE = 400;
+          for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+            const chunk = docs.slice(i, i + BATCH_SIZE);
+            const batch = db.batch();
+            chunk.forEach(d => batch.delete(d.ref));
+            await batch.commit();
+          }
         } catch (err) {
           console.warn('清除雲端 ' + c + ' 失敗:', err);
         }
@@ -10315,6 +10329,7 @@ async function wipeCloudOnly() {
   if (!confirm('🚨 最終確認：將清空 Firestore 所有文件，本地也會同步清空！')) return;
   try {
     suppressSubscription = true;
+    // ★ 完整清單：所有有 onSnapshot 訂閱的集合都要清，否則訂閱會把舊資料推回
     const collectionsToWipe = ['employees', 'records', 'daily', 'products', 'leaveEntitlements'];
     let total = 0;
     for (const c of collectionsToWipe) {
@@ -10344,6 +10359,155 @@ async function wipeCloudOnly() {
   } catch (e) {
     suppressSubscription = false;
     alert('清除失敗：' + e.message);
+  }
+}
+
+// ☢ 核爆雲端 — 掃所有已知 collection（含 deductCats / bonusCats / workContents / leaveCats / workplaces / users）
+//    並列出每個集合的 doc 數量，再全部刪除。也清掉本地 localStorage 對應的所有 key。
+async function nuclearWipeCloud() {
+  if (!cloudReady) { alert('雲端尚未連線'); return; }
+  if (!requireAdmin('☢ 核爆雲端 Firestore（清掉所有 collection 的所有文件）')) return;
+
+  // Step 1: 先掃描雲端，列出所有殘留
+  const ALL_COLLECTIONS = [
+    'employees', 'records', 'daily', 'products', 'leaveEntitlements',
+    'users', 'deductCats', 'bonusCats', 'workContents', 'leaveCats', 'workplaces'
+  ];
+  let scanReport = '🔍 掃描雲端結果：\n\n';
+  let scanTotal = 0;
+  const counts = {};
+  try {
+    for (const c of ALL_COLLECTIONS) {
+      const snap = await ws().collection(c).get();
+      counts[c] = snap.docs.length;
+      scanTotal += snap.docs.length;
+      scanReport += `  ${c}: ${snap.docs.length} 筆\n`;
+    }
+  } catch (e) {
+    alert('掃描失敗：' + e.message);
+    return;
+  }
+  scanReport += `\n總計：${scanTotal} 筆\n`;
+
+  // 列出 employees 的內容讓使用者確認看到的是哪些殘留
+  if (counts.employees > 0) {
+    try {
+      const empSnap = await ws().collection('employees').get();
+      const names = empSnap.docs.slice(0, 8).map(d => {
+        const x = d.data();
+        return `${x.id || '-'} ${x.name || '?'}`;
+      });
+      scanReport += `\n☁ 雲端殘留員工（前 8 筆）：\n  ${names.join('\n  ')}`;
+      if (empSnap.docs.length > 8) scanReport += `\n  ... 共 ${empSnap.docs.length} 位`;
+    } catch (e) {}
+  }
+
+  if (!confirm(scanReport + '\n\n⚠ 按「確定」→ 核爆全部，連 config 也清；按「取消」→ 不動')) return;
+  if (!confirm('🚨 最終確認！這會徹底清空雲端 Firestore，按「確定」後無法復原！')) return;
+
+  // Step 2: 暫停訂閱，連續刪除所有
+  suppressSubscription = true;
+  let totalDeleted = 0;
+  let report = '';
+  try {
+    for (const c of ALL_COLLECTIONS) {
+      const snap = await ws().collection(c).get();
+      // 用批次以加速
+      const BATCH_SIZE = 400;
+      const docs = snap.docs;
+      for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+        const chunk = docs.slice(i, i + BATCH_SIZE);
+        const batch = db.batch();
+        chunk.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
+      totalDeleted += docs.length;
+      report += `✅ ${c}: 刪除 ${docs.length} 筆\n`;
+    }
+    // 也清掉 config 內可能殘留的設定（保留 meta 用於廣播）
+    try {
+      await ws().collection('config').doc('rates').delete();
+    } catch (e) {}
+
+    // Step 3: 同步清空本地所有相關 storage
+    employees = []; records = []; dailyEntries = []; products = []; leaveEntitlements = [];
+    users = []; deductCats = []; bonusCats = []; workContents = []; leaveCategories = []; workplaces = [];
+    [
+      STORE.employees, STORE.records, STORE.daily, STORE.products, STORE.leaveEntitlements,
+      STORE.users, STORE.deductCats, STORE.bonusCats, STORE.workContents, STORE.leaveCats, STORE.workplaces
+    ].forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
+
+    // 廣播清除，其他裝置下次開啟自動清乾淨
+    await broadcastClear('nuclearWipe');
+    suppressSubscription = false;
+
+    // 強制刷新 UI
+    if (typeof refreshEmployeeList === 'function') refreshEmployeeList();
+    if (typeof refreshEmpDropdown === 'function') refreshEmpDropdown();
+    if (typeof refreshRecords === 'function') refreshRecords();
+    if (typeof refreshDailyEntries === 'function') refreshDailyEntries();
+    if (typeof refreshProductList === 'function') refreshProductList();
+    if (typeof refreshUserList === 'function') refreshUserList();
+    if (typeof updateSummary === 'function') updateSummary();
+    if (typeof refreshEntitlementList === 'function') refreshEntitlementList();
+
+    alert(
+      `☢ 核爆完成！\n\n` +
+      report +
+      `\n總計：刪除 ${totalDeleted} 筆雲端文件\n` +
+      `本地：所有相關 localStorage 已清除\n` +
+      `廣播：其他裝置下次開啟會自動清空\n\n` +
+      `💡 強烈建議：按 F5 重新整理本頁，徹底重置`
+    );
+  } catch (e) {
+    suppressSubscription = false;
+    alert('☢ 核爆失敗：' + e.message + '\n\n請檢查 Firestore 規則是否允許刪除');
+  }
+}
+
+// 🔍 診斷雲端殘留 — 不刪資料，只列出每個 collection 的 doc 數量
+async function diagnoseCloudResidual() {
+  if (!cloudReady) { alert('雲端尚未連線'); return; }
+  const ALL_COLLECTIONS = [
+    'employees', 'records', 'daily', 'products', 'leaveEntitlements',
+    'users', 'deductCats', 'bonusCats', 'workContents', 'leaveCats', 'workplaces'
+  ];
+  let report = `🔍 雲端 Firestore 殘留診斷\n（路徑：workspaces/${WORKSPACE_ID}）\n\n`;
+  let cloudTotal = 0;
+  try {
+    for (const c of ALL_COLLECTIONS) {
+      const snap = await ws().collection(c).get();
+      const localCount =
+        c === 'employees' ? employees.length :
+        c === 'records' ? records.length :
+        c === 'daily' ? dailyEntries.length :
+        c === 'products' ? products.length :
+        c === 'leaveEntitlements' ? (leaveEntitlements && leaveEntitlements.length || 0) :
+        c === 'users' ? users.length :
+        c === 'leaveCats' ? leaveCategories.length :
+        c === 'workContents' ? workContents.length :
+        c === 'workplaces' ? workplaces.length :
+        c === 'deductCats' ? (typeof deductCats !== 'undefined' ? deductCats.length : 0) :
+        c === 'bonusCats' ? (typeof bonusCats !== 'undefined' ? bonusCats.length : 0) :
+        '?';
+      const mismatch = snap.docs.length !== localCount ? ' ⚠ 不一致' : '';
+      report += `  ${c.padEnd(20)}: 雲端 ${snap.docs.length} | 本地 ${localCount}${mismatch}\n`;
+      cloudTotal += snap.docs.length;
+    }
+    // 列出雲端殘留員工的前 10 筆
+    const empSnap = await ws().collection('employees').get();
+    if (empSnap.docs.length > 0) {
+      report += `\n☁ 雲端員工列表（前 10 筆）：\n`;
+      empSnap.docs.slice(0, 10).forEach(d => {
+        const x = d.data();
+        report += `  ${x.id || '-'} ${x.name || '?'}（_id=${(d.id || '').slice(-8)}）\n`;
+      });
+      if (empSnap.docs.length > 10) report += `  ... 共 ${empSnap.docs.length} 位\n`;
+    }
+    report += `\n總計雲端：${cloudTotal} 筆`;
+    alert(report);
+  } catch (e) {
+    alert('診斷失敗：' + e.message);
   }
 }
 
