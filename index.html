@@ -5323,6 +5323,51 @@ function refreshEmpStatusConfirm() {
       <div style="margin-top:6px; font-size:11px; color:#92400e; background:#fef3c7; padding:6px 10px; border-radius:6px;">
         💡 系統會以**員工資料最後一次更新**的設定計算本月薪資。如果中途有改過（例如月薪制改時薪制、約定制改法規制），請先確認上面顯示的是您要的版本。
       </div>
+      ${(() => {
+        // ⚖ 合規提示：根據員工類型 + 設定，列出建議簽署文件
+        const tips = [];
+        const type = emp.isShift ? '月薪+排班' : (emp.isHourly ? '時薪制' : '月薪制');
+        // 1. 月薪制（含排班）→ 建議簽勞資會議同意書（讓月OT 46→54h）
+        if (!emp.isHourly && !emp.responsibilitySystem) {
+          if (!emp.otAgreement) {
+            tips.push({ icon: '📝', color: '#dc2626', bg: '#fee2e2',
+              text: `<strong>建議簽「勞資會議延長工時同意書」</strong>：法定月加班上限 46h，簽過可放寬到 54h（每 3 月 138h）。範本：<a href="勞資會議同意書_範本.html" target="_blank" style="color:#dc2626; font-weight:700;">查看範本</a>` });
+          }
+        }
+        // 2. 月薪+排班 → 額外建議簽變形工時同意書（彈性日工時）
+        if (emp.isShift && !emp.flexibleHours) {
+          tips.push({ icon: '🔁', color: '#7c2d12', bg: '#fff7ed',
+            text: `<strong>排班制建議簽「變形工時同意書」</strong>：二週/四週/八週變形可放寬單日工時上限（8h → 10h），符合排班彈性。員工頁可勾選 ${'<code>變形工時類型</code>'}` });
+        }
+        // 3. 時薪/兼職 + 約定制 → 建議簽「約定時薪同意書」
+        if (emp.isHourly && (emp.holidayPayMode === 'agreement')) {
+          tips.push({ icon: '🤝', color: '#075985', bg: '#e0f2fe',
+            text: `<strong>約定制：應簽「約定時薪同意書」</strong>：勞動部要求書面合意。範本：<a href="約定時薪同意書_範本.html" target="_blank" style="color:#075985; font-weight:700;">查看範本</a>` });
+        }
+        // 4. §84-1 責任制 → 須核備
+        if (emp.responsibilitySystem) {
+          tips.push({ icon: '👔', color: '#5b21b6', bg: '#ede9fe',
+            text: `<strong>§84-1 責任制須核備</strong>：個別書面同意 + 報主管機關核備（限監督管理人、監視性、間歇性、特殊性工作）` });
+        }
+        // 5. 沒投保 → 提醒
+        if (!emp.insuredDate) {
+          tips.push({ icon: '⚠', color: '#991b1b', bg: '#fee2e2',
+            text: `<strong>未投保</strong>：勞健保不扣款；若未來健檢/勞檢，需有書面證明（合約制/自願不投保聲明）` });
+        }
+        // 6. 通用：提醒每日加班 §24 拆分
+        tips.push({ icon: '⚖', color: '#1e40af', bg: '#dbeafe',
+          text: `<strong>單日加班拆分（§24）</strong>：平日 OT 前 2h ×4/3、第 3-4h ×5/3、>4h <span style="color:#dc2626;">違法</span>。系統用月合計簡化算，「⚖ 工時稽核」會逐日列出拆分明細（含休息日 §24-2、國定假日 §39）` });
+
+        if (tips.length === 0) return '';
+        return `
+          <div style="margin-top:8px; padding:8px 10px; background:#f0fdf4; border-left:3px solid #059669; border-radius:6px;">
+            <div style="font-weight:700; color:#065f46; font-size:12px; margin-bottom:6px;">📋 ${type} 員工合規提醒（${tips.length} 項）</div>
+            ${tips.map(t => `
+              <div style="padding:6px 8px; background:${t.bg}; border-radius:4px; margin-bottom:4px; font-size:11px; color:${t.color}; line-height:1.5;">
+                ${t.icon} ${t.text}
+              </div>`).join('')}
+          </div>`;
+      })()}
     </div>
   `;
 }
@@ -5370,6 +5415,59 @@ function refreshLaborAuditCard() {
 
   card.style.display = 'block';
   let html = respNote;
+
+  // ★ 每日加班拆分明細（§24 / §39）
+  if (result.dailyOtBreakdown && result.dailyOtBreakdown.length > 0) {
+    const _payMode = emp.holidayPayMode || 'simple';
+    const dayKindLabel = { weekday:'平日', restday:'休息日', weeklyOff:'例假日', holiday:'國定假日' };
+    const dayKindColor = { weekday:'#1e40af', restday:'#9a3412', weeklyOff:'#991b1b', holiday:'#be185d' };
+    let totalLegalPay = 0, totalIllegalHours = 0;
+    const _empHourly = emp.hourlyRate || (emp.baseSalary > 0 ? Math.round(emp.baseSalary / 30 / 8) : 0);
+
+    const rows = result.dailyOtBreakdown.map(bd => {
+      const partsText = bd.parts.map(p => {
+        const pay = Math.round(p.hrs * (_payMode === 'agreement' ? 1.0 : p.rate) * _empHourly);
+        if (p.label.startsWith('>4h')) totalIllegalHours += p.hrs;
+        else totalLegalPay += pay;
+        const isIllegal = p.label.includes('違法') || p.label.includes('禁止');
+        return `<span style="display:inline-block; padding:2px 6px; margin:1px; background:${isIllegal?'#fee2e2':'#f0f9ff'}; color:${isIllegal?'#991b1b':'#075985'}; border-radius:4px; font-size:11px; font-weight:600;">${p.hrs}h ${p.label} = NT$ ${formatMoney(pay)}</span>`;
+      }).join(' ');
+      return `
+        <tr>
+          <td style="padding:4px 6px; border-bottom:1px solid #e5e7eb; font-size:11px;">${bd.date}</td>
+          <td style="padding:4px 6px; border-bottom:1px solid #e5e7eb; font-size:11px; color:${dayKindColor[bd.dayKind]}; font-weight:700;">${dayKindLabel[bd.dayKind]}</td>
+          <td style="padding:4px 6px; border-bottom:1px solid #e5e7eb; font-size:11px; text-align:center;">${bd.otHrs}h</td>
+          <td style="padding:4px 6px; border-bottom:1px solid #e5e7eb;">${partsText}</td>
+        </tr>`;
+    }).join('');
+    const modeNote = _payMode === 'agreement'
+      ? '⚠ 此員工為「約定制」→ 加班費含於時薪內、所有倍率視為 ×1.0；建議僅用於部分工時/學生且時薪明顯高於基本×2'
+      : '依勞基法 §24 / §39 計算「應領」加班費，與系統實際 ot1/ot2 月合計可能略有差異（系統以月合計簡化算）';
+    html += `
+      <div style="padding:10px 12px; background:linear-gradient(135deg,#fef9c3,#fef3c7); border-left:4px solid #f59e0b; border-radius:8px; margin-bottom:10px;">
+        <div style="font-weight:700; color:#92400e; margin-bottom:6px;">📊 每日加班拆分（§24 / §39）— 共 ${result.dailyOtBreakdown.length} 天有加班</div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse; background:white; border-radius:6px; overflow:hidden;">
+            <thead>
+              <tr style="background:#fff7ed;">
+                <th style="padding:6px; font-size:11px; text-align:left;">日期</th>
+                <th style="padding:6px; font-size:11px; text-align:left;">日類型</th>
+                <th style="padding:6px; font-size:11px;">OT 時數</th>
+                <th style="padding:6px; font-size:11px; text-align:left;">拆分（時薪 NT$ ${_empHourly}）</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        <div style="margin-top:6px; font-size:11px; color:#78350f;">
+          ✅ 應給付加班費合計：<strong>NT$ ${formatMoney(totalLegalPay)}</strong>
+          ${totalIllegalHours > 0 ? `<span style="margin-left:10px; color:#991b1b;">⛔ 違法時數：<strong>${totalIllegalHours}h</strong>（仍須給付，但屬違法應改善）</span>` : ''}
+          <br><span style="color:#9a3412;">📜 ${modeNote}</span>
+        </div>
+      </div>
+    `;
+  }
+
   if (result.violations.length > 0) {
     html += `<div style="padding:12px 14px; background:#fee2e2; border-left:4px solid #dc2626; border-radius:8px; margin-bottom:10px;">
       <div style="font-weight:700; color:#991b1b; margin-bottom:8px;">🚨 違規 ${result.violations.length} 項（可能被罰 2~100 萬）</div>
@@ -5432,6 +5530,8 @@ function auditLaborLaw(empId, month) {
   });
 
   // ========== 檢查 1: 單日工時 > 12 小時（§32）==========
+  // ★ 同時拆分單日加班時數 → §24 前2h × 4/3、第3-4h × 5/3、>4h 違法
+  const dailyOtBreakdown = []; // 給 UI 顯示用
   if (!isResponsibility) {
     Object.keys(byDate).forEach(date => {
       const workEntries = byDate[date].filter(d => {
@@ -5439,8 +5539,12 @@ function auditLaborLaw(empId, month) {
         return t === 'normal' || t === '加班' || t === '時薪加班';
       });
       const totalHrs = workEntries.reduce((s, d) => s + (d.hours || 0), 0);
+      const otHrs = workEntries.filter(d => (d.attType === '加班' || d.attType === '時薪加班'))
+        .reduce((s, d) => s + (d.hours || 0), 0);
       const dailyLimit = (emp.flexibleHours === '2week' || emp.flexibleHours === '4week') ? 10 : 8;
       const dailyMax = dailyLimit + 4; // 正常 + OT 4h = 最多 12h
+
+      // §32 單日工時上限
       if (totalHrs > dailyMax) {
         violations.push({
           date, severity: 'high',
@@ -5448,6 +5552,69 @@ function auditLaborLaw(empId, month) {
           detail: `實際 ${totalHrs}h（正常 ${dailyLimit}h + OT 最多 4h）`,
           law: '勞基法 §32'
         });
+      }
+
+      // ★ 判定為平日 / 休息日 / 例假 / 國定假日（用日期判斷）
+      const dt = new Date(date);
+      const dow = dt.getDay();
+      const isHoliday = (typeof holidays !== 'undefined' && Array.isArray(holidays)) ? holidays.includes(date) : false;
+      let dayKind = 'weekday'; // weekday(平日) / restday(休息日,週六) / weeklyOff(例假,週日) / holiday(國定假日)
+      if (isHoliday) dayKind = 'holiday';
+      else if (dow === 0) dayKind = 'weeklyOff';
+      else if (dow === 6) dayKind = 'restday';
+
+      // ★ 單日加班 §24 拆分（僅平日加班與休息日加班適用拆分；國定/例假整日加倍）
+      if (otHrs > 0) {
+        let bd = { date, dayKind, otHrs, totalHrs, parts: [], illegal: 0 };
+        if (dayKind === 'weekday') {
+          // §24 平日：前 2h × 4/3、第 3-4h × 5/3、>4h 違法（§32 上限）
+          const h12 = Math.min(otHrs, 2);
+          const h34 = Math.min(Math.max(otHrs - 2, 0), 2);
+          const hOver = Math.max(otHrs - 4, 0);
+          if (h12 > 0) bd.parts.push({ hrs: h12, rate: 4/3, label: '前 2h ×4/3', law: '§24-1' });
+          if (h34 > 0) bd.parts.push({ hrs: h34, rate: 5/3, label: '第 3-4h ×5/3', law: '§24-1' });
+          if (hOver > 0) {
+            bd.parts.push({ hrs: hOver, rate: 5/3, label: `>4h 違法（${hOver}h）`, law: '§32 上限' });
+            bd.illegal = hOver;
+            violations.push({
+              date, severity: 'high',
+              rule: `單日平日加班超過 4h（§32 上限）`,
+              detail: `實際 OT ${otHrs}h，超出 4h 部分 ${hOver}h 為違法`,
+              law: '勞基法 §32'
+            });
+          }
+        } else if (dayKind === 'restday') {
+          // §24-2 休息日：前 2h ×4/3、第 3-8h ×5/3、第 9-12h ×8/3 (≈2.67)
+          const h12 = Math.min(otHrs, 2);
+          const h38 = Math.min(Math.max(otHrs - 2, 0), 6);
+          const h912 = Math.min(Math.max(otHrs - 8, 0), 4);
+          const hOver = Math.max(otHrs - 12, 0);
+          if (h12 > 0) bd.parts.push({ hrs: h12, rate: 4/3, label: '前 2h ×4/3', law: '§24-2' });
+          if (h38 > 0) bd.parts.push({ hrs: h38, rate: 5/3, label: '第 3-8h ×5/3', law: '§24-2' });
+          if (h912 > 0) bd.parts.push({ hrs: h912, rate: 8/3, label: '第 9-12h ×8/3', law: '§24-2' });
+          if (hOver > 0) {
+            bd.illegal = hOver;
+            violations.push({
+              date, severity: 'high',
+              rule: `休息日加班超過 12h`,
+              detail: `實際 ${otHrs}h，超出 12h 部分為違法`,
+              law: '勞基法 §32 / §36'
+            });
+          }
+        } else if (dayKind === 'holiday') {
+          // §39 國定假日：當日工資加倍（不論時數，整日加倍給）
+          bd.parts.push({ hrs: otHrs, rate: 2.0, label: '國定假日 ×2', law: '§39' });
+        } else if (dayKind === 'weeklyOff') {
+          // §40 例假日：禁止出勤（除非天災事變或特殊情況），且加倍給並補假
+          bd.parts.push({ hrs: otHrs, rate: 2.0, label: '例假日 ×2 + 補假', law: '§40 (限天災)' });
+          violations.push({
+            date, severity: 'high',
+            rule: `例假日出勤（§40 原則禁止）`,
+            detail: `${otHrs}h 例假日工作，僅限天災/事變/突發事件 + 須事後補假`,
+            law: '勞基法 §40'
+          });
+        }
+        dailyOtBreakdown.push(bd);
       }
     });
   }
@@ -5582,7 +5749,12 @@ function auditLaborLaw(empId, month) {
     });
   }
 
-  return { violations, warnings, skipped: false, isResponsibility, contractType: emp.contractType || 'fulltime' };
+  return {
+    violations, warnings, skipped: false,
+    isResponsibility,
+    contractType: emp.contractType || 'fulltime',
+    dailyOtBreakdown
+  };
 }
 
 // ========= 🎉 特別假額度追蹤（婚、喪、產、陪產、家庭照顧）=========
