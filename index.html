@@ -991,9 +991,38 @@
             <input type="text" id="batchPieceNote" placeholder="選填">
           </div>
         </div>
+        <!-- 🆕 上班時間（用於最低時薪檢查） -->
+        <div style="padding:8px 10px; background:#eff6ff; border-left:3px solid #3b82f6; border-radius:4px; font-size:12px; color:#1e40af; margin-bottom:8px;">
+          ⏰ <strong>上班時間（用於最低時薪檢查，選填）</strong>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>上班時間</label>
+            <input type="text" id="batchPieceStart" value="08:00" placeholder="HH:MM" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this); updateBatchPiecePreview()">
+          </div>
+          <div class="form-group">
+            <label>下班時間</label>
+            <input type="text" id="batchPieceEnd" value="17:00" placeholder="HH:MM" pattern="^([01]?\d|2[0-3]):[0-5]\d$" inputmode="numeric" maxlength="5" onblur="formatTime24(this); updateBatchPiecePreview()">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>休息 (分鐘)</label>
+            <div style="display:flex; gap:4px;">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('batchPieceBreak').value=0; updateBatchPiecePreview()" style="padding:4px 8px; font-size:11px;">無</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('batchPieceBreak').value=60; updateBatchPiecePreview()" style="padding:4px 8px; font-size:11px;">1小時</button>
+              <input type="number" id="batchPieceBreak" placeholder="分" value="60" min="0" step="5" style="flex:1;" oninput="updateBatchPiecePreview()">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>＆nbsp;</label>
+            <div style="font-size:11px; color:#6b7280; padding-top:8px;">不填上下班時間 → 不檢查最低時薪</div>
+          </div>
+        </div>
         <div id="batchPiecePreviewBox" style="padding:8px 10px; background:#fef3c7; border-left:3px solid #f59e0b; border-radius:4px; font-size:12px; color:#92400e; margin-bottom:10px;">
           📦 <strong>每天</strong> 0 件 × NT$ 0 = <strong>NT$ 0</strong>
         </div>
+        <div id="batchPieceMinWageWarn" style="display:none; padding:10px 12px; background:#fee2e2; border-left:4px solid #dc2626; border-radius:4px; font-size:12px; color:#991b1b; margin-bottom:10px;"></div>
       </div>
 
       <!-- 預覽：每天工時與金額（計時模式） -->
@@ -5055,7 +5084,13 @@ function refreshLeaveList() {
     return;
   }
   box.innerHTML = visible.map(e => {
-    const info = calcAnnualLeave(e.hireDate, baseDate);
+    // ★ 雙重計算：到職日 / 投保日
+    const infoHire = calcAnnualLeave(e.hireDate, baseDate);
+    const infoInsured = calcAnnualLeave(e.insuredDate, baseDate);
+    // 員工偏好基準：'hire'（預設）或 'insured'
+    const basis = e.leaveBasis || 'hire';
+    const info = (basis === 'insured' && infoInsured.valid) ? infoInsured : infoHire;
+
     const isHourly = !!e.isHourly;
     const weekly = parseFloat(e.weeklyHours) || 0;
     const override = parseFloat(e.leaveEntitledOverride);
@@ -5072,6 +5107,15 @@ function refreshLeaveList() {
       } else {
         entitled = 0;
         formulaNote = '請填每週工時';
+      }
+    }
+    // ★ 雙重計算結果（給 UI 顯示用）
+    let entitledHire = infoHire.entitled;
+    let entitledInsured = infoInsured.entitled;
+    if (isHourly) {
+      if (weekly > 0) {
+        if (infoHire.valid) entitledHire = Math.round(infoHire.entitled * weekly / 40 * 10) / 10;
+        if (infoInsured.valid) entitledInsured = Math.round(infoInsured.entitled * weekly / 40 * 10) / 10;
       }
     }
     // ★ 已休：自動從 dailyEntries 累計當年度特休時數 / 8
@@ -5133,6 +5177,35 @@ function refreshLeaveList() {
     const inputStyle = 'width:100%; box-sizing:border-box; padding:4px; text-align:center; font-weight:700; font-size:17px; border:1px solid; border-radius:4px; background:white; height:30px;';
     const valueStyle = 'font-weight:700; font-size:17px; height:30px; display:flex; align-items:center; justify-content:center;';
     const unitStyle = 'font-size:10px; color:#6b7280;';
+    // ★ 雙重計算對照表：到職日 vs 投保日
+    const dualCompareHtml = `
+      <div style="padding:8px 10px; background:linear-gradient(135deg,#eff6ff 0%,#fef3c7 100%); border:1px dashed #f59e0b; border-radius:6px; margin-top:4px;">
+        <div style="font-size:11px; color:#92400e; font-weight:700; margin-bottom:4px;">📊 雙重計算對照（依勞基法 §38，用「到職日」；勞保權益用「投保日」）</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; font-size:11px;">
+          <label style="padding:6px; background:${basis==='hire'?'#dbeafe':'white'}; border:2px solid ${basis==='hire'?'#1e40af':'#e5e7eb'}; border-radius:6px; cursor:pointer; display:flex; flex-direction:column; gap:2px;">
+            <span style="display:flex; align-items:center; gap:4px;">
+              <input type="radio" name="basis_${e._id}" value="hire" ${basis==='hire'?'checked':''} onchange="updateEmpLeaveBasis('${e._id}','hire')">
+              <strong style="color:#1e40af;">📅 依到職日</strong>
+            </span>
+            <span style="color:#374151;">${e.hireDate || '<span style=color:#dc2626;>未填</span>'}</span>
+            <span style="color:#1e40af; font-weight:700;">應有 ${entitledHire} 天 ${infoHire.valid?`(${infoHire.years}年${infoHire.months}月)`:''}</span>
+          </label>
+          <label style="padding:6px; background:${basis==='insured'?'#dcfce7':'white'}; border:2px solid ${basis==='insured'?'#059669':'#e5e7eb'}; border-radius:6px; cursor:pointer; display:flex; flex-direction:column; gap:2px;">
+            <span style="display:flex; align-items:center; gap:4px;">
+              <input type="radio" name="basis_${e._id}" value="insured" ${basis==='insured'?'checked':''} ${!infoInsured.valid?'disabled':''} onchange="updateEmpLeaveBasis('${e._id}','insured')">
+              <strong style="color:#059669;">🏥 依投保日</strong>
+            </span>
+            <span style="color:#374151;">${e.insuredDate || '<span style=color:#dc2626;>未填</span>'}</span>
+            <span style="color:#059669; font-weight:700;">應有 ${entitledInsured} 天 ${infoInsured.valid?`(${infoInsured.years}年${infoInsured.months}月)`:''}</span>
+          </label>
+        </div>
+        ${(infoHire.valid && infoInsured.valid && entitledHire !== entitledInsured) ? `
+          <div style="margin-top:4px; padding:4px 8px; background:#fef3c7; border-left:3px solid #f59e0b; border-radius:4px; font-size:10px; color:#92400e;">
+            ⚠ 兩種基準計算結果不同（差 ${Math.abs(entitledHire - entitledInsured)} 天）。勞基法 §38 規定以<strong>到職日</strong>為準；若投保日晚於到職日，員工權益應以到職日計算。
+          </div>` : ''
+        }
+      </div>
+    `;
     return `
       <div class="employee-item" style="flex-direction:column; align-items:stretch; gap:8px;">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
@@ -5140,8 +5213,10 @@ function refreshLeaveList() {
           <div style="font-size:12px; color:#6b7280;">${tierHint}</div>
         </div>
         ${hourlyHint}
+        ${dualCompareHtml}
         <div style="background:#f9fafb; padding:8px; border-radius:6px; font-size:12px; color:#374151; text-align:center; line-height:1.6;">
           剩餘 = <strong style="color:#6b21a8;">去年結轉 ${carryover}</strong> + <strong style="color:#1e40af;">應有 ${entitled}</strong> − <strong style="color:#92400e;">已休 ${used}</strong> − <strong style="color:#7c2d12;">補薪 ${compensated}</strong> = <strong style="color:#059669; font-size:15px;">${remaining} 天</strong>
+          <div style="font-size:10px; color:#6b7280; margin-top:2px;">（基準：${basis==='insured'?'🏥 投保日':'📅 到職日'}）</div>
         </div>
         <div style="display:grid; grid-template-columns: repeat(5, 1fr); gap:6px; font-size:13px;">
           <div style="${cellBase} background:#faf5ff;">
@@ -5803,6 +5878,17 @@ function updateEmpLeaveCompensated(empId, value) {
   const emp = employees.find(e => e._id === empId);
   if (!emp) return;
   emp.leaveCompensated = parseFloat(value) || 0;
+  save(STORE.employees, employees);
+  cloudSave('employees', emp);
+  refreshLeaveList();
+}
+
+// 🆕 更新員工特休計算基準（hire = 到職日 / insured = 投保日）
+function updateEmpLeaveBasis(empId, basis) {
+  const emp = employees.find(e => e._id === empId);
+  if (!emp) return;
+  emp.leaveBasis = (basis === 'insured') ? 'insured' : 'hire';
+  emp.updatedAt = new Date().toISOString();
   save(STORE.employees, employees);
   cloudSave('employees', emp);
   refreshLeaveList();
@@ -6735,17 +6821,28 @@ function setBatchMode(mode) {
     pieceBtn.className = 'btn btn-primary';
     hourFields.style.display = 'none';
     pieceFields.style.display = '';
-    // 同步產品下拉
+    // 同步產品下拉（每次切換都重新填一次，確保拿到最新產品 & defaultPrice）
     const sel = document.getElementById('batchPieceProduct');
-    if (sel && sel.options.length <= 1) {
+    if (sel) {
+      const currentVal = sel.value;
       sel.innerHTML = '<option value="">-- 請選擇 --</option>' +
-        products.map(p => `<option value="${p._id}" data-price="${p.price || ''}">${escapeHtml(p.name)} ${p.price ? '(預設 ' + p.price + ')' : ''}</option>`).join('');
-      sel.addEventListener('change', () => {
-        const opt = sel.options[sel.selectedIndex];
-        const price = opt && opt.dataset.price;
-        if (price) document.getElementById('batchPiecePrice').value = price;
-        updateBatchPiecePreview();
-      });
+        (products || []).map(p => {
+          const dp = p.defaultPrice || p.price || '';
+          const priceText = dp ? ` (預設 NT$ ${dp})` : '';
+          const photoMark = p.photo ? ' 📷' : '';
+          return `<option value="${p._id}" data-price="${dp}">${escapeHtml(p.name)}${priceText}${photoMark}</option>`;
+        }).join('');
+      if (currentVal) sel.value = currentVal;
+      // 移除舊監聽，重新綁
+      if (!sel._pieceBatchBound) {
+        sel.addEventListener('change', () => {
+          const opt = sel.options[sel.selectedIndex];
+          const price = opt && opt.dataset.price;
+          if (price) document.getElementById('batchPiecePrice').value = price;
+          updateBatchPiecePreview();
+        });
+        sel._pieceBatchBound = true;
+      }
     }
   }
 }
@@ -6755,7 +6852,52 @@ function updateBatchPiecePreview() {
   const price = parseFloat(document.getElementById('batchPiecePrice').value) || 0;
   const subtotal = qty * price;
   const box = document.getElementById('batchPiecePreviewBox');
-  if (box) box.innerHTML = `📦 <strong>每天</strong> ${qty} 件 × NT$ ${price} = <strong>NT$ ${formatMoney(subtotal)}</strong>`;
+  if (!box) return;
+
+  // 計算工時與時薪換算（用於最低時薪檢查）
+  const start = (document.getElementById('batchPieceStart') || {}).value || '';
+  const end = (document.getElementById('batchPieceEnd') || {}).value || '';
+  const brk = parseFloat((document.getElementById('batchPieceBreak') || {}).value) || 0;
+  let hours = 0;
+  if (start && end && typeof calcHours === 'function') {
+    hours = calcHours(start, end, brk);
+  }
+
+  let html = `📦 <strong>每天</strong> ${qty} 件 × NT$ ${price} = <strong>NT$ ${formatMoney(subtotal)}</strong>`;
+  if (hours > 0 && subtotal > 0) {
+    const implicitRate = subtotal / hours;
+    html += `<br>⏱ 工時 <strong>${hours}h</strong> · 換算時薪 <strong>NT$ ${implicitRate.toFixed(1)}/h</strong>`;
+  }
+  box.innerHTML = html;
+
+  // ⚖ 最低時薪檢查（114年起 NT$ 190/h）
+  const MIN_WAGE = 190;
+  const warnBox = document.getElementById('batchPieceMinWageWarn');
+  if (!warnBox) return;
+  if (hours > 0 && subtotal > 0) {
+    const implicitRate = subtotal / hours;
+    if (implicitRate < MIN_WAGE) {
+      const diff = MIN_WAGE - implicitRate;
+      const dailyShortage = Math.ceil(diff * hours);
+      warnBox.style.display = '';
+      warnBox.innerHTML =
+        `⚠ <strong>低於基本工資警告</strong><br>` +
+        `每天 ${qty} 件 × NT$ ${price} = NT$ ${formatMoney(subtotal)} ÷ ${hours}h = <strong>NT$ ${implicitRate.toFixed(1)}/h</strong><br>` +
+        `低於勞基法基本時薪 NT$ ${MIN_WAGE}/h，每天差 NT$ ${dailyShortage}。<br>` +
+        `<span style="font-size:11px; color:#6b7280;">建議：① 調高單價 ② 補差額 ③ 改為計時模式</span>`;
+    } else {
+      warnBox.style.display = '';
+      warnBox.style.background = '#dcfce7';
+      warnBox.style.borderLeftColor = '#16a34a';
+      warnBox.style.color = '#15803d';
+      warnBox.innerHTML = `✓ 換算時薪 NT$ ${implicitRate.toFixed(1)}/h ≥ 基本工資 NT$ ${MIN_WAGE}/h，符合勞基法。`;
+    }
+  } else {
+    warnBox.style.display = 'none';
+    warnBox.style.background = '#fee2e2';
+    warnBox.style.borderLeftColor = '#dc2626';
+    warnBox.style.color = '#991b1b';
+  }
 }
 
 // 🆕 論件批次儲存
@@ -6772,8 +6914,39 @@ function batchSavePieceAttendance() {
   if (qty <= 0) { alert('每日數量必須 > 0'); return; }
   if (price <= 0) { alert('單價必須 > 0'); return; }
 
+  // 上班時間（選填，用於最低時薪檢查與打卡）
+  const startEl = document.getElementById('batchPieceStart');
+  const endEl = document.getElementById('batchPieceEnd');
+  const brkEl = document.getElementById('batchPieceBreak');
+  const start = startEl ? startEl.value : '';
+  const end = endEl ? endEl.value : '';
+  const brk = brkEl ? (parseFloat(brkEl.value) || 0) : 0;
+  let hours = 0;
+  if (start && end && typeof calcHours === 'function') hours = calcHours(start, end, brk);
+
   const checkedDates = [...document.querySelectorAll('.batch-day-chk:checked:not(:disabled)')].map(c => c.dataset.date);
   if (checkedDates.length === 0) { alert('請勾選要新增的日期'); return; }
+
+  // ⚖ 最低時薪檢查（114 年起 NT$ 190/h）
+  const MIN_WAGE = 190;
+  const subtotal = Math.round(qty * price * 100) / 100;
+  if (hours > 0) {
+    const implicitRate = subtotal / hours;
+    if (implicitRate < MIN_WAGE) {
+      const diff = MIN_WAGE - implicitRate;
+      const okMinWage = confirm(
+        `⚠ 警告：論件換算時薪低於基本工資！\n\n` +
+        `每天 ${qty} 件 × NT$ ${price} = NT$ ${formatMoney(subtotal)}\n` +
+        `÷ 工時 ${hours}h = NT$ ${implicitRate.toFixed(1)}/h\n` +
+        `基本時薪 NT$ ${MIN_WAGE}/h（114 年起）\n` +
+        `每天差 NT$ ${Math.ceil(diff * hours)}\n\n` +
+        `依勞基法 §21，工資不得低於基本工資。\n` +
+        `按「確定」→ 我了解風險，仍要繼續儲存（公司應於月薪結算時自動補足差額）\n` +
+        `按「取消」→ 修改單價或工時`
+      );
+      if (!okMinWage) return;
+    }
+  }
 
   // 重複檢查（同產品同日期）
   const dupDates = checkedDates.filter(date =>
@@ -6791,8 +6964,8 @@ function batchSavePieceAttendance() {
     if (datesToAdd.length === 0) return;
   }
 
-  const subtotal = Math.round(qty * price * 100) / 100;
-  if (!confirm(`將為 ${emp.name} 批次新增 ${datesToAdd.length} 天論件記錄：\n  產品：${product.name}\n  每天 ${qty} 件 × NT$ ${price} = NT$ ${formatMoney(subtotal)}\n  總計：NT$ ${formatMoney(subtotal * datesToAdd.length)}\n\n繼續？`)) return;
+  const timeNote = (start && end) ? `（${start}-${end}，扣休息 ${brk} 分，工時 ${hours}h）` : '';
+  if (!confirm(`將為 ${emp.name} 批次新增 ${datesToAdd.length} 天論件記錄：\n  產品：${product.name}\n  每天 ${qty} 件 × NT$ ${price} = NT$ ${formatMoney(subtotal)}${timeNote}\n  總計：NT$ ${formatMoney(subtotal * datesToAdd.length)}\n\n繼續？`)) return;
 
   let baseId = Date.now();
   let count = 0;
@@ -6810,6 +6983,13 @@ function batchSavePieceAttendance() {
       photo: null,
       createdAt: new Date().toISOString()
     };
+    // 若有填上下班時間 → 一併記錄（用於工時稽核 & 出勤明細）
+    if (start && end) {
+      entry.startTime = start;
+      entry.endTime = end;
+      entry.breakMin = brk;
+      entry.hours = hours;
+    }
     dailyEntries.push(entry);
     cloudSave('daily', entry);
     count++;
@@ -7382,49 +7562,75 @@ function printSalarySlip() {
   if (!resultHtml || resultHtml.trim() === '') { alert('請先按「預覽計算」產生結果'); return; }
 
   const today = new Date().toISOString().slice(0, 10);
-  const companyName = '員工薪資單'; // 可改為公司名稱
-  const printHtml = `
-    <!DOCTYPE html>
-    <html lang="zh-TW"><head>
-      <meta charset="UTF-8">
-      <title>薪資單 - ${escapeHtml(emp.name)} - ${month}</title>
-      <style>
-        body { font-family: "Microsoft JhengHei", "PingFang TC", sans-serif; padding: 24px; color: #111; }
-        h1 { text-align: center; color: #059669; border-bottom: 3px double #059669; padding-bottom: 10px; margin: 0 0 16px; }
-        .info-box { background:#f9fafb; padding:12px 16px; border-radius:8px; margin-bottom:16px; font-size:14px; line-height:1.8; }
-        .info-box div { display:flex; justify-content:space-between; }
-        .info-box strong { color:#065f46; }
-        .result-row { display:flex; justify-content:space-between; padding: 6px 4px; border-bottom: 1px dashed #d1d5db; font-size:14px; }
-        .result-row.total { background:#ecfdf5; font-weight:bold; font-size:17px; color:#059669; padding:10px; border-radius:6px; margin-top:8px; border-bottom:none; }
-        .footer { margin-top:24px; padding-top:12px; border-top:1px solid #e5e7eb; font-size:11px; color:#6b7280; display:flex; justify-content:space-between; }
-        .sign-box { margin-top:36px; display:flex; justify-content:space-between; font-size:13px; }
-        .sign-box > div { width:45%; border-top:1px solid #111; padding-top:4px; text-align:center; }
-        @media print { body { padding: 0; } }
-      </style>
-    </head>
-    <body>
-      <h1>${companyName}</h1>
-      <div class="info-box">
-        <div><span>員工姓名：<strong>${escapeHtml(emp.name)}</strong></span><span>員工編號：${escapeHtml(emp.id || '-')}</span></div>
-        <div><span>薪資月份：<strong>${month}</strong></span><span>列印日期：${today}</span></div>
-        ${emp.workplace ? `<div><span>工作地點：${escapeHtml(emp.workplace)}</span><span>${emp.isHourly ? '時薪制' : '月薪制'}${emp.isShift ? '（排班制）' : ''}</span></div>` : ''}
-      </div>
-      ${resultHtml}
-      <div class="sign-box">
-        <div>發薪人簽章</div>
-        <div>員工簽收</div>
-      </div>
-      <div class="footer">
-        <span>本薪資單由薪資計算系統自動產生</span>
-        <span>${today}</span>
-      </div>
-      <script>window.onload = () => { window.print(); };<\/script>
-    </body></html>
-  `;
-  const w = window.open('', '_blank');
-  if (!w) { alert('瀏覽器擋下新視窗，請允許彈出視窗後再試'); return; }
-  w.document.write(printHtml);
-  w.document.close();
+  // 取公司資訊
+  let _co = { name: '員工薪資單' };
+  try {
+    if (typeof getActiveCompany === 'function') {
+      const ac = getActiveCompany();
+      if (ac) _co = ac;
+    }
+  } catch (e) {}
+  const companyName = _co.name || '員工薪資單';
+
+  const printHtml = `<!DOCTYPE html>
+<html lang="zh-TW"><head>
+  <meta charset="UTF-8">
+  <title>薪資單 - ${escapeHtml(emp.name)} - ${month}</title>
+  <style>
+    body { font-family: "Microsoft JhengHei", "PingFang TC", sans-serif; padding: 24px; color: #111; margin:0; }
+    h1 { text-align: center; color: #1a2a4a; border-bottom: 3px double #c9a95c; padding-bottom: 10px; margin: 0 0 16px; }
+    .info-box { background:#f9fafb; padding:12px 16px; border-radius:8px; margin-bottom:16px; font-size:14px; line-height:1.8; }
+    .info-box div { display:flex; justify-content:space-between; }
+    .info-box strong { color:#1a2a4a; }
+    .result-row { display:flex; justify-content:space-between; padding: 6px 4px; border-bottom: 1px dashed #d1d5db; font-size:14px; }
+    .result-row.total { background:#fef3c7; font-weight:bold; font-size:17px; color:#1a2a4a; padding:10px; border-radius:6px; margin-top:8px; border-bottom:none; }
+    .footer { margin-top:24px; padding-top:12px; border-top:1px solid #e5e7eb; font-size:11px; color:#6b7280; display:flex; justify-content:space-between; }
+    .sign-box { margin-top:36px; display:flex; justify-content:space-between; font-size:13px; }
+    .sign-box > div { width:45%; border-top:1px solid #111; padding-top:4px; text-align:center; }
+    @page { size: A4; margin: 15mm; }
+    @media print { body { padding: 0; } }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(companyName)}</h1>
+  <div class="info-box">
+    <div><span>員工姓名：<strong>${escapeHtml(emp.name)}</strong></span><span>員工編號：${escapeHtml(emp.id || '-')}</span></div>
+    <div><span>薪資月份：<strong>${month}</strong></span><span>列印日期：${today}</span></div>
+    ${emp.workplace ? `<div><span>工作地點：${escapeHtml(emp.workplace)}</span><span>${emp.isHourly ? '時薪制' : '月薪制'}${emp.isShift ? '（排班制）' : ''}</span></div>` : ''}
+    ${_co.taxId ? `<div><span>統一編號：${escapeHtml(_co.taxId)}</span><span>${_co.address ? '地址：' + escapeHtml(_co.address) : ''}</span></div>` : ''}
+  </div>
+  ${resultHtml}
+  <div class="sign-box">
+    <div>發薪人簽章</div>
+    <div>員工簽收</div>
+  </div>
+  <div class="footer">
+    <span>本薪資單由薪資計算系統自動產生</span>
+    <span>${today}</span>
+  </div>
+</body></html>`;
+
+  // 用 iframe 列印，避開 popup blocker
+  const old = document.getElementById('__printIframe');
+  if (old) old.remove();
+  const iframe = document.createElement('iframe');
+  iframe.id = '__printIframe';
+  iframe.style.cssText = 'position:fixed; top:-9999px; left:-9999px; width:0; height:0; border:0;';
+  document.body.appendChild(iframe);
+  const doc = iframe.contentDocument || iframe.contentWindow.document;
+  doc.open();
+  doc.write(printHtml);
+  doc.close();
+  setTimeout(() => {
+    try {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    } catch (e) {
+      console.error('列印失敗:', e);
+      alert('列印失敗：' + e.message + '\n\n請使用 Ctrl + P 從這頁列印。');
+    }
+    setTimeout(() => { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); }, 1500);
+  }, 300);
 }
 
 function calculateAndPreview() {
@@ -7847,7 +8053,7 @@ function showSalarySaveSuccess(rec, emp, wasEditing) {
 
       <!-- 底部操作按鈕 -->
       <div style="padding: 14px 24px 20px; border-top: 2px solid ${BRAND_GOLD}; display: flex; gap: 8px; flex-wrap: wrap; background: #fafbfc;">
-        <button onclick="printSalarySlip()" style="flex:1; padding: 12px; background: ${BRAND_NAVY}; color: ${BRAND_GOLD}; border: 2px solid ${BRAND_GOLD}; border-radius: 6px; font-size: 14px; font-weight: 700; cursor: pointer; letter-spacing:1px;">🖨 列 印 薪 資 單</button>
+        <button onclick="printSalarySlipFromModal()" style="flex:1; padding: 12px; background: ${BRAND_NAVY}; color: ${BRAND_GOLD}; border: 2px solid ${BRAND_GOLD}; border-radius: 6px; font-size: 14px; font-weight: 700; cursor: pointer; letter-spacing:1px;">🖨 列 印 薪 資 單</button>
         <button onclick="closeSalarySaveSuccess()" style="flex:0 0 100px; padding: 12px; background: white; color: ${BRAND_NAVY}; border: 2px solid ${BRAND_NAVY}; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer;">關 閉</button>
       </div>
     </div>
@@ -7866,29 +8072,53 @@ function closeSalarySaveSuccess() {
   if (modal) modal.remove();
 }
 
-function printSalarySlip() {
+// 🖨 從儲存成功彈窗中列印薪資單（用 iframe，避開 popup blocker）
+function printSalarySlipFromModal() {
   const content = document.getElementById('salarySlipContent');
-  if (!content) return;
-  const printWin = window.open('', '_blank');
-  printWin.document.write(`
-    <!DOCTYPE html>
+  if (!content) {
+    alert('找不到薪資單內容，請重新儲存月薪記錄。');
+    return;
+  }
+
+  // 移除任何舊的列印 iframe
+  const old = document.getElementById('__printIframe');
+  if (old) old.remove();
+
+  // 建立隱藏 iframe 進行列印
+  const iframe = document.createElement('iframe');
+  iframe.id = '__printIframe';
+  iframe.style.cssText = 'position:fixed; top:-9999px; left:-9999px; width:0; height:0; border:0;';
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentDocument || iframe.contentWindow.document;
+  doc.open();
+  doc.write(`<!DOCTYPE html>
     <html lang="zh-Hant">
     <head>
       <meta charset="UTF-8">
       <title>薪資單</title>
       <style>
-        body { font-family: "Microsoft JhengHei", sans-serif; padding: 30px; font-size: 14px; line-height: 1.7; color: #1f2937; }
-        @page { size: A4; margin: 20mm; }
+        body { font-family: "Microsoft JhengHei", "PingFang TC", sans-serif; padding: 30px; font-size: 14px; line-height: 1.7; color: #1f2937; margin:0; }
+        @page { size: A4; margin: 15mm; }
         @media print { body { padding: 0; } }
       </style>
     </head>
-    <body>
-      ${content.innerHTML}
-      <script>window.onload = () => { setTimeout(() => window.print(), 300); };<\/script>
-    </body>
-    </html>
-  `);
-  printWin.document.close();
+    <body>${content.innerHTML}</body>
+    </html>`);
+  doc.close();
+
+  // 等待內容載入後觸發列印
+  setTimeout(() => {
+    try {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    } catch (e) {
+      console.error('列印失敗:', e);
+      alert('列印失敗：' + e.message + '\n\n請使用 Ctrl + P 從這頁列印。');
+    }
+    // 列印完關閉 iframe
+    setTimeout(() => { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); }, 1500);
+  }, 300);
 }
 
 // ✅ 自動載入既有月薪記錄：選員工 + 月份後，若已有儲存過的記錄就自動帶入
@@ -9697,12 +9927,10 @@ function isPaidHourEntry(d, emp) {
   const attType = d.attType || 'normal';
   // 請假類型 → 不計薪
   if (attType !== 'normal' && attType !== '加班' && attType !== '時薪加班') return false;
-  // ★ 核心規則：subtotal > 0 就計入（不論員工類型或 attType）
+  // ★ 月薪制員工的「正常上班」 → 含於底薪，不計（避免員工從時薪轉月薪後舊記錄重複計薪）
+  if (emp && !emp.isHourly && attType === 'normal') return false;
+  // ★ 核心規則：subtotal > 0 就計入
   if ((d.subtotal || 0) > 0) return true;
-  // subtotal = 0 的情況：
-  //   月薪正常上班 → 底薪含，不計
-  //   加班無金額 → 走 ot1/ot2 倍率，不在此計
-  //   時薪制無 subtotal → 異常（應該要有 rate × hours）
   return false;
 }
 
@@ -10446,7 +10674,22 @@ function init() {
     });
   }
   document.getElementById('calcMonth').addEventListener('change', () => { resetAutoFillFlags(); refreshRecords(); updateMonthlyDailyHint(); autoLoadExistingRecord(); });
-  document.getElementById('calcEmp').addEventListener('change', () => { resetAutoFillFlags(); updateMonthlyDailyHint(); autoLoadExistingRecord(); });
+  document.getElementById('calcEmp').addEventListener('change', () => {
+    resetAutoFillFlags();
+    // ★ 員工切換時，強制重設「本月時薪」為員工資料的時薪（避免殘留前一員工的值或預設值）
+    const empSelId = document.getElementById('calcEmp').value;
+    const empSel = empSelId ? employees.find(x => x._id === empSelId) : null;
+    const mh = document.getElementById('monthHourly');
+    if (mh && empSel) {
+      const empRate = empSel.hourlyRate || (empSel.baseSalary > 0 ? Math.round(empSel.baseSalary / 30 / 8) : 0);
+      mh.value = empRate || '';
+    }
+    // 同樣重設加班時薪
+    const moh = document.getElementById('monthOtHourly');
+    if (moh) moh.value = '';
+    updateMonthlyDailyHint();
+    autoLoadExistingRecord();
+  });
   document.getElementById('dailyDate').addEventListener('change', refreshDailyEntries);
   document.getElementById('dailyEmp').addEventListener('change', () => {
     refreshDailyEntries();
