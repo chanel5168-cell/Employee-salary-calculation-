@@ -1790,11 +1790,21 @@
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>E-mail</label>
+            <label>📞 公司電話</label>
+            <input type="text" id="newCompanyPhone" placeholder="04-7980000">
+          </div>
+          <div class="form-group">
+            <label>📱 LINE ID / 群組</label>
+            <input type="text" id="newCompanyLine" placeholder="@yangji 或 LINE 官方帳號 ID">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>✉ E-mail</label>
             <input type="text" id="newCompanyEmail" placeholder="yang.ji.hardware@gmail.com">
           </div>
           <div class="form-group">
-            <label>標語</label>
+            <label>🏷 標語</label>
             <input type="text" id="newCompanySlogan" placeholder="穩固久遠 · 品質至上">
           </div>
         </div>
@@ -1898,21 +1908,63 @@
       <div class="alert alert-info" style="font-size:12px;">
         國定假日會在月薪頁的出勤明細自動顯示紅色，並算入「例假日上班 / 例假日加班」。依人事行政總處公告更新。
       </div>
+
+      <!-- 單筆新增 -->
       <div class="form-row">
         <div class="form-group" style="margin-bottom:0;">
-          <label>新增國定假日</label>
+          <label>單筆新增</label>
           <input type="date" id="newHoliday">
         </div>
         <div class="form-group" style="margin-bottom:0; display:flex; align-items:end;">
           <button type="button" class="btn btn-primary btn-block" onclick="addHoliday()">新增</button>
         </div>
       </div>
+
+      <!-- 🆕 批次匯入年度 -->
+      <div style="margin-top:10px; padding:10px 12px; background:#fef9ee; border-left:3px solid #c9a95c; border-radius:6px;">
+        <div style="font-weight:700; color:#92400e; font-size:13px; margin-bottom:6px;">📥 批次匯入年度行事曆</div>
+        <div style="font-size:11px; color:#78350f; margin-bottom:6px; line-height:1.6;">
+          一鍵匯入整年國定假日。資料來源：行政院人事行政總處公告。
+        </div>
+        <div class="btn-group" style="flex-wrap:wrap; gap:4px;">
+          <button class="btn btn-secondary btn-sm" onclick="batchImportHolidays(2024)" style="flex:1; min-width:120px;">📅 民國 113 年（2024）</button>
+          <button class="btn btn-secondary btn-sm" onclick="batchImportHolidays(2025)" style="flex:1; min-width:120px;">📅 民國 114 年（2025）</button>
+          <button class="btn btn-secondary btn-sm" onclick="batchImportHolidays(2026)" style="flex:1; min-width:120px; background:#fef3c7; color:#92400e; border:1px solid #f59e0b;">📅 民國 115 年（2026）</button>
+        </div>
+        <div class="btn-group" style="margin-top:6px;">
+          <button class="btn btn-secondary btn-block" onclick="customImportHolidays()" style="background:#dbeafe; color:#1e40af; border:1px solid #1e40af; font-size:12px;">📋 從文字貼上匯入（給自訂年度用）</button>
+        </div>
+      </div>
+
       <div style="margin-top:10px; font-size:12px; color:#6b7280;">目前共 <strong id="holidayCount">0</strong> 天</div>
       <div id="holidayList" style="max-height:200px; overflow-y:auto; margin-top:6px;"></div>
+
+      <div class="btn-group" style="margin-top:10px; gap:4px;">
+        <button class="btn btn-danger btn-sm" onclick="clearHolidaysByYear()" style="flex:1; font-size:12px;">🗑 依年度清除</button>
+        <button class="btn btn-secondary btn-sm" onclick="exportHolidaysAsText()" style="flex:1; font-size:12px;">📤 匯出當前清單</button>
+      </div>
     </div>
 
     <div class="card">
-      <h3>台灣勞健保參數 (2026年)</h3>
+      <h3>⚖ 法定費率與勞基法常數 <span style="font-size:11px; color:#6b7280; font-weight:normal;">（適用 中華民國 <span id="ratesYearlyVer">114</span> 年）</span></h3>
+      <div style="padding:8px 10px; background:#dbeafe; border-left:3px solid #1e40af; border-radius:6px; font-size:12px; color:#1e3a8a; margin-bottom:10px; line-height:1.7;">
+        💡 <strong>更新提醒</strong>：政府每年公告新基本工資 + 勞健保費率（通常 8-12 月），請於該年度開始前手動更新此區。
+        系統會在每年 1 月自動跳出檢查提示。
+      </div>
+
+      <h4 style="margin-bottom:6px; font-size:14px; color:#1a2a4a;">💵 基本工資（§21）</h4>
+      <div class="form-row">
+        <div class="form-group">
+          <label>基本時薪 NT$ / 小時</label>
+          <input type="number" id="cfgMinWage" value="190" step="1">
+        </div>
+        <div class="form-group">
+          <label>基本月薪 NT$ / 月</label>
+          <input type="number" id="cfgMinMonthlyWage" value="28590" step="10">
+        </div>
+      </div>
+
+      <h4 style="margin-bottom:6px; font-size:14px; color:#1a2a4a;">🏥 勞健保費率</h4>
       <div class="form-row">
         <div class="form-group">
           <label>勞保費率 (員工 %)</label>
@@ -1923,9 +1975,35 @@
           <input type="number" id="healthRate" value="1.655" step="0.001">
         </div>
       </div>
-      <button class="btn btn-secondary btn-block" onclick="saveRates()">儲存費率</button>
-      <div class="alert alert-warn" style="margin-top:12px;">
-        費率會隨政府公告調整，請自行確認最新數字。
+
+      <h4 style="margin-bottom:6px; font-size:14px; color:#1a2a4a;">📅 適用年度</h4>
+      <div class="form-row">
+        <div class="form-group">
+          <label>中華民國年度</label>
+          <input type="number" id="cfgYearlyVer" value="114" step="1">
+        </div>
+        <div class="form-group" style="display:flex; align-items:end;">
+          <button class="btn btn-secondary btn-block" onclick="checkLawUpdates()" style="background:#fef3c7; color:#92400e; border:1px solid #f59e0b;">🔍 檢查法規更新</button>
+        </div>
+      </div>
+
+      <button class="btn btn-primary btn-block" onclick="saveRates()" style="margin-top:8px;">💾 儲存全部設定</button>
+
+      <div style="margin-top:10px; padding:10px 12px; background:#f0f9ff; border-left:3px solid #06C755; border-radius:6px; font-size:12px; color:#075985; line-height:1.7;">
+        <strong>📜 勞基法計算規則（系統內建，不需更新）</strong><br>
+        • 平日加班 §24-1：前 2h × 4/3、第 3-4h × 5/3、超過 4h <span style="color:#dc2626;">違法 §32</span><br>
+        • 休息日加班 §24-2：前 2h × 4/3、3-8h × 5/3、9-12h × 8/3<br>
+        • 例假日 §40：原則禁止出勤；國定假日 §39：×2 加倍<br>
+        • 月加班 §32：法定 46h、勞資會議同意可達 54h（每 3 月 138h）<br>
+        • 7 休 1 §36 / 11h 換班間隔 §34 / 週 40h §30<br>
+        ⚠ 上述倍率與條文由勞基法明定，<strong>不會自動變動</strong>。若有重大修法請通知工程師更新程式邏輯。
+      </div>
+
+      <div class="alert alert-warn" style="margin-top:12px; font-size:12px;">
+        💡 <strong>歷年基本工資參考</strong>（資料來源：勞動部）：<br>
+        ・113 年（2024）：時薪 183 / 月薪 27,470<br>
+        ・114 年（2025）：時薪 190 / 月薪 28,590<br>
+        ・115 年（2026）：時薪 ___ / 月薪 ___ <span style="color:#9ca3af;">(待政府公告)</span>
       </div>
     </div>
   </div>
@@ -2015,6 +2093,8 @@ const DEFAULT_COMPANIES = [{
   nameEn: 'YANG JI HARDWARE CO., LTD.',
   taxId: '83273097',
   address: '彰化縣伸港鄉定興村定興路53號',
+  phone: '',
+  line: '',
   email: 'yang.ji.hardware@gmail.com',
   slogan: '穩固久遠 · 品質至上',
   isDefault: true
@@ -2111,7 +2191,22 @@ const DEFAULT_HOLIDAYS = [
 ];
 let holidays = load(STORE.holidays, DEFAULT_HOLIDAYS);
 let currentLeaveItems = [];
-let rates = load(STORE.rates, { labor: 2.42, health: 1.655 });
+// ⚖ 法定費率 / 勞基法常數（可由總管理者更新，不需改程式碼）
+//   - labor / health: 勞健保費率（百分比）
+//   - minWage: 基本時薪（新台幣 / 小時）
+//   - minMonthlyWage: 基本月薪
+//   - yearlyVersion: 對應的「中華民國年度」(用來提示更新)
+let rates = load(STORE.rates, {
+  labor: 2.42,
+  health: 1.655,
+  minWage: 190,           // 114 年起 NT$ 190/h
+  minMonthlyWage: 28590,  // 114 年起 NT$ 28,590/月
+  yearlyVersion: 114      // 中華民國 114 年（2025）
+});
+// 補齊舊版 rates 中可能缺失的欄位
+if (rates.minWage == null) rates.minWage = 190;
+if (rates.minMonthlyWage == null) rates.minMonthlyWage = 28590;
+if (rates.yearlyVersion == null) rates.yearlyVersion = 114;
 let editingEmpId = null;
 let editingDailyId = null;
 let editingRecordId = null;
@@ -2500,6 +2595,14 @@ function subscribeAll() {
       const hr = document.getElementById('healthRate');
       if (lr) lr.value = rates.labor;
       if (hr) hr.value = rates.health;
+      const mw = document.getElementById('cfgMinWage');
+      const mmw = document.getElementById('cfgMinMonthlyWage');
+      const yv = document.getElementById('cfgYearlyVer');
+      const yvLabel = document.getElementById('ratesYearlyVer');
+      if (mw) mw.value = rates.minWage || 190;
+      if (mmw) mmw.value = rates.minMonthlyWage || 28590;
+      if (yv) yv.value = rates.yearlyVersion || 114;
+      if (yvLabel) yvLabel.textContent = rates.yearlyVersion || 114;
     }
   });
 }
@@ -7458,8 +7561,8 @@ function updateBatchPiecePreview() {
   }
   box.innerHTML = html;
 
-  // ⚖ 最低時薪檢查（114年起 NT$ 190/h）
-  const MIN_WAGE = 190;
+  // ⚖ 最低時薪檢查（取系統設定的基本時薪）
+  const MIN_WAGE = (rates && rates.minWage) || 190;
   const warnBox = document.getElementById('batchPieceMinWageWarn');
   if (!warnBox) return;
   if (hours > 0 && subtotal > 0) {
@@ -7515,8 +7618,9 @@ function batchSavePieceAttendance() {
   const checkedDates = [...document.querySelectorAll('.batch-day-chk:checked:not(:disabled)')].map(c => c.dataset.date);
   if (checkedDates.length === 0) { alert('請勾選要新增的日期'); return; }
 
-  // ⚖ 最低時薪檢查（114 年起 NT$ 190/h）
-  const MIN_WAGE = 190;
+  // ⚖ 最低時薪檢查（取系統設定的基本時薪）
+  const MIN_WAGE = (rates && rates.minWage) || 190;
+  const _yearlyVer = (rates && rates.yearlyVersion) || 114;
   const subtotal = Math.round(qty * price * 100) / 100;
   if (hours > 0) {
     const implicitRate = subtotal / hours;
@@ -7526,7 +7630,7 @@ function batchSavePieceAttendance() {
         `⚠ 警告：論件換算時薪低於基本工資！\n\n` +
         `每天 ${qty} 件 × NT$ ${price} = NT$ ${formatMoney(subtotal)}\n` +
         `÷ 工時 ${hours}h = NT$ ${implicitRate.toFixed(1)}/h\n` +
-        `基本時薪 NT$ ${MIN_WAGE}/h（114 年起）\n` +
+        `基本時薪 NT$ ${MIN_WAGE}/h（${_yearlyVer} 年起）\n` +
         `每天差 NT$ ${Math.ceil(diff * hours)}\n\n` +
         `依勞基法 §21，工資不得低於基本工資。\n` +
         `按「確定」→ 我了解風險，仍要繼續儲存（公司應於月薪結算時自動補足差額）\n` +
@@ -8195,6 +8299,7 @@ function printSalarySlip() {
     <div><span>薪資月份：<strong>${month}</strong></span><span>列印日期：${today}</span></div>
     ${emp.workplace ? `<div><span>工作地點：${escapeHtml(emp.workplace)}</span><span>${emp.isHourly ? '時薪制' : '月薪制'}${emp.isShift ? '（排班制）' : ''}</span></div>` : ''}
     ${_co.taxId ? `<div><span>統一編號：${escapeHtml(_co.taxId)}</span><span>${_co.address ? '地址：' + escapeHtml(_co.address) : ''}</span></div>` : ''}
+    ${(_co.phone || _co.line) ? `<div><span>${_co.phone ? '📞 ' + escapeHtml(_co.phone) : ''}</span><span>${_co.line ? '📱 LINE: ' + escapeHtml(_co.line) : ''}</span></div>` : ''}
   </div>
   ${resultHtml}
   <div class="sign-box">
@@ -8643,6 +8748,7 @@ function showSalarySaveSuccess(rec, emp, wasEditing) {
         <div style="margin-top:16px; padding-top:12px; border-top:2px solid ${BRAND_GOLD}; text-align:center; font-size:10px; color:#64748b; line-height:1.6;">
           ${_co.slogan ? `<div style="color:${BRAND_NAVY}; font-weight:700; letter-spacing:1px;">⚙ ${escapeHtml(_co.slogan)} ⚙</div>` : ''}
           ${_co.address ? `<div style="margin-top:4px;">${escapeHtml(_co.address)}</div>` : ''}
+          ${(_co.phone || _co.line) ? `<div style="margin-top:2px;">${_co.phone ? '📞 ' + escapeHtml(_co.phone) : ''}${_co.phone && _co.line ? ' · ' : ''}${_co.line ? '📱 LINE: ' + escapeHtml(_co.line) : ''}</div>` : ''}
           ${(_co.email || _co.taxId) ? `<div>${_co.email ? 'E-mail: ' + escapeHtml(_co.email) : ''}${_co.email && _co.taxId ? ' · ' : ''}${_co.taxId ? '統編: ' + escapeHtml(_co.taxId) : ''}</div>` : ''}
           <div style="margin-top:6px; color:#94a3b8; font-size:9px;">列印時間：${new Date().toLocaleString('zh-TW')}</div>
         </div>
@@ -9390,8 +9496,8 @@ function exportToExcel() {
   // === 論件計酬明細工作表（以員工為分類）===
   const pieceData = dailyData.filter(d => d.type === 'piece');
   if (pieceData.length > 0) {
-    // ★ 勞基法基本工資時薪參考（114 年 = 2026 起 NT$ 190/h）
-    const minWage = 190;
+    // ★ 勞基法基本工資時薪參考（取系統設定的基本時薪）
+    const minWage = (rates && rates.minWage) || 190;
     const pieceHead = ['日期', '品名', '數量', '單價', '小計', '開始時間', '結束時間', '工時(小時)', '效率(個/時)', '換算時薪(NT$/h)', '是否達基本工資', '工作內容', '備註', '照片檔名'];
     const pieceRows = [];
     // 報表開頭加法規提醒
@@ -10999,6 +11105,8 @@ function saveCompanyInfo() {
   co.nameEn = (document.getElementById('newCompanyNameEn').value || '').trim();
   co.taxId = (document.getElementById('newCompanyTaxId').value || '').trim();
   co.address = (document.getElementById('newCompanyAddress').value || '').trim();
+  co.phone = (document.getElementById('newCompanyPhone').value || '').trim();
+  co.line = (document.getElementById('newCompanyLine').value || '').trim();
   co.email = (document.getElementById('newCompanyEmail').value || '').trim();
   co.slogan = (document.getElementById('newCompanySlogan').value || '').trim();
 
@@ -11027,6 +11135,8 @@ function editCompanyInfo(id) {
   document.getElementById('newCompanyNameEn').value = co.nameEn || '';
   document.getElementById('newCompanyTaxId').value = co.taxId || '';
   document.getElementById('newCompanyAddress').value = co.address || '';
+  document.getElementById('newCompanyPhone').value = co.phone || '';
+  document.getElementById('newCompanyLine').value = co.line || '';
   document.getElementById('newCompanyEmail').value = co.email || '';
   document.getElementById('newCompanySlogan').value = co.slogan || '';
   document.getElementById('companyPrimaryBtn').textContent = '💾 更新';
@@ -11041,7 +11151,7 @@ function cancelCompanyEdit() {
 }
 
 function clearCompanyForm() {
-  ['newCompanyName','newCompanyNameEn','newCompanyTaxId','newCompanyAddress','newCompanyEmail','newCompanySlogan']
+  ['newCompanyName','newCompanyNameEn','newCompanyTaxId','newCompanyAddress','newCompanyPhone','newCompanyLine','newCompanyEmail','newCompanySlogan']
     .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
 }
 
@@ -11086,6 +11196,10 @@ function refreshCompanyList() {
           <div style="font-size:11px; color:#64748b; margin-top:3px;">
             ${co.taxId ? `統編：${escapeHtml(co.taxId)} · ` : ''}${escapeHtml(co.address || '—')}
           </div>
+          ${(co.phone || co.line || co.email) ? `<div style="font-size:11px; color:#475569; margin-top:3px;">
+            ${co.phone ? `📞 ${escapeHtml(co.phone)}` : ''}${co.phone && (co.line || co.email) ? ' · ' : ''}${co.line ? `📱 LINE ${escapeHtml(co.line)}` : ''}${(co.phone || co.line) && co.email ? ' · ' : ''}${co.email ? `✉ ${escapeHtml(co.email)}` : ''}
+          </div>` : ''}
+          ${co.slogan ? `<div style="font-size:11px; color:#9a3412; margin-top:3px; font-style:italic;">⚙ ${escapeHtml(co.slogan)} ⚙</div>` : ''}
         </div>
         <div style="display:flex; gap:4px; flex-wrap:wrap;">
           ${co.isDefault ? '' : `<button class="btn btn-secondary btn-sm" onclick="setDefaultCompany('${co._id}')" style="padding:3px 8px; font-size:11px;">設為預設</button>`}
@@ -11407,6 +11521,191 @@ function addHoliday() {
   refreshHolidayList();
 }
 
+// 🆕 批次匯入年度國定假日（資料來源：行政院人事行政總處）
+const HOLIDAY_DATASETS = {
+  2024: {
+    rocYear: 113,
+    items: [
+      { date: '2024-01-01', name: '元旦' },
+      { date: '2024-02-08', name: '春節調整放假' },
+      { date: '2024-02-09', name: '農曆除夕' },
+      { date: '2024-02-10', name: '春節初一' },
+      { date: '2024-02-11', name: '春節初二' },
+      { date: '2024-02-12', name: '春節初三' },
+      { date: '2024-02-13', name: '春節初四' },
+      { date: '2024-02-14', name: '春節初五' },
+      { date: '2024-02-28', name: '228 和平紀念日' },
+      { date: '2024-04-04', name: '兒童節 / 民族掃墓節' },
+      { date: '2024-04-05', name: '兒童節調整放假' },
+      { date: '2024-05-01', name: '勞動節（限勞工）' },
+      { date: '2024-06-10', name: '端午節' },
+      { date: '2024-09-17', name: '中秋節' },
+      { date: '2024-10-10', name: '國慶日' }
+    ]
+  },
+  2025: {
+    rocYear: 114,
+    items: [
+      { date: '2025-01-01', name: '元旦' },
+      { date: '2025-01-27', name: '春節調整放假' },
+      { date: '2025-01-28', name: '農曆除夕' },
+      { date: '2025-01-29', name: '春節初一' },
+      { date: '2025-01-30', name: '春節初二' },
+      { date: '2025-01-31', name: '春節初三' },
+      { date: '2025-02-28', name: '228 和平紀念日' },
+      { date: '2025-04-03', name: '兒童節調整放假' },
+      { date: '2025-04-04', name: '兒童節 / 民族掃墓節' },
+      { date: '2025-05-01', name: '勞動節（限勞工）' },
+      { date: '2025-05-30', name: '端午節調整放假' },
+      { date: '2025-05-31', name: '端午節' },
+      { date: '2025-10-06', name: '中秋節' },
+      { date: '2025-10-10', name: '國慶日' }
+    ]
+  },
+  2026: {
+    rocYear: 115,
+    items: [
+      // ⚠ 115 年（2026）行事曆需以人事行政總處公告為準，以下為依規律推估
+      { date: '2026-01-01', name: '元旦' },
+      { date: '2026-01-02', name: '元旦調整放假（依規律推估）' },
+      { date: '2026-02-14', name: '春節（依規律推估，請以官方公告為準）' },
+      { date: '2026-02-15', name: '春節' },
+      { date: '2026-02-16', name: '春節' },
+      { date: '2026-02-17', name: '春節' },
+      { date: '2026-02-18', name: '春節' },
+      { date: '2026-02-19', name: '春節' },
+      { date: '2026-02-20', name: '春節調整放假' },
+      { date: '2026-02-27', name: '228 調整放假' },
+      { date: '2026-02-28', name: '228 和平紀念日' },
+      { date: '2026-04-03', name: '兒童節調整放假' },
+      { date: '2026-04-04', name: '兒童節 / 民族掃墓節' },
+      { date: '2026-04-05', name: '民族掃墓節' },
+      { date: '2026-04-06', name: '兒童節調整放假' },
+      { date: '2026-05-01', name: '勞動節（限勞工）' },
+      { date: '2026-06-19', name: '端午節調整放假' },
+      { date: '2026-06-20', name: '端午節' },
+      { date: '2026-06-21', name: '端午節' },
+      { date: '2026-09-25', name: '中秋節調整放假' },
+      { date: '2026-09-26', name: '中秋節' },
+      { date: '2026-09-27', name: '中秋節' },
+      { date: '2026-10-09', name: '國慶日調整放假' },
+      { date: '2026-10-10', name: '國慶日' }
+    ]
+  }
+};
+
+function batchImportHolidays(year) {
+  const ds = HOLIDAY_DATASETS[year];
+  if (!ds) { alert(`沒有 ${year} 年資料`); return; }
+  const existingInYear = holidays.filter(h => h.startsWith(String(year)));
+  if (existingInYear.length > 0) {
+    if (!confirm(
+      `偵測到 ${year} 年已有 ${existingInYear.length} 筆國定假日。\n\n` +
+      `按「確定」→ 清除舊資料 + 重新匯入 ${ds.items.length} 筆\n` +
+      `按「取消」→ 不變更`
+    )) return;
+    holidays = holidays.filter(h => !h.startsWith(String(year)));
+  }
+  let added = 0;
+  ds.items.forEach(it => {
+    if (!holidays.includes(it.date)) {
+      holidays.push(it.date);
+      added++;
+    }
+  });
+  holidays.sort();
+  save(STORE.holidays, holidays);
+  refreshHolidayList();
+
+  // ⚠ 115 年特殊提示
+  let warn = '';
+  if (year === 2026) {
+    warn = '\n\n⚠ 115 年（2026）行事曆於 2025 年 8-10 月由人事行政總處公告。\n' +
+           '本資料依規律推估，正式公告後請至「人事行政總處」官網對照修正。';
+  }
+  alert(`✅ 已匯入民國 ${ds.rocYear} 年（${year}）國定假日 ${added} 天\n總計 ${ds.items.length} 個假期。${warn}`);
+}
+
+function customImportHolidays() {
+  const example =
+    '請在下方文字框貼上日期清單，每行一筆，格式為 YYYY-MM-DD：\n\n' +
+    '範例：\n' +
+    '2026-01-01\n' +
+    '2026-02-14\n' +
+    '2026-02-15\n' +
+    '...\n\n' +
+    '（也可直接貼從人事行政總處 PDF 複製的日期清單，系統會自動過濾不合格的行）';
+  const input = prompt(example);
+  if (!input) return;
+  const datePattern = /(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/g;
+  const found = [];
+  let m;
+  while ((m = datePattern.exec(input)) !== null) {
+    const d = `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+    if (!found.includes(d)) found.push(d);
+  }
+  if (found.length === 0) { alert('找不到任何符合格式的日期。請確認格式為 YYYY-MM-DD'); return; }
+  if (!confirm(`偵測到 ${found.length} 筆日期：\n${found.slice(0, 10).join('\n')}${found.length > 10 ? '\n...' : ''}\n\n按確定匯入。`)) return;
+  let added = 0;
+  found.forEach(d => {
+    if (!holidays.includes(d)) {
+      holidays.push(d);
+      added++;
+    }
+  });
+  holidays.sort();
+  save(STORE.holidays, holidays);
+  refreshHolidayList();
+  alert(`✅ 已匯入 ${added} 筆國定假日（${found.length - added} 筆已存在跳過）`);
+}
+
+function clearHolidaysByYear() {
+  const yr = prompt('請輸入要清除的年度（西元，例如 2024）：\n\n按取消可清除全部國定假日。');
+  if (yr === null) return;
+  const yrInput = (yr || '').trim();
+  if (!yrInput) {
+    if (!confirm('⚠ 將清除全部國定假日，確定？')) return;
+    holidays = [];
+  } else {
+    const before = holidays.length;
+    holidays = holidays.filter(h => !h.startsWith(yrInput));
+    const removed = before - holidays.length;
+    if (removed === 0) { alert(`沒有 ${yrInput} 年的國定假日`); return; }
+    if (!confirm(`將清除 ${yrInput} 年共 ${removed} 筆國定假日，確定？`)) {
+      // 還原
+      const ds = HOLIDAY_DATASETS[Number(yrInput)];
+      if (ds) {
+        ds.items.forEach(it => { if (!holidays.includes(it.date)) holidays.push(it.date); });
+      }
+      return;
+    }
+  }
+  save(STORE.holidays, holidays);
+  refreshHolidayList();
+  alert('✅ 已清除');
+}
+
+function exportHolidaysAsText() {
+  if (holidays.length === 0) { alert('目前無國定假日'); return; }
+  const sorted = holidays.slice().sort();
+  const text = sorted.join('\n');
+  // 用提示視窗顯示，使用者可複製
+  const blob = new Blob([
+    `# 國定假日清單（共 ${sorted.length} 筆）\n` +
+    `# 匯出時間：${new Date().toLocaleString('zh-TW')}\n\n` +
+    text
+  ], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `國定假日_${new Date().toISOString().slice(0, 10)}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  alert(`✅ 已匯出 ${sorted.length} 筆國定假日為 .txt 檔`);
+}
+
 function removeHoliday(d) {
   if (!confirm(`確定刪除 ${d} ？`)) return;
   holidays = holidays.filter(x => x !== d);
@@ -11440,9 +11739,136 @@ function saveLiffId() {
 function saveRates() {
   rates.labor = parseFloat(document.getElementById('laborRate').value) || 2.42;
   rates.health = parseFloat(document.getElementById('healthRate').value) || 1.655;
+  // 基本工資 / 年度版本
+  const mw = parseFloat((document.getElementById('cfgMinWage') || {}).value);
+  const mmw = parseFloat((document.getElementById('cfgMinMonthlyWage') || {}).value);
+  const yv = parseInt((document.getElementById('cfgYearlyVer') || {}).value);
+  if (!isNaN(mw) && mw > 0) rates.minWage = mw;
+  if (!isNaN(mmw) && mmw > 0) rates.minMonthlyWage = mmw;
+  if (!isNaN(yv) && yv > 100) rates.yearlyVersion = yv;
+  rates.lastUpdated = new Date().toISOString();
   save(STORE.rates, rates);
   cloudSaveRates();
-  alert('費率已儲存');
+  // 更新顯示
+  const yvLabel = document.getElementById('ratesYearlyVer');
+  if (yvLabel) yvLabel.textContent = rates.yearlyVersion || 114;
+  alert(
+    '✅ 設定已儲存\n\n' +
+    `中華民國 ${rates.yearlyVersion} 年（${rates.yearlyVersion + 1911} 年）\n` +
+    `  · 基本時薪：NT$ ${rates.minWage} / 小時\n` +
+    `  · 基本月薪：NT$ ${rates.minMonthlyWage} / 月\n` +
+    `  · 勞保費率：${rates.labor}%\n` +
+    `  · 健保費率：${rates.health}%\n\n` +
+    '已自動同步到所有裝置。'
+  );
+}
+
+// 🔍 檢查法規更新 — 對照當前年度與系統設定，提醒可能需要更新的項目
+function checkLawUpdates() {
+  const now = new Date();
+  const currentRocYear = now.getFullYear() - 1911;
+  const sysYear = rates.yearlyVersion || 114;
+  const sysMinWage = rates.minWage || 190;
+  const sysMonthlyWage = rates.minMonthlyWage || 28590;
+  const lastUpdated = rates.lastUpdated ? new Date(rates.lastUpdated) : null;
+  const monthsSinceUpdate = lastUpdated
+    ? Math.floor((now - lastUpdated) / (1000 * 60 * 60 * 24 * 30))
+    : 999;
+
+  // 檢查國定假日是否包含當年度
+  const currentYear = now.getFullYear();
+  const nextYear = currentYear + 1;
+  const hasCurrentYearHolidays = holidays.some(d => d.startsWith(String(currentYear)));
+  const hasNextYearHolidays = holidays.some(d => d.startsWith(String(nextYear)));
+
+  let report = `🔍 法規更新檢查報告\n\n`;
+  report += `📅 系統時間：${now.toLocaleDateString('zh-TW')}（民國 ${currentRocYear} 年）\n`;
+  report += `⚙ 系統設定年度：民國 ${sysYear} 年\n`;
+  report += `📆 設定上次更新：${lastUpdated ? lastUpdated.toLocaleDateString('zh-TW') + `（${monthsSinceUpdate} 個月前）` : '從未更新'}\n\n`;
+
+  const issues = [];
+  // 1. 系統年度與當前年度不一致
+  if (sysYear < currentRocYear) {
+    issues.push({
+      level: '⚠ 警告',
+      msg: `系統設定為民國 ${sysYear} 年，但實際已是 ${currentRocYear} 年。\n  → 請確認基本工資 / 勞健保費率是否要更新`
+    });
+  }
+  // 2. 設定超過 1 年沒更新
+  if (monthsSinceUpdate >= 12) {
+    issues.push({
+      level: '⚠ 警告',
+      msg: `法規費率已 ${monthsSinceUpdate} 個月未更新。\n  → 政府每年 8-12 月公告新基本工資，請至勞動部官網確認`
+    });
+  }
+  // 3. 國定假日缺少當年度
+  if (!hasCurrentYearHolidays) {
+    issues.push({
+      level: '🚨 嚴重',
+      msg: `國定假日清單沒有 ${currentYear} 年資料！請新增`
+    });
+  }
+  // 4. 缺下一年度國定假日（10 月後提醒）
+  if (now.getMonth() >= 9 && !hasNextYearHolidays) {
+    issues.push({
+      level: '💡 提示',
+      msg: `${nextYear} 年國定假日尚未匯入。\n  → 政府通常 8-10 月公告隔年行事曆，建議至「人事行政總處」網站查詢後新增`
+    });
+  }
+
+  // 法源資訊（連結）
+  report += `📋 目前系統設定：\n`;
+  report += `  · 基本時薪：NT$ ${sysMinWage} / 小時\n`;
+  report += `  · 基本月薪：NT$ ${sysMonthlyWage} / 月\n`;
+  report += `  · 勞保費率：${rates.labor}%\n`;
+  report += `  · 健保費率：${rates.health}%\n`;
+  report += `  · 已登國定假日：${holidays.length} 天\n\n`;
+
+  if (issues.length === 0) {
+    report += `✅ 系統設定看起來符合當前年度，未發現需要更新的項目。\n\n`;
+  } else {
+    report += `🚨 發現 ${issues.length} 項需要關注：\n\n`;
+    issues.forEach((it, i) => {
+      report += `${i + 1}. ${it.level}：${it.msg}\n\n`;
+    });
+  }
+
+  report += `🔗 政府法規查詢資訊：\n`;
+  report += `  · 勞動部基本工資公告 → 搜尋「基本工資」\n`;
+  report += `  · 勞動部勞工保險局 → 「勞保費率」\n`;
+  report += `  · 中央健保署 → 「健保費率」\n`;
+  report += `  · 人事行政總處 → 「行事曆」（國定假日）\n\n`;
+  report += `💡 確認新數據後，請在上方欄位填入並按「💾 儲存全部設定」。`;
+
+  alert(report);
+}
+
+// 🆕 啟動時自動檢查（每年 1 月、每 6 個月各一次）
+function autoCheckLawUpdatesOnLoad() {
+  try {
+    const lastCheck = localStorage.getItem('salary_law_check_last');
+    const now = Date.now();
+    if (lastCheck) {
+      const daysSince = (now - parseInt(lastCheck)) / (1000 * 60 * 60 * 24);
+      if (daysSince < 180) return; // 每 180 天最多自動提醒一次
+    }
+    const sysYear = rates.yearlyVersion || 114;
+    const currentRocYear = new Date().getFullYear() - 1911;
+    if (sysYear < currentRocYear || (rates.lastUpdated && (now - new Date(rates.lastUpdated)) > 365 * 24 * 60 * 60 * 1000)) {
+      // 暫存「已提示」標記
+      localStorage.setItem('salary_law_check_last', String(now));
+      setTimeout(() => {
+        if (typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || currentUser.role === 'super')) {
+          alert(
+            '⚖ 法規更新提醒\n\n' +
+            `您的系統設定年度為民國 ${sysYear} 年，目前已是 ${currentRocYear} 年。\n\n` +
+            '建議至「設定 → 法定費率與勞基法常數」按「🔍 檢查法規更新」確認最新數據。\n\n' +
+            '此提醒每 6 個月自動跳出一次。'
+          );
+        }
+      }, 5000);
+    }
+  } catch (e) {}
 }
 
 async function initLiff() {
@@ -11589,6 +12015,8 @@ function init() {
 }
 
 init();
+// 🆕 啟動 5 秒後檢查法規更新（每 180 天最多跳一次）
+if (typeof autoCheckLawUpdatesOnLoad === 'function') autoCheckLawUpdatesOnLoad();
 
 // ========= 📊 管理分析（圖表 + 匯出）=========
 let _chartMonthly = null, _chartByWp = null, _chartOt = null;
