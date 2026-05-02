@@ -1332,11 +1332,11 @@
       <button class="btn btn-secondary btn-block" onclick="forcePullFromCloud()" style="margin-top:8px;">🔄 從雲端強制同步（清空本地以雲端為準）</button>
       <div style="padding:10px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; font-size:13px; color:#664d03; margin-top:6px; line-height:1.7;">
         💡 <strong>清除順序建議</strong>：<br>
-        ① 先按「🔍 診斷雲端殘留」→ 看清楚哪些 collection 還有資料<br>
+        ① 先按「🔍 診斷雲端殘留」→ 看清楚 13 個 collection 哪些還有資料<br>
         ② 一般「🔐 清除全部」清不乾淨時 → 按「☁ 強制重設雲端資料」<br>
-        ③ 如果還是有測試員工跑回來 → 按「☢ 核爆雲端」（會掃描所有 11 個 collection 全部刪光）<br>
+        ③ 如果還是有測試員工跑回來 → 按「☢ 核爆雲端」（會掃描所有 13 個 collection 全部刪光，含 companies / holidays）<br>
         ④ 核爆後請按 <strong>F5 重新整理</strong>，確保 onSnapshot 訂閱重置<br><br>
-        🔄 <strong>從雲端強制同步</strong>：如果此裝置（尤其手機）發現資料跟其他人不同步，按這個會把本裝置清空，重新從雲端下載最新版。<br>
+        🔄 <strong>從雲端強制同步</strong>：如果此裝置（尤其手機）發現資料跟其他人不同步（公司資料、特別假、使用者...），按這個會把本裝置清空，重新從雲端下載最新版（13 個 collection 全部）<br>
         📷 <strong>30 天前舊照片</strong>：系統每天自動清理一次，會移除 30 天以前的計時照片（保留時數、金額等記錄）。<span style="color:#dc2626; font-weight:600;">重要照片請定期從「匯出」頁下載 ZIP 備份。</span><br>
         🔐 標示的按鈕需要管理者密碼（驗證後 10 分鐘內不再重問）。
       </div>
@@ -2331,7 +2331,7 @@ async function migrateAndSubscribe() {
     }
 
     setSyncStatus('檢查同步狀態…', 'syncing');
-    const [nEmp, nRec, nDaily, nProd, nDc, nBc, nWc, nLc, nWp, nEnt] = await Promise.all([
+    const [nEmp, nRec, nDaily, nProd, nDc, nBc, nWc, nLc, nWp, nEnt, nU, nCo] = await Promise.all([
       syncMissing('employees', employees),
       syncMissing('records', records),
       syncMissing('daily', dailyEntries),
@@ -2341,13 +2341,15 @@ async function migrateAndSubscribe() {
       syncMissing('workContents', workContents),
       syncMissing('leaveCats', leaveCategories),
       syncMissing('workplaces', workplaces),
-      syncMissing('leaveEntitlements', leaveEntitlements)
+      syncMissing('leaveEntitlements', leaveEntitlements),
+      syncMissing('users', users),
+      syncMissing('companies', companies)
     ]);
     // 費率若雲端沒有也要補
     const rSnap = await ws().collection('config').doc('rates').get();
     if (!rSnap.exists) await ws().collection('config').doc('rates').set(rates);
 
-    const totalSynced = nEmp + nRec + nDaily + nProd + nDc + nBc + nWc + nLc + nWp + nEnt;
+    const totalSynced = nEmp + nRec + nDaily + nProd + nDc + nBc + nWc + nLc + nWp + nEnt + nU + nCo;
     if (totalSynced > 0) {
       setSyncStatus(`已補傳 ${totalSynced} 筆遺漏記錄`, 'syncing');
     }
@@ -2416,44 +2418,61 @@ function subscribeAll() {
   });
 
   col('deductCats').onSnapshot(snap => {
-    if (snap.docs.length > 0) {
-      deductCategories = snap.docs.map(d => d.data());
-      save(STORE.deductCats, deductCategories);
-      const dm = document.getElementById('deductCatManager');
-      if (dm && dm.style.display === 'block') refreshDeductCatList();
-      if (currentDeductItems.length > 0) renderDeductItems();
-    }
+    if (suppressSubscription) return;
+    // ⚠ 不再用 snap.docs.length > 0 過濾 — 雲端清空時本地也要清空，避免不一致
+    deductCategories = snap.docs.map(d => d.data());
+    save(STORE.deductCats, deductCategories);
+    const dm = document.getElementById('deductCatManager');
+    if (dm && dm.style.display === 'block') refreshDeductCatList();
+    if (currentDeductItems.length > 0) renderDeductItems();
   });
 
   col('bonusCats').onSnapshot(snap => {
-    if (snap.docs.length > 0) {
-      bonusCategories = snap.docs.map(d => d.data());
-      save(STORE.bonusCats, bonusCategories);
-      const bm = document.getElementById('bonusCatManager');
-      if (bm && bm.style.display === 'block') refreshBonusCatList();
-      if (currentBonusItems.length > 0) renderBonusItems();
-    }
+    if (suppressSubscription) return;
+    bonusCategories = snap.docs.map(d => d.data());
+    save(STORE.bonusCats, bonusCategories);
+    const bm = document.getElementById('bonusCatManager');
+    if (bm && bm.style.display === 'block') refreshBonusCatList();
+    if (currentBonusItems.length > 0) renderBonusItems();
   });
 
   col('workContents').onSnapshot(snap => {
-    if (snap.docs.length > 0) {
-      workContents = snap.docs.map(d => d.data());
-      save(STORE.workContents, workContents);
-      // 雲端可能還是舊名「打樣」/「半製品製作」→ 強制修正
-      forceFixWorkContents();
-      refreshWorkContentDropdown();
-      const wm = document.getElementById('workContentManager');
-      if (wm && wm.style.display === 'block') refreshWorkContentList();
-    }
+    if (suppressSubscription) return;
+    workContents = snap.docs.map(d => d.data());
+    save(STORE.workContents, workContents);
+    if (typeof forceFixWorkContents === 'function') forceFixWorkContents();
+    if (typeof refreshWorkContentDropdown === 'function') refreshWorkContentDropdown();
+    const wm = document.getElementById('workContentManager');
+    if (wm && wm.style.display === 'block') refreshWorkContentList();
   });
 
   col('leaveCats').onSnapshot(snap => {
+    if (suppressSubscription) return;
+    leaveCategories = snap.docs.map(d => d.data());
+    save(STORE.leaveCats, leaveCategories);
+    const lm = document.getElementById('leaveCatManager');
+    if (lm && lm.style.display === 'block') refreshLeaveCatList();
+    if (currentLeaveItems.length > 0) renderLeaveItems();
+  });
+
+  // ★ 公司資料同步（之前完全沒有監聽器，導致電腦存的手機看不到）
+  col('companies').onSnapshot(snap => {
+    if (suppressSubscription) return;
+    companies = snap.docs.map(d => d.data());
+    save(STORE.companies, companies);
+    if (typeof refreshCompanyList === 'function') refreshCompanyList();
+  });
+
+  // ★ 國定假日同步
+  col('holidays').onSnapshot(snap => {
+    if (suppressSubscription) return;
     if (snap.docs.length > 0) {
-      leaveCategories = snap.docs.map(d => d.data());
-      save(STORE.leaveCats, leaveCategories);
-      const lm = document.getElementById('leaveCatManager');
-      if (lm && lm.style.display === 'block') refreshLeaveCatList();
-      if (currentLeaveItems.length > 0) renderLeaveItems();
+      const cloudHolidays = snap.docs.map(d => d.data().date).filter(Boolean);
+      if (cloudHolidays.length > 0) {
+        holidays = cloudHolidays;
+        save(STORE.holidays, holidays);
+        if (typeof refreshHolidayList === 'function') refreshHolidayList();
+      }
     }
   });
 
@@ -2631,41 +2650,93 @@ function wipeLocalSilently() {
 async function forcePullFromCloud() {
   if (!requireAdmin('從雲端強制同步資料')) return;
   if (!cloudReady) { alert('雲端尚未連線，請稍候再試'); return; }
-  if (!confirm('⚠ 此操作會：\n\n1. 清空本地的員工、薪資、每日、產品資料\n2. 重新從雲端下載最新版\n\n本地未同步到雲端的資料會遺失。要繼續嗎？')) return;
+  if (!confirm(
+    '⚠ 此操作會：\n\n' +
+    '1. 清空本地所有資料（員工/薪資/每日/產品/公司/特別假/廠別/分類/使用者...）\n' +
+    '2. 重新從雲端下載最新版（含 13 個 collection）\n\n' +
+    '本地未同步到雲端的資料會遺失。要繼續嗎？'
+  )) return;
   suppressSubscription = true;
+  // 清空所有
   employees = []; records = []; dailyEntries = []; products = [];
-  save(STORE.employees, []);
-  save(STORE.records, []);
-  save(STORE.daily, []);
-  save(STORE.products, []);
+  leaveEntitlements = []; users = []; companies = []; holidays = [];
+  workplaces = []; workContents = []; leaveCategories = [];
+  deductCategories = []; bonusCategories = [];
   try {
-    const [empSnap, recSnap, dSnap, pSnap] = await Promise.all([
+    const [empSnap, recSnap, dSnap, pSnap, entSnap, uSnap, coSnap, hSnap, wpSnap, wcSnap, lcSnap, dcSnap, bcSnap] = await Promise.all([
       ws().collection('employees').get(),
       ws().collection('records').get(),
       ws().collection('daily').get(),
-      ws().collection('products').get()
+      ws().collection('products').get(),
+      ws().collection('leaveEntitlements').get(),
+      ws().collection('users').get(),
+      ws().collection('companies').get(),
+      ws().collection('holidays').get(),
+      ws().collection('workplaces').get(),
+      ws().collection('workContents').get(),
+      ws().collection('leaveCats').get(),
+      ws().collection('deductCats').get(),
+      ws().collection('bonusCats').get()
     ]);
     employees = empSnap.docs.map(d => d.data());
     records = recSnap.docs.map(d => d.data());
     dailyEntries = dSnap.docs.map(d => d.data());
     products = pSnap.docs.map(d => d.data());
+    leaveEntitlements = entSnap.docs.map(d => d.data());
+    users = uSnap.docs.map(d => d.data());
+    companies = coSnap.docs.map(d => d.data());
+    const cloudHols = hSnap.docs.map(d => d.data().date).filter(Boolean);
+    if (cloudHols.length > 0) holidays = cloudHols;
+    workplaces = wpSnap.docs.map(d => d.data());
+    workContents = wcSnap.docs.map(d => d.data());
+    leaveCategories = lcSnap.docs.map(d => d.data());
+    deductCategories = dcSnap.docs.map(d => d.data());
+    bonusCategories = bcSnap.docs.map(d => d.data());
+
+    // 全部存到本地
     save(STORE.employees, employees);
     save(STORE.records, records);
     save(STORE.daily, dailyEntries);
     save(STORE.products, products);
-    refreshEmployeeList();
-    refreshEmpDropdown();
-    refreshRecords();
-    refreshDailyEntries();
-    refreshMonthlyDaily();
-    refreshProductList();
-    updateSummary();
+    save(STORE.leaveEntitlements, leaveEntitlements);
+    save(STORE.users, users);
+    save(STORE.companies, companies);
+    save(STORE.holidays, holidays);
+    save(STORE.workplaces, workplaces);
+    save(STORE.workContents, workContents);
+    save(STORE.leaveCats, leaveCategories);
+    save(STORE.deductCats, deductCategories);
+    save(STORE.bonusCats, bonusCategories);
+
+    // 全部刷新 UI
+    if (typeof refreshEmployeeList === 'function') refreshEmployeeList();
+    if (typeof refreshEmpDropdown === 'function') refreshEmpDropdown();
+    if (typeof refreshRecords === 'function') refreshRecords();
+    if (typeof refreshDailyEntries === 'function') refreshDailyEntries();
+    if (typeof refreshMonthlyDaily === 'function') refreshMonthlyDaily();
+    if (typeof refreshProductList === 'function') refreshProductList();
+    if (typeof refreshUserList === 'function') refreshUserList();
+    if (typeof refreshEntitlementList === 'function') refreshEntitlementList();
+    if (typeof refreshCompanyList === 'function') refreshCompanyList();
+    if (typeof refreshAllWorkplaceUIs === 'function') refreshAllWorkplaceUIs();
+    if (typeof updateSummary === 'function') updateSummary();
+
     // 記錄最新 clear ack（避免再次觸發廣播清空）
     const metaSnap = await ws().collection('config').doc('meta').get();
     if (metaSnap.exists && metaSnap.data().lastClearedAt) {
       localStorage.setItem('salary_last_clear_ack', metaSnap.data().lastClearedAt);
     }
-    alert(`✅ 已從雲端重新同步：\n  員工 ${employees.length} 位\n  月薪記錄 ${records.length} 筆\n  每日記錄 ${dailyEntries.length} 筆\n  產品 ${products.length} 個`);
+    alert(
+      `✅ 已從雲端重新同步：\n` +
+      `  員工 ${employees.length} 位\n` +
+      `  月薪記錄 ${records.length} 筆\n` +
+      `  每日記錄 ${dailyEntries.length} 筆\n` +
+      `  產品 ${products.length} 個\n` +
+      `  特別假額度 ${leaveEntitlements.length} 筆\n` +
+      `  使用者 ${users.length} 位\n` +
+      `  公司資訊 ${companies.length} 筆\n` +
+      `  廠別 ${workplaces.length} 個`
+    );
   } catch (e) {
     alert('同步失敗：' + e.message);
   }
@@ -10448,7 +10519,8 @@ async function nuclearWipeCloud() {
   // Step 1: 先掃描雲端，列出所有殘留
   const ALL_COLLECTIONS = [
     'employees', 'records', 'daily', 'products', 'leaveEntitlements',
-    'users', 'deductCats', 'bonusCats', 'workContents', 'leaveCats', 'workplaces'
+    'users', 'deductCats', 'bonusCats', 'workContents', 'leaveCats', 'workplaces',
+    'companies', 'holidays'
   ];
   let scanReport = '🔍 掃描雲端結果：\n\n';
   let scanTotal = 0;
@@ -10509,9 +10581,11 @@ async function nuclearWipeCloud() {
     // Step 3: 同步清空本地所有相關 storage
     employees = []; records = []; dailyEntries = []; products = []; leaveEntitlements = [];
     users = []; deductCategories = []; bonusCategories = []; workContents = []; leaveCategories = []; workplaces = [];
+    companies = []; holidays = [];
     [
       STORE.employees, STORE.records, STORE.daily, STORE.products, STORE.leaveEntitlements,
-      STORE.users, STORE.deductCats, STORE.bonusCats, STORE.workContents, STORE.leaveCats, STORE.workplaces
+      STORE.users, STORE.deductCats, STORE.bonusCats, STORE.workContents, STORE.leaveCats, STORE.workplaces,
+      STORE.companies, STORE.holidays
     ].forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
     // ★ 標記為「已主動清除預設值」→ 下次重新整理不會再自動補 5 個預設廠別 / 12 個預設假別
     try { localStorage.setItem('salary_defaults_purged', '1'); } catch (e) {}
@@ -10570,7 +10644,8 @@ async function diagnoseCloudResidual() {
   if (!cloudReady) { alert('雲端尚未連線'); return; }
   const ALL_COLLECTIONS = [
     'employees', 'records', 'daily', 'products', 'leaveEntitlements',
-    'users', 'deductCats', 'bonusCats', 'workContents', 'leaveCats', 'workplaces'
+    'users', 'deductCats', 'bonusCats', 'workContents', 'leaveCats', 'workplaces',
+    'companies', 'holidays'
   ];
   let report = `🔍 雲端 Firestore 殘留診斷\n（路徑：workspaces/${WORKSPACE_ID}）\n\n`;
   let cloudTotal = 0;
@@ -10589,6 +10664,8 @@ async function diagnoseCloudResidual() {
         c === 'workplaces' ? workplaces.length :
         c === 'deductCats' ? (typeof deductCategories !== 'undefined' ? deductCategories.length : 0) :
         c === 'bonusCats' ? (typeof bonusCategories !== 'undefined' ? bonusCategories.length : 0) :
+        c === 'companies' ? (typeof companies !== 'undefined' ? companies.length : 0) :
+        c === 'holidays' ? (typeof holidays !== 'undefined' ? holidays.length : 0) :
         '?';
       const mismatch = snap.docs.length !== localCount ? ' ⚠ 不一致' : '';
       report += `  ${c.padEnd(20)}: 雲端 ${snap.docs.length} | 本地 ${localCount}${mismatch}\n`;
