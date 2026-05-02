@@ -647,9 +647,20 @@
         <div class="form-group">
           <label>出勤類型</label>
           <select id="hourAttType" onchange="onHourAttTypeChange()">
-            <optgroup label="上班/加班">
+            <optgroup label="上班">
               <option value="normal">✅ 正常上班</option>
-              <option value="加班">💪 加班（法定 1.34/1.67 倍）</option>
+            </optgroup>
+            <optgroup label="加班 — 分段（自動倍率）">
+              <option value="加班-平日前2h">💪 平日加班 前2h ×4/3 (§24)</option>
+              <option value="加班-平日3-4h">💪 平日加班 第3-4h ×5/3 (§24)</option>
+              <option value="加班-休息日前2h">🟧 休息日加班 前2h ×4/3 (§24-2)</option>
+              <option value="加班-休息日3-8h">🟧 休息日加班 3-8h ×5/3 (§24-2)</option>
+              <option value="加班-休息日9-12h">🟧 休息日加班 9-12h ×8/3 (§24-2)</option>
+              <option value="加班-例假日">🚫 例假日加班 ×2+補假 (§40)</option>
+              <option value="加班-國定假日">🎌 國定假日加班 ×2 (§39)</option>
+            </optgroup>
+            <optgroup label="加班 — 其他">
+              <option value="加班">💪 加班（月合計簡化倍率）</option>
               <option value="時薪加班">💰 時薪加班（另計特別時薪）</option>
             </optgroup>
             <optgroup label="有薪假（全薪）">
@@ -816,9 +827,20 @@
         <div class="form-group">
           <label>出勤類型</label>
           <select id="quickAttType" onchange="onQuickAttTypeChange()">
-            <optgroup label="上班/加班">
+            <optgroup label="上班">
               <option value="normal">✅ 正常上班</option>
-              <option value="加班">💪 加班（法定 1.34/1.67 倍）</option>
+            </optgroup>
+            <optgroup label="加班 — 分段（自動倍率）">
+              <option value="加班-平日前2h">💪 平日加班 前2h ×4/3 (§24)</option>
+              <option value="加班-平日3-4h">💪 平日加班 第3-4h ×5/3 (§24)</option>
+              <option value="加班-休息日前2h">🟧 休息日加班 前2h ×4/3 (§24-2)</option>
+              <option value="加班-休息日3-8h">🟧 休息日加班 3-8h ×5/3 (§24-2)</option>
+              <option value="加班-休息日9-12h">🟧 休息日加班 9-12h ×8/3 (§24-2)</option>
+              <option value="加班-例假日">🚫 例假日加班 ×2+補假 (§40)</option>
+              <option value="加班-國定假日">🎌 國定假日加班 ×2 (§39)</option>
+            </optgroup>
+            <optgroup label="加班 — 其他">
+              <option value="加班">💪 加班（月合計簡化倍率）</option>
               <option value="時薪加班">💰 時薪加班（另計特別時薪）</option>
             </optgroup>
             <optgroup label="有薪假（全薪）">
@@ -1924,6 +1946,49 @@ const STORE = {
   companies: 'salary_companies',
   defaultCompanyId: 'salary_default_company_id'
 };
+
+// ========= ⚖ 分段加班類型登錄表（§24 / §39 / §40） =========
+// 每個類型內建：倍率、適用日類型、單日上限、法源
+const OT_RATE_MAP = {
+  '加班-平日前2h':   { rate: 4/3, label: '平日加班 前2h ×4/3',   law: '§24-1', maxPerDay: 2,  dayKind: 'weekday',  emoji: '💪' },
+  '加班-平日3-4h':   { rate: 5/3, label: '平日加班 第3-4h ×5/3', law: '§24-1', maxPerDay: 2,  dayKind: 'weekday',  emoji: '💪' },
+  '加班-休息日前2h': { rate: 4/3, label: '休息日加班 前2h ×4/3', law: '§24-2', maxPerDay: 2,  dayKind: 'restday',  emoji: '🟧' },
+  '加班-休息日3-8h': { rate: 5/3, label: '休息日加班 3-8h ×5/3', law: '§24-2', maxPerDay: 6,  dayKind: 'restday',  emoji: '🟧' },
+  '加班-休息日9-12h':{ rate: 8/3, label: '休息日加班 9-12h ×8/3',law: '§24-2', maxPerDay: 4,  dayKind: 'restday',  emoji: '🟧' },
+  '加班-例假日':     { rate: 2.0, label: '例假日 ×2 + 補假',      law: '§40',   maxPerDay: 8,  dayKind: 'weeklyOff',emoji: '🚫' },
+  '加班-國定假日':   { rate: 2.0, label: '國定假日 ×2',           law: '§39',   maxPerDay: 8,  dayKind: 'holiday',  emoji: '🎌' }
+};
+// 是否為分段加班類型
+function isSegmentedOt(attType) { return !!OT_RATE_MAP[attType]; }
+// 是否為「加班類」(含舊式 加班 / 時薪加班 / 分段)
+function isOtAttType(attType) { return attType === '加班' || attType === '時薪加班' || isSegmentedOt(attType); }
+// 取得倍率（非加班類回 1）
+function getOtMultiplier(attType, holidayPayMode) {
+  if (holidayPayMode === 'agreement') return 1.0; // 約定制：含於時薪
+  const m = OT_RATE_MAP[attType];
+  return m ? m.rate : 1.0;
+}
+// 計算分段加班的小計（含倍率）
+function calcSegmentedOtSubtotal(hours, hourlyRate, attType, holidayPayMode) {
+  const rate = getOtMultiplier(attType, holidayPayMode);
+  return Math.round(hours * hourlyRate * rate * 100) / 100;
+}
+// 給下拉選單用的標籤
+function getOtTypeLabel(attType) {
+  const m = OT_RATE_MAP[attType];
+  return m ? `${m.emoji} ${m.label}（${m.law}）` : attType;
+}
+// 依日期推薦對應的加班類型
+function recommendOtTypesByDate(date) {
+  if (!date) return [];
+  const dt = new Date(date);
+  const dow = dt.getDay();
+  const isHol = (typeof holidays !== 'undefined' && Array.isArray(holidays)) ? holidays.includes(date) : false;
+  if (isHol) return ['加班-國定假日'];
+  if (dow === 0) return ['加班-例假日'];
+  if (dow === 6) return ['加班-休息日前2h','加班-休息日3-8h','加班-休息日9-12h'];
+  return ['加班-平日前2h','加班-平日3-4h'];
+}
 
 function load(key, def) {
   try { return JSON.parse(localStorage.getItem(key)) || def; }
@@ -3232,9 +3297,21 @@ function updateHourPreview() {
     breakdown.style.display = 'none';
   }
 
-  document.getElementById('hourSubtotal').value = rate > 0 && workHours > 0
-    ? `NT$ ${formatMoney(sub)}  (${workHours.toFixed(2)}h × ${rate})`
-    : '';
+  // ★ 分段加班 → 顯示應用倍率與最終金額
+  const _attTypeEl = document.getElementById('hourAttType');
+  const _attType = _attTypeEl ? _attTypeEl.value : '';
+  if (isSegmentedOt(_attType) && rate > 0 && workHours > 0) {
+    const _empId = document.getElementById('dailyEmp') ? document.getElementById('dailyEmp').value : '';
+    const _emp = employees.find(e => e._id === _empId);
+    const _mult = getOtMultiplier(_attType, _emp && _emp.holidayPayMode);
+    const _finalSub = workHours * rate * _mult;
+    document.getElementById('hourSubtotal').value =
+      `NT$ ${formatMoney(_finalSub)}  (${workHours.toFixed(2)}h × ${rate} × ${_mult.toFixed(3).replace(/0+$/,'').replace(/\.$/,'')} 倍)`;
+  } else {
+    document.getElementById('hourSubtotal').value = rate > 0 && workHours > 0
+      ? `NT$ ${formatMoney(sub)}  (${workHours.toFixed(2)}h × ${rate})`
+      : '';
+  }
 }
 
 function addPieceEntry() {
@@ -3384,6 +3461,49 @@ function addHourEntry() {
 
   // ✅ 週末/國定假日 + 正常上班 → 提醒改加班（排班制員工除外）
   const _attTypeNow = document.getElementById('hourAttType').value || 'normal';
+  // ⚖ 分段加班類型 → 同日累計時數合規檢查
+  if (isSegmentedOt(_attTypeNow)) {
+    const meta = OT_RATE_MAP[_attTypeNow];
+    // 同日同類型已存在的時數
+    const sameTypeToday = dailyEntries
+      .filter(d => d.empId === empId && d.date === date && d._id !== editingDailyId && d.attType === _attTypeNow)
+      .reduce((s, d) => s + (d.hours || 0), 0);
+    const newTotal = sameTypeToday + (hours || 0);
+    if (newTotal > meta.maxPerDay) {
+      const okOver = confirm(
+        `⚠ 「${meta.label}」單日累計超過 ${meta.maxPerDay}h！\n\n` +
+        `已有：${sameTypeToday}h\n` +
+        `本筆：${hours}h\n` +
+        `合計：${newTotal}h（超出 ${(newTotal - meta.maxPerDay).toFixed(1)}h）\n\n` +
+        `${meta.law} 規定此類加班單日上限 ${meta.maxPerDay}h。\n` +
+        `${_attTypeNow === '加班-平日3-4h' ? '若超過 4h 屬違法（§32）。\n' : ''}` +
+        `${_attTypeNow === '加班-平日前2h' ? '若已用滿 2h，後續加班應改選「平日3-4h」。\n' : ''}` +
+        `按「確定」→ 仍儲存（請於下一筆改選正確類型）\n` +
+        `按「取消」→ 修改類型或時數`
+      );
+      if (!okOver) return;
+    }
+    // 日期類型一致性最終確認
+    const dt = new Date(date);
+    const dow = dt.getDay();
+    const isHol = holidays.includes(date);
+    let actual = 'weekday';
+    if (isHol) actual = 'holiday';
+    else if (dow === 0) actual = 'weeklyOff';
+    else if (dow === 6) actual = 'restday';
+    if (actual !== meta.dayKind) {
+      const map = { weekday:'平日', restday:'休息日(週六)', weeklyOff:'例假日(週日)', holiday:'國定假日' };
+      const okMis = confirm(
+        `⚠ 出勤類型與日期不一致！\n\n` +
+        `日期 ${date} 實際為「${map[actual]}」\n` +
+        `您選了「${meta.label}」(${meta.law})\n\n` +
+        `這會導致加班費倍率錯誤。建議改選符合日類型的選項。\n\n` +
+        `按「確定」→ 仍要儲存（您確認該員工此日的計薪規則特殊）\n` +
+        `按「取消」→ 改選正確類型`
+      );
+      if (!okMis) return;
+    }
+  }
   if (_attTypeNow === 'normal' && emp && !emp.isShift) {
     const dt = getDayType(date);
     if (dt === 'holiday' || dt === 'sunday' || dt === 'saturday') {
@@ -3432,6 +3552,13 @@ function addHourEntry() {
     }
   }
 
+  // ★ 分段加班類型 → 自動套用倍率
+  let _subtotal = Math.round(hours * rate * 100) / 100;
+  let _otRate = 1.0;
+  if (isSegmentedOt(_hourAttType)) {
+    _otRate = getOtMultiplier(_hourAttType, emp && emp.holidayPayMode);
+    _subtotal = calcSegmentedOtSubtotal(hours, rate, _hourAttType, emp && emp.holidayPayMode);
+  }
   const entry = {
     _id: editingDailyId || ('d_' + Date.now()),
     date, empId,
@@ -3441,7 +3568,8 @@ function addHourEntry() {
     start, end, breakMin: brk,
     hours: Math.round(hours * 100) / 100,
     rate,
-    subtotal: Math.round(hours * rate * 100) / 100,
+    otRate: _otRate, // ★ 分段加班用：實際應用倍率（約定制 = 1.0）
+    subtotal: _subtotal,
     workContent: document.getElementById('hourWorkContent').value,
     attType: _hourAttType,
     lateMinutes: parseFloat(document.getElementById('hourLate').value) || 0,
@@ -3649,7 +3777,14 @@ function openAttendanceEditModal(entry) {
   }
   const typeOptions = [
     ['normal', '✅ 正常上班'],
-    ['加班', '💪 加班（法定倍率）'],
+    ['加班-平日前2h', '💪 平日加班 前2h ×4/3 (§24)'],
+    ['加班-平日3-4h', '💪 平日加班 第3-4h ×5/3 (§24)'],
+    ['加班-休息日前2h', '🟧 休息日加班 前2h ×4/3 (§24-2)'],
+    ['加班-休息日3-8h', '🟧 休息日加班 3-8h ×5/3 (§24-2)'],
+    ['加班-休息日9-12h', '🟧 休息日加班 9-12h ×8/3 (§24-2)'],
+    ['加班-例假日', '🚫 例假日加班 ×2+補假 (§40)'],
+    ['加班-國定假日', '🎌 國定假日加班 ×2 (§39)'],
+    ['加班', '💪 加班（月合計簡化倍率）'],
     ['時薪加班', '💰 時薪加班（另計特別時薪）'],
     ['特休', '🌴 特休'],
     ['公假', '🏛 公假'],
@@ -3772,13 +3907,13 @@ function saveAttendanceFromModal(id) {
     const attType = document.getElementById('attEditType').value;
     const work = document.getElementById('attEditWork').value;
 
-    const isLeave = attType !== 'normal' && attType !== '加班' && attType !== '時薪加班';
+    const isLeave = attType !== 'normal' && !isOtAttType(attType);
     // ★ 一律從時段重算 hours（請假也要算實際時段，避免改了時間但 hours 沒更新）
     const hours = (start && end) ? calcHours(start, end, brk, late) : (entry.hours || 8);
     const emp = employees.find(e => e._id === entry.empId);
     const isMonthly = emp && !emp.isHourly;
     const attendanceOnly = isMonthly && attType === 'normal';
-    // 與 quickAddAttendance 相同邏輯：加班一律 subtotal=0 走倍率
+    // 與 quickAddAttendance 相同邏輯：「加班」(月合計) 一律 subtotal=0 走倍率；分段加班則套用倍率
     const needSubtotal = !isLeave && !attendanceOnly && attType !== '加班';
     const rate = entry.rate || (emp ? (emp.hourlyRate || Math.round((emp.baseSalary || 0) / 30 / 8)) : 0);
 
@@ -3791,7 +3926,15 @@ function saveAttendanceFromModal(id) {
     entry.workContent = work;
     entry.hours = Math.round(hours * 100) / 100;
     entry.rate = needSubtotal ? rate : 0;
-    entry.subtotal = needSubtotal ? Math.round(hours * rate * 100) / 100 : 0;
+    // ★ 分段加班 → 套倍率；其餘正常時薪
+    if (isSegmentedOt(attType)) {
+      const _otRate = getOtMultiplier(attType, emp && emp.holidayPayMode);
+      entry.otRate = _otRate;
+      entry.subtotal = calcSegmentedOtSubtotal(hours, rate, attType, emp && emp.holidayPayMode);
+    } else {
+      entry.otRate = 1.0;
+      entry.subtotal = needSubtotal ? Math.round(hours * rate * 100) / 100 : 0;
+    }
     entry.attendanceOnly = attendanceOnly;
     entry.note = note;
   }
@@ -4325,25 +4468,26 @@ function refreshMonthlyAttendance() {
     const isWeekendCal = (dow === 0 || dow === 6) || isHoliday;
     // 排班制 → 一律當平日；非排班 → 依日曆
     const isWeekend = isShiftEmp ? false : isWeekendCal;
-    // 請假類型（含 時薪加班 不算請假）
-    const isLeaveType = type !== 'normal' && type !== '加班' && type !== '時薪加班';
+    // 請假類型（含 時薪加班 / 分段加班類型不算請假）
+    const isLeaveType = type !== 'normal' && !isOtAttType(type);
     // 「有明確金額」的加班 → 走計時收入，不再走 ot1/ot2 倍率
-    const hasExplicitSubtotal = (type === '加班' || type === '時薪加班') && (d.subtotal || 0) > 0;
+    //   分段加班（subtotal 已含倍率）也歸於此類，不再重複計入 ot1/ot2
+    const hasExplicitSubtotal = isOtAttType(type) && (d.subtotal || 0) > 0;
 
     if (!isLeaveType) {
       // 上班或加班（不論是否有 subtotal）
       if (isWeekend) {
         weekendWorkDates.add(d.date);
-        // 例假日上班/加班一律算例假日加班時數（含 normal & 加班）
+        // 例假日上班/加班一律算例假日加班時數（含 normal & 加班 & 分段）
         weekendOtHours += d.hours || 0;
         // 沒有明確金額的才自動填入 ot2 走倍率
         if (!hasExplicitSubtotal) weekendOtHoursForMultiplier += d.hours || 0;
       } else {
         weekdayWorkDates.add(d.date);
-        // 平日加班統計：只要 attType='加班' 或 '時薪加班' 就計入
-        if (type === '加班' || type === '時薪加班') {
+        // 平日加班統計：「加班」、「時薪加班」、「分段加班」都計入
+        if (isOtAttType(type)) {
           weekdayOtHours += d.hours || 0;
-          // 沒有明確金額的才自動填入 ot1 走倍率
+          // 沒有明確金額的才自動填入 ot1 走倍率（type === '加班'）
           if (!hasExplicitSubtotal && type === '加班') weekdayOtHoursForMultiplier += d.hours || 0;
         }
       }
@@ -4407,6 +4551,18 @@ function refreshMonthlyAttendance() {
     </div>
     <div style="font-size:11px; color:#6b7280; margin-bottom:8px;">（點每列「✏️」可編輯，或按上方按鈕強制刷新出勤天數/加班時數；「整月清除」可一次刪除本月所有記錄重新建立）</div>
 
+    <!-- 🆕 分段加班類型提醒（給排班人員）-->
+    <div style="padding:8px 10px; background:linear-gradient(135deg,#dbeafe,#eff6ff); border-left:4px solid #1e40af; border-radius:6px; margin-bottom:8px; font-size:12px; color:#1e3a8a; line-height:1.6;">
+      💡 <strong>排班人員注意：</strong>登錄加班時請選擇對應的<strong>分段類型</strong>，預覽就會顯示正確的「應領金額」：
+      <div style="margin-top:4px; font-size:11px; line-height:1.7;">
+        • <strong>平日加班</strong>：前 2h 選「💪 平日前2h ×4/3」；第 3-4h 選「💪 平日3-4h ×5/3」；超過 4h 屬<span style="color:#dc2626;">違法 §32</span><br>
+        • <strong>休息日（週六）</strong>：前 2h ×4/3、3-8h ×5/3、9-12h ×8/3<br>
+        • <strong>例假日（週日）</strong>：原則禁止出勤（§40），僅限天災事變；×2+補假<br>
+        • <strong>國定假日</strong>：×2（§39，照給+加倍）<br>
+        ⚖ 若一筆超過該類型上限（例：「平日前2h」填 3h）→ 系統會跳出提醒；若日期類型對不上（例：週六選「平日加班」）→ 也會提醒
+      </div>
+    </div>
+
     <!-- ★ 時薪制員工的工時/收入摘要 -->
     ${(() => {
       if (!empObj || !empObj.isHourly) return '';
@@ -4417,12 +4573,15 @@ function refreshMonthlyAttendance() {
       empEntries.forEach(d => {
         if (d.type === 'hour') {
           const t = d.attType || 'normal';
-          if (t === 'normal' || t === '時薪加班') {
+          // 計時上班：normal、時薪加班、所有分段加班 都列入計時工時/收入
+          if (t === 'normal' || t === '時薪加班' || isSegmentedOt(t)) {
             hourCount += (d.hours || 0);
             hourPay += (d.subtotal || 0);
           }
-          if (t === '加班' || t === '時薪加班') {
+          // 加班時數：除了 normal 以外所有加班類別
+          if (isOtAttType(t)) {
             otHours += (d.hours || 0);
+            otPay += (d.subtotal || 0);
           }
         } else if (d.type === 'piece') {
           pieceCount++;
@@ -4467,13 +4626,13 @@ function refreshMonthlyAttendance() {
         empEntries.forEach(d => {
           if (d.type !== 'hour') return;
           const t = d.attType || 'normal';
-          const isLeave = t !== 'normal' && t !== '加班' && t !== '時薪加班';
+          const isLeave = t !== 'normal' && !isOtAttType(t);
           const h = isLeave ? ((d.hours && d.hours > 0) ? d.hours : 8) : (d.hours || 0);
           const dow = new Date(d.date).getDay();
           const isHol = holidays.includes(d.date);
           if (isLeave) {
             totalLeave += h;
-          } else if (t === '加班' || t === '時薪加班') {
+          } else if (isOtAttType(t)) {
             totalOT += h;
           } else {
             totalNormal += h;
@@ -4507,7 +4666,7 @@ function refreshMonthlyAttendance() {
       empEntries.forEach(d => {
         if (d.type !== 'hour') return;
         const type = d.attType || 'normal';
-        const isLeave = type !== 'normal' && type !== '加班' && type !== '時薪加班';
+        const isLeave = type !== 'normal' && !isOtAttType(type);
         const h = isLeave ? ((d.hours && d.hours > 0) ? d.hours : 8) : (d.hours || 0);
         const dow = new Date(d.date).getDay();
         const isHol = holidays.includes(d.date);
@@ -4664,7 +4823,7 @@ function refreshMonthlyAttendance() {
     const hourEntries = dayEntries.filter(e => e.type === 'hour');
     let dayTotalHours = 0;
     hourEntries.forEach(e => {
-      const isLeave = e.attType && e.attType !== 'normal' && e.attType !== '加班' && e.attType !== '時薪加班';
+      const isLeave = e.attType && e.attType !== 'normal' && !isOtAttType(e.attType);
       const h = isLeave ? ((e.hours && e.hours > 0) ? e.hours : 8) : (e.hours || 0);
       dayTotalHours += h;
     });
@@ -4689,10 +4848,19 @@ function refreshMonthlyAttendance() {
         if (e.type === 'hour') {
           const brkHr = (e.breakMin || 0) / 60;
           const attTypeNow = e.attType || 'normal';
-          const isLeaveRow = attTypeNow !== 'normal' && attTypeNow !== '加班';
-          const attBadge = attTypeNow !== 'normal'
-            ? ` <span style="background:${isLeaveRow ? '#fee2e2' : '#dbeafe'}; color:${isLeaveRow ? '#991b1b' : '#1e40af'}; padding:1px 5px; border-radius:8px; font-size:10px;">${attTypeNow}</span>`
-            : '';
+          const isLeaveRow = attTypeNow !== 'normal' && !isOtAttType(attTypeNow);
+          // 分段加班用顯眼的橘色標籤 + 顯示倍率與小計
+          const isSegOt = isSegmentedOt(attTypeNow);
+          const otMeta = OT_RATE_MAP[attTypeNow];
+          let attBadge = '';
+          if (attTypeNow !== 'normal') {
+            if (isSegOt) {
+              const subText = e.subtotal ? ` = NT$ ${formatMoney(e.subtotal)}` : '';
+              attBadge = ` <span style="background:#fef3c7; color:#92400e; padding:1px 5px; border-radius:8px; font-size:10px; font-weight:700;" title="${otMeta ? otMeta.law : ''}">${otMeta ? otMeta.emoji : '💪'} ${attTypeNow.replace('加班-','')} ×${otMeta ? otMeta.rate.toFixed(3).replace(/0+$/,'').replace(/\.$/,'') : ''}${subText}</span>`;
+            } else {
+              attBadge = ` <span style="background:${isLeaveRow ? '#fee2e2' : '#dbeafe'}; color:${isLeaveRow ? '#991b1b' : '#1e40af'}; padding:1px 5px; border-radius:8px; font-size:10px;">${attTypeNow}</span>`;
+            }
+          }
           const lateBadge = e.lateMinutes > 0
             ? ` <span style="background:#fee2e2; color:#991b1b; padding:1px 5px; border-radius:8px; font-size:10px;">遲${e.lateMinutes}分</span>`
             : '';
@@ -4735,15 +4903,15 @@ function refreshMonthlyAttendance() {
       });
     }
   }
-  // ★ 月合計工時：只計算真正上班 + 加班的時數（排除請假時段）
+  // ★ 月合計工時：只計算真正上班 + 加班（含分段）的時數（排除請假時段）
   const totalHours = empEntries
     .filter(e => e.type === 'hour')
-    .filter(e => !e.attType || e.attType === 'normal' || e.attType === '加班')
+    .filter(e => !e.attType || e.attType === 'normal' || isOtAttType(e.attType))
     .reduce((a,b) => a + (b.hours || 0), 0);
-  // ★ 請假時數：所有非 normal/加班 的時段
+  // ★ 請假時數：所有非 normal/加班類 的時段
   const totalLeaveHr = empEntries
     .filter(e => e.type === 'hour')
-    .filter(e => e.attType && e.attType !== 'normal' && e.attType !== '加班')
+    .filter(e => e.attType && e.attType !== 'normal' && !isOtAttType(e.attType))
     .reduce((a,b) => a + (b.hours || 0), 0);
   const totalPieceQty = empEntries
     .filter(e => e.type === 'piece')
@@ -4881,7 +5049,7 @@ function computeLeaveItemsFromAttendance(empId, month) {
   if (!empId || !month) return [];
   const list = dailyEntries.filter(d =>
     d.empId === empId && d.date.startsWith(month) && d.type === 'hour' &&
-    d.attType && d.attType !== 'normal' && d.attType !== '加班' && d.attType !== '時薪加班'
+    d.attType && d.attType !== 'normal' && !isOtAttType(d.attType)
   );
   if (list.length === 0) return [];
   const byType = {};
@@ -5432,12 +5600,16 @@ function refreshLaborAuditCard() {
         const isIllegal = p.label.includes('違法') || p.label.includes('禁止');
         return `<span style="display:inline-block; padding:2px 6px; margin:1px; background:${isIllegal?'#fee2e2':'#f0f9ff'}; color:${isIllegal?'#991b1b':'#075985'}; border-radius:4px; font-size:11px; font-weight:600;">${p.hrs}h ${p.label} = NT$ ${formatMoney(pay)}</span>`;
       }).join(' ');
+      // ★ 顯示記錄上實際選的類型（讓使用者比對是否選對）
+      const recordedHtml = (bd.recordedTypes && bd.recordedTypes.length > 0)
+        ? `<div style="font-size:10px; color:#475569; margin-top:2px;">📝 已登記：${bd.recordedTypes.map(escapeHtml).join('、')}</div>`
+        : '';
       return `
         <tr>
           <td style="padding:4px 6px; border-bottom:1px solid #e5e7eb; font-size:11px;">${bd.date}</td>
           <td style="padding:4px 6px; border-bottom:1px solid #e5e7eb; font-size:11px; color:${dayKindColor[bd.dayKind]}; font-weight:700;">${dayKindLabel[bd.dayKind]}</td>
           <td style="padding:4px 6px; border-bottom:1px solid #e5e7eb; font-size:11px; text-align:center;">${bd.otHrs}h</td>
-          <td style="padding:4px 6px; border-bottom:1px solid #e5e7eb;">${partsText}</td>
+          <td style="padding:4px 6px; border-bottom:1px solid #e5e7eb;">${partsText}${recordedHtml}</td>
         </tr>`;
     }).join('');
     const modeNote = _payMode === 'agreement'
@@ -5536,10 +5708,10 @@ function auditLaborLaw(empId, month) {
     Object.keys(byDate).forEach(date => {
       const workEntries = byDate[date].filter(d => {
         const t = d.attType || 'normal';
-        return t === 'normal' || t === '加班' || t === '時薪加班';
+        return t === 'normal' || isOtAttType(t);
       });
       const totalHrs = workEntries.reduce((s, d) => s + (d.hours || 0), 0);
-      const otHrs = workEntries.filter(d => (d.attType === '加班' || d.attType === '時薪加班'))
+      const otHrs = workEntries.filter(d => isOtAttType(d.attType))
         .reduce((s, d) => s + (d.hours || 0), 0);
       const dailyLimit = (emp.flexibleHours === '2week' || emp.flexibleHours === '4week') ? 10 : 8;
       const dailyMax = dailyLimit + 4; // 正常 + OT 4h = 最多 12h
@@ -5565,7 +5737,10 @@ function auditLaborLaw(empId, month) {
 
       // ★ 單日加班 §24 拆分（僅平日加班與休息日加班適用拆分；國定/例假整日加倍）
       if (otHrs > 0) {
-        let bd = { date, dayKind, otHrs, totalHrs, parts: [], illegal: 0 };
+        // 蒐集當日所有加班記錄的 attType 與 hours / subtotal
+        const otEntries = workEntries.filter(d => isOtAttType(d.attType));
+        const recordedTypes = otEntries.map(d => `${d.attType}(${d.hours||0}h${d.subtotal?` NT$${formatMoney(d.subtotal)}`:''})`);
+        let bd = { date, dayKind, otHrs, totalHrs, parts: [], illegal: 0, recordedTypes };
         if (dayKind === 'weekday') {
           // §24 平日：前 2h × 4/3、第 3-4h × 5/3、>4h 違法（§32 上限）
           const h12 = Math.min(otHrs, 2);
@@ -5624,7 +5799,7 @@ function auditLaborLaw(empId, month) {
     let monthlyOT = 0;
     entries.forEach(d => {
       const t = d.attType || 'normal';
-      if (t === '加班' || t === '時薪加班') monthlyOT += (d.hours || 0);
+      if (isOtAttType(t)) monthlyOT += (d.hours || 0);
       // 平日/假日加班欄位也要考慮
       monthlyOT += (d.ot1 || 0) + (d.ot2 || 0);
     });
@@ -5654,7 +5829,7 @@ function auditLaborLaw(empId, month) {
     Object.keys(byDate).forEach(date => {
       const hasWork = byDate[date].some(d => {
         const t = d.attType || 'normal';
-        return t === 'normal' || t === '加班' || t === '時薪加班';
+        return t === 'normal' || isOtAttType(t);
       });
       if (hasWork) workedDates.add(date);
     });
@@ -6819,6 +6994,33 @@ function onHourAttTypeChange() {
       workSel.value = type;
     }
   }
+
+  // ★ 分段加班 → 提示日類型是否相符
+  const date = document.getElementById('dailyDate') ? document.getElementById('dailyDate').value : '';
+  if (isSegmentedOt(type) && date) {
+    const meta = OT_RATE_MAP[type];
+    const dt = new Date(date);
+    const dow = dt.getDay();
+    const isHol = (typeof holidays !== 'undefined' && Array.isArray(holidays)) ? holidays.includes(date) : false;
+    let actual = 'weekday';
+    if (isHol) actual = 'holiday';
+    else if (dow === 0) actual = 'weeklyOff';
+    else if (dow === 6) actual = 'restday';
+    if (actual !== meta.dayKind) {
+      const map = { weekday:'平日', restday:'休息日(週六)', weeklyOff:'例假日(週日)', holiday:'國定假日' };
+      alert(
+        `⚠ 出勤類型與日期不一致！\n\n` +
+        `${date} 實際為「${map[actual]}」，但您選了「${meta.label}」(${meta.law})\n\n` +
+        `建議改選對應類型，否則加班費倍率會錯。\n` +
+        `提示：${actual==='weekday'?'平日加班用「平日前2h / 第3-4h」' :
+                actual==='restday'?'休息日加班用「休息日前2h / 3-8h / 9-12h」' :
+                actual==='weeklyOff'?'例假日加班用「例假日 ×2+補假」':
+                '國定假日加班用「國定假日 ×2」'}`
+      );
+    }
+  }
+  // 觸發預覽更新（顯示倍率）
+  if (typeof updateHourPreview === 'function') updateHourPreview();
 }
 
 function onQuickAttTypeChange() {
@@ -6826,7 +7028,7 @@ function onQuickAttTypeChange() {
   // 自訂模式 → 顯示輸入欄
   const customRow = document.getElementById('quickCustomTypeRow');
   if (customRow) customRow.style.display = (type === '__custom__') ? 'flex' : 'none';
-  const isLeaveType = type && type !== 'normal' && type !== '加班' && type !== '__custom__';
+  const isLeaveType = type && type !== 'normal' && !isOtAttType(type) && type !== '__custom__';
 
   // 時間欄位 → 所有類型都顯示（請假也要填時段）
   const timeRow = document.getElementById('quickAttTimeRow');
@@ -6862,6 +7064,30 @@ function onQuickAttTypeChange() {
     if (startLbl) startLbl.textContent = '上班時間';
     if (endLbl) endLbl.textContent = '下班時間';
     if (timeHint) timeHint.style.display = 'none';
+  }
+
+  // ★ 分段加班 → 顯示倍率提示 + 日期一致性提示
+  if (isSegmentedOt(type)) {
+    const meta = OT_RATE_MAP[type];
+    const date = document.getElementById('quickAttDate') ? document.getElementById('quickAttDate').value : '';
+    let hint = `<strong>${meta.label}</strong>（${meta.law}）— 系統會自動套用倍率 ×${meta.rate.toFixed(3).replace(/0+$/,'').replace(/\.$/,'')}`;
+    if (date) {
+      const dt = new Date(date);
+      const dow = dt.getDay();
+      const isHol = (typeof holidays !== 'undefined' && Array.isArray(holidays)) ? holidays.includes(date) : false;
+      let actual = 'weekday';
+      if (isHol) actual = 'holiday';
+      else if (dow === 0) actual = 'weeklyOff';
+      else if (dow === 6) actual = 'restday';
+      if (actual !== meta.dayKind) {
+        const map = { weekday:'平日', restday:'休息日(週六)', weeklyOff:'例假日(週日)', holiday:'國定假日' };
+        hint += `<br>⚠ <span style="color:#dc2626;">${date} 實際為「${map[actual]}」，與選擇的類型不符！</span>`;
+      }
+    }
+    if (timeHint) {
+      timeHint.style.display = 'block';
+      timeHint.innerHTML = `💡 ${hint}`;
+    }
   }
 }
 
@@ -7324,8 +7550,8 @@ function quickAddAttendance() {
       if (typeof cloudSave === 'function') cloudSave('leaveCats', newCat);
     }
   }
-  // 請假類型：不含 加班、時薪加班
-  const isLeave = attType !== 'normal' && attType !== '加班' && attType !== '時薪加班';
+  // 請假類型：不含 加班、時薪加班、分段加班
+  const isLeave = attType !== 'normal' && !isOtAttType(attType);
   const isMonthly = !emp.isHourly;
 
   // ✅ 週末/國定假日 + 正常上班 → 提醒改加班（排班制員工除外）
@@ -7351,6 +7577,14 @@ function quickAddAttendance() {
   //   請假 → subtotal = 0（走請假明細）
   const attendanceOnly = isMonthly && attType === 'normal';
   const needSubtotal = !isLeave && !attendanceOnly && attType !== '加班';
+  // ★ 分段加班 → subtotal 套倍率（subtotal 已包含加班費，不再重複算 ot1/ot2）
+  let _subtotal, _otRate = 1.0;
+  if (isSegmentedOt(attType)) {
+    _otRate = getOtMultiplier(attType, emp.holidayPayMode);
+    _subtotal = calcSegmentedOtSubtotal(hours, rate, attType, emp.holidayPayMode);
+  } else {
+    _subtotal = needSubtotal ? Math.round(hours * rate * 100) / 100 : 0;
+  }
   const entry = {
     _id: 'd_' + Date.now(),
     date, empId, empName: emp.name, empNo: emp.id,
@@ -7358,7 +7592,8 @@ function quickAddAttendance() {
     start, end, breakMin: brk,
     hours: Math.round(hours * 100) / 100,
     rate: needSubtotal ? rate : 0,
-    subtotal: needSubtotal ? Math.round(hours * rate * 100) / 100 : 0,
+    otRate: _otRate,
+    subtotal: _subtotal,
     workContent: work || attType,
     attType: attType,
     lateMinutes: late,
@@ -7692,7 +7927,7 @@ function exportSalarySlipExcel() {
   // 本月請假摘要
   const monthLeaveEntries = dailyEntries.filter(d =>
     d.empId === emp._id && d.type === 'hour' && d.date.startsWith(month) &&
-    d.attType && d.attType !== 'normal' && d.attType !== '加班' && d.attType !== '時薪加班'
+    d.attType && d.attType !== 'normal' && !isOtAttType(d.attType)
   );
   const leaveUsage = {};
   monthLeaveEntries.forEach(d => {
@@ -7876,7 +8111,7 @@ function calculateAndPreview() {
   const calcMonth = document.getElementById('calcMonth').value;
   const monthLeaveEntries = dailyEntries.filter(d =>
     d.empId === emp._id && d.type === 'hour' && d.date.startsWith(calcMonth) &&
-    d.attType && d.attType !== 'normal' && d.attType !== '加班' && d.attType !== '時薪加班'
+    d.attType && d.attType !== 'normal' && !isOtAttType(d.attType)
   );
   const leaveUsageByType = {};
   monthLeaveEntries.forEach(d => {
@@ -8594,7 +8829,7 @@ function buildMonthlyCountSheets(wb, targetMonth) {
           .filter(x => x.empId === emp._id && x.date === dateStr && x.type === 'hour')
           .filter(x => {
             const t = x.attType || 'normal';
-            return t === 'normal' || t === '加班' || t === '時薪加班';
+            return t === 'normal' || isOtAttType(t);
           })
           .reduce((a, b) => a + (parseFloat(b.hours) || 0), 0);
         row.push(hrs || '');
@@ -8617,7 +8852,7 @@ function buildMonthlyCountSheets(wb, targetMonth) {
         .filter(x => x.empId === emp._id && x.date.startsWith(targetMonth) && x.type === 'hour')
         .filter(x => {
           const t = x.attType || 'normal';
-          return t === 'normal' || t === '加班' || t === '時薪加班';
+          return t === 'normal' || isOtAttType(t);
         })
         .reduce((a, b) => a + (parseFloat(b.hours) || 0), 0);
       // 加班時數（ot1 + ot2）
@@ -8625,7 +8860,7 @@ function buildMonthlyCountSheets(wb, targetMonth) {
         .filter(x => x.empId === emp._id && x.date.startsWith(targetMonth) && x.type === 'hour')
         .filter(x => {
           const t = x.attType || 'normal';
-          return t === '加班' || t === '時薪加班';
+          return isOtAttType(t);
         })
         .reduce((a, b) => a + (parseFloat(b.hours) || 0), 0);
 
@@ -8689,7 +8924,7 @@ function buildCombinedMonthlySummary(wb, targetMonth) {
       .filter(x => x.type === 'hour')
       .filter(x => {
         const t = x.attType || 'normal';
-        return t === 'normal' || t === '加班' || t === '時薪加班';
+        return t === 'normal' || isOtAttType(t);
       })
       .reduce((a, b) => a + (parseFloat(b.hours) || 0), 0);
 
@@ -9693,7 +9928,7 @@ function fixOvertimeEntries() {
   let count = 0;
   dailyEntries.forEach(d => {
     if (d.type !== 'hour') return;
-    if (d.attType !== '加班' && d.attType !== '時薪加班') return;
+    if (!isOtAttType(d.attType)) return;
     // 找員工 → 取時薪
     const emp = employees.find(e => e._id === d.empId);
     if (!emp) return;
@@ -9701,7 +9936,10 @@ function fixOvertimeEntries() {
     const rate = d.rate || fallbackRate;
     const oldAttOnly = d.attendanceOnly;
     const oldSub = d.subtotal || 0;
-    const newSub = Math.round((d.hours || 0) * rate * 100) / 100;
+    // ★ 分段加班 → 套倍率；舊式「加班 / 時薪加班」 → 1.0
+    const newSub = isSegmentedOt(d.attType)
+      ? calcSegmentedOtSubtotal(d.hours || 0, rate, d.attType, emp.holidayPayMode)
+      : Math.round((d.hours || 0) * rate * 100) / 100;
     if (oldAttOnly || oldSub !== newSub || !d.rate) {
       d.attendanceOnly = false;
       d.rate = rate;
@@ -10097,8 +10335,8 @@ function isPaidHourEntry(d, emp) {
   if (!d || d.type !== 'hour') return false;
   if (d.attendanceOnly) return false;
   const attType = d.attType || 'normal';
-  // 請假類型 → 不計薪
-  if (attType !== 'normal' && attType !== '加班' && attType !== '時薪加班') return false;
+  // 請假類型 → 不計薪（加班類含分段加班一律算工作）
+  if (attType !== 'normal' && !isOtAttType(attType)) return false;
   // ★ 月薪制員工的「正常上班」 → 含於底薪，不計（避免員工從時薪轉月薪後舊記錄重複計薪）
   if (emp && !emp.isHourly && attType === 'normal') return false;
   // ★ 核心規則：subtotal > 0 就計入
