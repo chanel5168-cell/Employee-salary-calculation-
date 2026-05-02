@@ -313,9 +313,12 @@
           <input type="date" id="empHireDate" oninput="updateEmpLeaveHint()">
         </div>
         <div class="form-group">
-          <label>投保日 <span style="font-size:10px; color:#6b7280;">(勞健保起算日)</span></label>
-          <input type="date" id="empInsuredDate">
+          <label>投保日 <span style="font-size:10px; color:#6b7280;">(勞健保起算日，<strong>留空 = 未投保員工，不扣勞健保</strong>)</span></label>
+          <input type="date" id="empInsuredDate" oninput="updateNotInsuredHint()" onchange="updateNotInsuredHint()">
         </div>
+      </div>
+      <div id="notInsuredHint" style="display:none; margin-top:-6px; margin-bottom:12px; padding:8px 10px; background:#fef3c7; border-left:3px solid #f59e0b; border-radius:4px; font-size:12px; color:#92400e;">
+        ⚠ <strong>未填投保日</strong>：此員工視為「未投保」（適用合約制、債務問題、學生兼職等情境），勞健保與自提勞退**自動為 0**，計薪時不扣款。
       </div>
       <div id="empLeaveHint" style="display:none; margin-top:-6px; margin-bottom:12px; padding:8px 10px; background:#f0fdf4; border-left:3px solid #06C755; border-radius:4px; font-size:12px; color:#166534;"></div>
       <div style="background:#eff6ff; border:1px solid #3b82f6; border-radius:8px; padding:10px; margin-bottom:12px;">
@@ -1748,7 +1751,19 @@
         </div>
       </div>
       <div class="form-group" id="newUserWorkplaceRow">
-        <label>限定廠別 * <span style="color:#6b7280; font-size:11px; font-weight:normal;">（可勾選多個，未勾代表該廠看不到）</span></label>
+        <label style="display:flex; justify-content:space-between; align-items:center;">
+          <span>限定廠別 * <span style="color:#6b7280; font-size:11px; font-weight:normal;">（可勾選多個，未勾代表該廠看不到）</span></span>
+          <button type="button" onclick="toggleUserWorkplaceAdd()" style="background:#06C755; color:white; border:none; padding:4px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;">➕ 新增廠別</button>
+        </label>
+        <!-- 快速新增廠別區（預設隱藏） -->
+        <div id="newUserAddWorkplaceBox" style="display:none; padding:10px; background:#f0fdf4; border:1px dashed #06C755; border-radius:6px; margin-bottom:8px;">
+          <div style="font-size:12px; color:#065f46; margin-bottom:6px;">在此新增廠別，會自動同步到員工頁的工作地點清單</div>
+          <div style="display:flex; gap:6px;">
+            <input type="text" id="newUserNewWorkplaceName" placeholder="新廠別名稱（例：日盛暘、香港倉）" style="flex:1; padding:6px 10px; border:1px solid #d1d5db; border-radius:4px;">
+            <button type="button" class="btn btn-primary btn-sm" onclick="addWorkplaceFromUser()" style="padding:6px 14px;">新增</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="toggleUserWorkplaceAdd()" style="padding:6px 14px;">取消</button>
+          </div>
+        </div>
         <div id="newUserWorkplaceChecks" style="display:flex; flex-wrap:wrap; gap:10px; padding:10px; border:1px solid #e5e7eb; border-radius:6px; background:#f9fafb;"></div>
       </div>
       <div class="form-group" id="newUserEmpRow" style="display:none;">
@@ -2692,6 +2707,7 @@ function editEmployee(id) {
   document.getElementById('empFlexibleHours').value = e.flexibleHours || '';
   document.getElementById('empContractType').value = e.contractType || 'fulltime';
   document.getElementById('empHolidayPayMode').value = e.holidayPayMode || 'simple';
+  if (typeof updateNotInsuredHint === 'function') updateNotInsuredHint();
   document.getElementById('empInsuredSalary').value = e.insuredSalary || '';
   document.getElementById('empDependents').value = e.dependents || '';
   document.getElementById('empPensionSelf').value = e.pensionSelf || '';
@@ -2723,6 +2739,7 @@ function clearEmpForm() {
   document.getElementById('empHolidayPayMode').value = 'simple';
   document.getElementById('empWorkplace').value = '';
   document.getElementById('empLeaveHint').style.display = 'none';
+  if (typeof updateNotInsuredHint === 'function') updateNotInsuredHint();
 }
 
 // ========= 每日記錄 =========
@@ -3365,6 +3382,49 @@ function refreshDailyEntries() {
 
 // 從月薪頁的出勤明細快速編輯
 // 強制依出勤明細重算月薪欄位（會覆蓋手動值）
+// 🗑 清除選定員工該月的所有每日記錄
+async function clearMonthAttendance(empId, month) {
+  if (!empId || !month) { alert('請先選員工與月份'); return; }
+  const emp = employees.find(e => e._id === empId);
+  if (!emp) { alert('找不到員工'); return; }
+  const list = dailyEntries.filter(d => d.empId === empId && d.date.startsWith(month));
+  if (list.length === 0) { alert('本月沒有任何記錄可清除'); return; }
+
+  // 統計
+  const pieceCount = list.filter(d => d.type === 'piece').length;
+  const hourCount = list.filter(d => d.type === 'hour').length;
+
+  if (!confirm(
+    `🗑 整月清除確認\n\n` +
+    `員工：${emp.name}\n` +
+    `月份：${month}\n` +
+    `清除筆數：${list.length} 筆\n` +
+    `  ・論件記錄 ${pieceCount} 筆\n` +
+    `  ・計時記錄 ${hourCount} 筆\n\n` +
+    `按「確定」→ 全部刪除（本地 + 雲端，無法復原）\n` +
+    `按「取消」→ 不動作\n\n` +
+    `💡 月薪記錄不會被刪，只清每日記錄，方便重新批次新增。`
+  )) return;
+  if (!confirm(`🚨 最終確認：將永久刪除 ${list.length} 筆記錄！`)) return;
+
+  const idsToDelete = list.map(d => d._id);
+  // 本地刪除
+  dailyEntries = dailyEntries.filter(d => !idsToDelete.includes(d._id));
+  save(STORE.daily, dailyEntries);
+
+  // 雲端刪除
+  if (cloudReady) {
+    try {
+      await Promise.all(idsToDelete.map(id => cloudDelete('daily', id)));
+    } catch (e) {
+      console.error('雲端刪除部分失敗:', e);
+    }
+  }
+
+  refreshAllDailyViews();
+  alert(`✅ 已清除 ${idsToDelete.length} 筆每日記錄\n\n您現在可以批次重新建立本月出勤。`);
+}
+
 // ➕ 工時稽核發現缺漏 → 自動加入扣款項目
 function addShortageDeduction(amount, hours) {
   if (!amount || amount <= 0) return;
@@ -4167,11 +4227,14 @@ function refreshMonthlyAttendance() {
     else monthWorkdays++;
   }
 
-  let html = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+  let html = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
       <div style="font-weight:700; color:#059669; font-size:15px;">📅 本月出勤明細</div>
-      <button type="button" onclick="forceRefillFromAttendance(${workDays}, ${totalLeaveDays}, ${weekdayOtHours}, ${weekendOtHours})" class="btn btn-primary btn-sm" style="padding:4px 10px; font-size:11px;">🔄 依出勤重算月薪欄位</button>
+      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        <button type="button" onclick="forceRefillFromAttendance(${workDays}, ${totalLeaveDays}, ${weekdayOtHours}, ${weekendOtHours})" class="btn btn-primary btn-sm" style="padding:4px 10px; font-size:11px;">🔄 依出勤重算月薪欄位</button>
+        <button type="button" onclick="clearMonthAttendance('${empId}', '${month}')" class="btn btn-danger btn-sm" style="padding:4px 10px; font-size:11px; background:#dc2626; color:white;">🗑 整月清除</button>
+      </div>
     </div>
-    <div style="font-size:11px; color:#6b7280; margin-bottom:8px;">（點每列「✏️」可編輯，或按上方按鈕強制刷新上方出勤天數/加班時數）</div>
+    <div style="font-size:11px; color:#6b7280; margin-bottom:8px;">（點每列「✏️」可編輯，或按上方按鈕強制刷新出勤天數/加班時數；「整月清除」可一次刪除本月所有記錄重新建立）</div>
 
     <!-- ★ 時薪制員工的工時/收入摘要 -->
     ${(() => {
@@ -5478,6 +5541,13 @@ function refreshEntitlementList() {
         ${ent.source ? `<div style="margin-top:4px; font-size:11px; color:${s.statusColor}; opacity:0.7;">⚖ ${escapeHtml(ent.source)}</div>` : ''}
       </div>`;
   }).join('');
+}
+
+function updateNotInsuredHint() {
+  const dateVal = document.getElementById('empInsuredDate').value;
+  const hint = document.getElementById('notInsuredHint');
+  if (!hint) return;
+  hint.style.display = dateVal ? 'none' : 'block';
 }
 
 function updateEmpLeaveHint() {
@@ -6936,16 +7006,19 @@ function computeSalary(emp, input) {
 
   const insBase = emp.insuredSalary > 0 ? emp.insuredSalary : (base > 0 ? base : hourly * 8 * 30);
   const dependents = Math.min(3, parseFloat(emp.dependents) || 0);
+  // ✅ 投保日為空 → 視為「未投保員工」（合約制/債務問題等），勞健保 + 自提勞退一律 0
+  //    使用者仍可手動填入扣款金額（input.laborIns / healthIns）
+  const isNotInsured = !emp.insuredDate;
   const laborIns = input.laborIns != null && input.laborIns !== ''
     ? parseFloat(input.laborIns)
-    : Math.round(insBase * rates.labor / 100);
+    : (isNotInsured ? 0 : Math.round(insBase * rates.labor / 100));
   // 健保 = 月投保薪資 × 1.655% × (1 + 眷口數)
   const healthIns = input.healthIns != null && input.healthIns !== ''
     ? parseFloat(input.healthIns)
-    : Math.round(insBase * rates.health / 100 * (1 + dependents));
-  // 自提勞退（員工端扣款，員工自願 0~6%）
+    : (isNotInsured ? 0 : Math.round(insBase * rates.health / 100 * (1 + dependents)));
+  // 自提勞退（員工端扣款，員工自願 0~6%；未投保員工不扣）
   const pensionSelfRate = Math.min(6, parseFloat(emp.pensionSelf) || 0);
-  const pensionSelf = Math.round(insBase * pensionSelfRate / 100);
+  const pensionSelf = isNotInsured ? 0 : Math.round(insBase * pensionSelfRate / 100);
 
   const gross = base + otPay1 + otPay2 + pieceIncome + hourIncome + leavePayAmount + dailyAddback + (input.bonus || 0) - dailyDeduct;
   const deductions = laborIns + healthIns + pensionSelf + (input.otherDeduct || 0);
@@ -9601,6 +9674,57 @@ function refreshUserList() {
         <td>${actionBtns}</td>
       </tr>`;
     }).join('') + '</tbody></table>';
+}
+
+// ➕ 在使用者管理介面快速新增廠別（與員工頁工作地點共用同一份資料）
+function toggleUserWorkplaceAdd() {
+  const box = document.getElementById('newUserAddWorkplaceBox');
+  if (!box) return;
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+  if (box.style.display === 'block') {
+    document.getElementById('newUserNewWorkplaceName').focus();
+  }
+}
+
+function addWorkplaceFromUser() {
+  // 只有總管理者/管理者可以新增廠別
+  if (currentUser && !isAdmin()) {
+    alert('⚠ 只有「管理者」以上層級可以新增廠別');
+    return;
+  }
+  const input = document.getElementById('newUserNewWorkplaceName');
+  const name = (input.value || '').trim();
+  if (!name) { alert('請輸入廠別名稱'); return; }
+  if (workplaces.find(w => w.name === name)) {
+    alert(`廠別「${name}」已存在`);
+    return;
+  }
+  // 新增到 workplaces 陣列（與員工頁共用）
+  const w = { _id: 'wp_' + Date.now(), name };
+  workplaces.push(w);
+  save(STORE.workplaces, workplaces);
+  if (typeof cloudSave === 'function') cloudSave('workplaces', w);
+
+  // 同步刷新員工頁的工作地點下拉
+  if (typeof refreshWorkplaceDropdown === 'function') refreshWorkplaceDropdown();
+  if (typeof refreshWorkplaceList === 'function') refreshWorkplaceList();
+
+  // 清空輸入框
+  input.value = '';
+  // 收起新增區
+  const box = document.getElementById('newUserAddWorkplaceBox');
+  if (box) box.style.display = 'none';
+
+  // 重新渲染廠別 checkbox（會包含新加的）
+  onUserRoleChange();
+
+  // 自動勾選剛新增的（方便使用者直接指派）
+  setTimeout(() => {
+    const cb = [...document.querySelectorAll('.user-wp-chk')].find(c => c.value === name);
+    if (cb) cb.checked = true;
+  }, 100);
+
+  alert(`✅ 已新增廠別「${name}」並自動勾選\n（也會出現在員工頁的工作地點下拉）`);
 }
 
 function onUserRoleChange() {
